@@ -65,6 +65,10 @@ jobs:
               sigh(api_key: api_key, force: true, app_identifier: "com.move.travelapp")
 
               # 3. Update Xcode Project Settings to use manual signing with the downloaded profile
+              update_code_signing_settings(
+                path: "App.xcodeproj",
+                use_automatic_signing: false
+              )
               update_project_provisioning(
                 xcodeproj: "App.xcodeproj",
                 profile: ENV["sigh_com.move.travelapp_appstore_profile-path"],
