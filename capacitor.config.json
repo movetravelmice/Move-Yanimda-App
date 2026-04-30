@@ -1,0 +1,6 @@
+{
+  "appId": "com.move.travelapp",
+  "appName": "MoveTravel",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "830935984877",
+    "project_id": "move-yanimda",
+    "storage_bucket": "move-yanimda.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:830935984877:android:882d79d7544ee987f4bae4",
+        "android_client_info": {
+          "package_name": "com.base44.moveyanimd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwmwEvZhPaVTQ2JMjbV1cPDMUknJLmWgk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:830935984877:android:63f18c9b2f0c495df4bae4",
+        "android_client_info": {
+          "package_name": "com.base44.moveyanimda"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwmwEvZhPaVTQ2JMjbV1cPDMUknJLmWgk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
