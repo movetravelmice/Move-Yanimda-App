@@ -64,7 +64,11 @@ jobs:
               )
 
               # 2. Create/Download Certificates and Profiles
-              cert(api_key: api_key)
+              cert(
+                api_key: api_key,
+                keychain_path: ENV["MATCH_KEYCHAIN_NAME"],
+                keychain_password: ENV["MATCH_KEYCHAIN_PASSWORD"]
+              )
               sigh(api_key: api_key, force: true, app_identifier: "com.move.travelapp")
 
               # 3. Update Xcode Project Settings to use manual signing with the downloaded profile
