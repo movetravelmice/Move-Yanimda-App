@@ -58,35 +58,26 @@ jobs:
                 in_house: false
               )
 
-              # 2. Make sure App exists in App Store Connect
-              produce(
-                app_identifier: "com.move.travelapp",
-                app_name: "Move Yanimda",
-                language: "en-US",
-                app_version: "1.0.0",
-                sku: "com.move.travelapp"
-              )
+              # 2. Create/Download Certificates and Profiles
+              cert(api_key: api_key)
+              sigh(api_key: api_key, force: true, app_identifier: "com.move.travelapp")
 
-              # 3. Create/Download Certificates and Profiles
-              cert
-              sigh(force: true)
-
-              # 4. Update Xcode Project Settings to use manual signing with the downloaded profile
+              # 3. Update Xcode Project Settings to use manual signing with the downloaded profile
               update_project_provisioning(
                 xcodeproj: "App.xcodeproj",
                 profile: ENV["sigh_com.move.travelapp_appstore_profile-path"],
                 build_configuration: "Release"
               )
 
-              # 5. Build App
+              # 4. Build App
               build_app(
                 workspace: "App.xcworkspace",
                 scheme: "App",
                 export_method: "app-store"
               )
 
-              # 6. Upload to TestFlight
-              upload_to_testflight(skip_waiting_for_build_processing: true)
+              # 5. Upload to TestFlight
+              upload_to_testflight(api_key: api_key, skip_waiting_for_build_processing: true)
             end
           end
           EOF
