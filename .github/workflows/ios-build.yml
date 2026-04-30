@@ -8,7 +8,7 @@ on:
 jobs:
   build_ios:
     name: Build and Upload iOS App
-    runs-on: macos-14
+    runs-on: macos-latest
 
     steps:
       - name: Checkout repository
