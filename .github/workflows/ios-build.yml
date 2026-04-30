@@ -84,7 +84,7 @@ jobs:
                 project: "App.xcodeproj",
                 scheme: "App",
                 export_method: "app-store",
-                xcargs: "DEVELOPMENT_TEAM='#{ENV['APPSTORE_TEAM_ID']}'"
+                xcargs: "DEVELOPMENT_TEAM='#{ENV['APPSTORE_TEAM_ID']}' CODE_SIGN_IDENTITY='Apple Distribution'"
               )
 
               # 5. Upload to TestFlight
