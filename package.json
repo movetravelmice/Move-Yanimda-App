@@ -9,10 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@capacitor/android": "latest",
-    "@capacitor/core": "latest",
-    "@capacitor/ios": "^8.3.0",
-    "@capacitor/local-notifications": "^8.0.2",
+    "@capacitor/android": "8.0.2",
+    "@capacitor/core": "8.0.2",
+    "@capacitor/ios": "8.0.2",
+    "@capacitor/local-notifications": "8.0.2",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "firebase": "^10.10.0",
@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "latest",
+    "@capacitor/cli": "8.0.2",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "@vitejs/plugin-react": "^4.2.1",
