@@ -66,8 +66,8 @@ jobs:
               # 2. Create/Download Certificates and Profiles
               cert(
                 api_key: api_key,
-                keychain_path: ENV["MATCH_KEYCHAIN_NAME"],
-                keychain_password: ENV["MATCH_KEYCHAIN_PASSWORD"]
+                keychain_path: File.expand_path("~/Library/Keychains/#{ENV['MATCH_KEYCHAIN_NAME'] || 'fastlane_tmp_keychain'}-db"),
+                keychain_password: ENV["MATCH_KEYCHAIN_PASSWORD"] || ""
               )
               sigh(api_key: api_key, force: true, app_identifier: "com.move.travelapp")
 
