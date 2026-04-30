@@ -14,6 +14,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Select Latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode* | sort -V | tail -n 1)
+          echo "Found latest Xcode at: $LATEST_XCODE"
+          sudo xcode-select -s "$LATEST_XCODE/Contents/Developer" || sudo xcode-select -s "$LATEST_XCODE"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
