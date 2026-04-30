@@ -52,6 +52,9 @@ jobs:
           platform :ios do
             desc "Build and upload to TestFlight"
             lane :beta do
+              # 0. Setup CI to avoid keychain permission popups
+              setup_ci
+              
               # 1. Setup API Key
               api_key = app_store_connect_api_key(
                 key_id: ENV["APPSTORE_KEY_ID"],
