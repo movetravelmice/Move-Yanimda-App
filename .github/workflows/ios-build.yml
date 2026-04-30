@@ -42,8 +42,9 @@ jobs:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
         working-directory: ./ios/App
         run: |
-          # Create Fastfile dynamically
-          cat << 'EOF' > Fastfile
+          # Create Fastfile dynamically inside fastlane folder
+          mkdir -p fastlane
+          cat << 'EOF' > fastlane/Fastfile
           default_platform(:ios)
 
           platform :ios do
