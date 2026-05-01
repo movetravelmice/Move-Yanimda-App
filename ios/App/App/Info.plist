@@ -6,6 +6,12 @@
 	<false/>
     <key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Profil fotoğrafı ve belge yükleyebilmeniz için kameraya erişim izni gereklidir.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Profil fotoğrafı ve belge yükleyebilmeniz için galerinize erişim izni gereklidir.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Çektiğiniz fotoğrafları galerinize kaydedebilmek için izin gereklidir.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
