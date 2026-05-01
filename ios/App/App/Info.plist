@@ -12,6 +12,12 @@
 	<string>Profil fotoğrafı ve belge yükleyebilmeniz için galerinize erişim izni gereklidir.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Çektiğiniz fotoğrafları galerinize kaydedebilmek için izin gereklidir.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Video çekimi ve sesli mesajlar için mikrofonunuza erişim izni gereklidir.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Tur sırasında konumunuzu rehberinizle paylaşabilmeniz ve hava durumu özelliklerini kullanabilmeniz için konum izni gereklidir.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Tur sırasında konumunuzu rehberinizle kesintisiz paylaşabilmeniz için konum izni gereklidir.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
