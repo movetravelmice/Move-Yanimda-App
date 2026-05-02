@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Calendar, Edit3, Eye, MessageCircle, Users, Megaphone, X, Send, Plus, CheckCircle2, Trash2, Timer } from 'lucide-react';
 import Header from '../../components/Header';
-import { useTourStore } from '../../store/tourStore';
+import { useTourStore, calculateDaysAndNights } from '../../store/tourStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useAuthStore } from '../../store/authStore';
 import ExpertRollCallPanel from '../../components/ExpertRollCallPanel';
@@ -178,8 +178,15 @@ export default function ExpertDashboard() {
               <div className="flex-row text-muted" style={{ marginBottom: '6px', fontSize: '14px' }}>
                 <MapPin size={16} /> {tour.destinations}
               </div>
-              <div className="flex-row text-muted" style={{ marginBottom: '16px', fontSize: '14px' }}>
-                <Calendar size={16} /> {tour.dates}
+              <div className="flex-row text-muted" style={{ marginBottom: '16px', fontSize: '14px', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Calendar size={16} /> {tour.dates}
+                </div>
+                {calculateDaysAndNights(tour.dates) && (
+                    <div style={{ background: '#f8fafc', color: '#64748b', fontSize: '12px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                        {calculateDaysAndNights(tour.dates)}
+                    </div>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>

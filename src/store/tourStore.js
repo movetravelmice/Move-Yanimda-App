@@ -147,3 +147,35 @@ export const useTourStore = create((set, get) => ({
       }
   }
 }));
+
+export const calculateDaysAndNights = (datesStr) => {
+    if (!datesStr || !datesStr.includes(' - ')) return '';
+    try {
+        const parts = datesStr.split(' - ');
+        const months = { 'ocak': 0, 'şubat': 1, 'mart': 2, 'nisan': 3, 'mayıs': 4, 'haziran': 5, 'temmuz': 6, 'ağustos': 7, 'eylül': 8, 'ekim': 9, 'kasım': 10, 'aralık': 11 };
+        
+        const parseDateString = (str) => {
+            const p = str.trim().split(' ');
+            if (p.length !== 3) return null;
+            const d = parseInt(p[0]);
+            const m = months[p[1].toLowerCase()];
+            const y = parseInt(p[2]);
+            if (isNaN(d) || m === undefined || isNaN(y)) return null;
+            return new Date(y, m, d);
+        };
+        
+        const d1 = parseDateString(parts[0]);
+        const d2 = parseDateString(parts[1]);
+        if (!d1 || !d2) return '';
+        
+        const diffTime = d2.getTime() - d1.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        if (diffDays > 0) {
+            const nights = diffDays - 1;
+            return `${diffDays} Gün ${nights} Gece`;
+        }
+    } catch (e) {
+        return '';
+    }
+    return '';
+};

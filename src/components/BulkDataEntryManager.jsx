@@ -1,57 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { ChevronLeft, PlaneTakeoff, PlaneLanding, Save, Bus, Plus, Trash2 } from 'lucide-react';
 import { useTourStore } from '../store/tourStore';
 
-export default function ParticipantTransferManager({ tourId, participant, onClose }) {
-  const { tours, updateParticipantTransfers } = useTourStore();
-  const tour = tours.find(t => t.id === tourId);
-  const existingPart = tour?.participants.find(p => p.id === participant.id);
+export default function BulkDataEntryManager({ tourId, participants, onClose }) {
+  const { editTour } = useTourStore();
 
   const majorAirlines = [
       "Turkish Airlines", "Pegasus", "SunExpress", "AnadoluJet", "Corendon",
       "Lufthansa", "Emirates", "Qatar Airways", "Air France", "KLM", "British Airways", "Diğer"
   ];
 
-  const [flightsInput, setFlightsInput] = useState([]);
+  const [flightsInput, setFlightsInput] = useState([
+      { id: Date.now(), type: 'Gidiş Uçuşu', airline: '', from: '', to: '', flightNo: '', date: '', departureTime: '', arrivalTime: '', pnr: '', ticketNo: '' }
+  ]);
   const [transfersInput, setTransfersInput] = useState([
      { id: Date.now(), desc: '', vehicle: '', plate: '', date: '', time: '' }
   ]);
 
-  useEffect(() => {
-    if (existingPart?.flights?.length > 0) {
-       setFlightsInput(existingPart.flights.map(f => ({ ...f, id: Math.random() })));
-    } else {
-       // Start with one empty departure flight for convenience
-       setFlightsInput([
-         { id: Date.now(), type: 'Gidiş Uçuşu', airline: '', from: '', to: '', flightNo: '', date: '', departureTime: '', arrivalTime: '', pnr: '', ticketNo: '' }
-       ]);
-    }
-    
-    if (existingPart?.transfers?.length > 0) {
-        setTransfersInput(existingPart.transfers.map(tr => ({
-            id: Math.random(),
-            desc: tr.desc || '',
-            vehicle: tr.vehicle || '',
-            plate: tr.plate || '',
-            date: tr.date ? tr.date.split(',')[0].trim() : '',
-            time: tr.date && tr.date.includes(',') ? tr.date.split(',')[1].trim() : ''
-        })));
-    }
-  }, [existingPart]);
-
   const getAirlineColor = (name) => {
       const n = (name || '').toLowerCase();
-      if (n.includes('turkish') || n.includes('thy')) return '#C3002F'; // THY Red
-      if (n.includes('pegasus')) return '#FFC600'; // Pegasus Yellow
-      if (n.includes('sunexpress')) return '#0055A5'; // SunExpress Blue
-      if (n.includes('anadolu')) return '#1D1A53'; // AnadoluJet Dark Blue
-      if (n.includes('corendon')) return '#E3000F'; // Corendon Red
-      if (n.includes('lufthansa')) return '#05164D'; // Lufthansa Navy
-      if (n.includes('emirates')) return '#D71920'; // Emirates Red
-      if (n.includes('qatar')) return '#5C0632'; // Qatar Maroon
-      if (n.includes('air france')) return '#002157'; // Air France Navy
-      if (n.includes('klm')) return '#00A1DE'; // KLM Light Blue
-      if (n.includes('british')) return '#075AAA'; // British Airways Blue
+      if (n.includes('turkish') || n.includes('thy')) return '#C3002F';
+      if (n.includes('pegasus')) return '#FFC600';
+      if (n.includes('sunexpress')) return '#0055A5';
+      if (n.includes('anadolu')) return '#1D1A53';
+      if (n.includes('corendon')) return '#E3000F';
+      if (n.includes('lufthansa')) return '#05164D';
+      if (n.includes('emirates')) return '#D71920';
+      if (n.includes('qatar')) return '#5C0632';
+      if (n.includes('air france')) return '#002157';
+      if (n.includes('klm')) return '#00A1DE';
+      if (n.includes('british')) return '#075AAA';
       return 'var(--primary)';
   };
 
@@ -71,10 +49,10 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
           icon: f.type === 'Gidiş Uçuşu' ? 'takeoff' : 'landing'
       }));
       
-      const transfers = [];
+      const transfersToSave = [];
       transfersInput.forEach(tr => {
           if (tr.desc || tr.plate || tr.vehicle) {
-              transfers.push({ 
+              transfersToSave.push({ 
                   type: 'Atanan Transfer', 
                   desc: tr.desc, 
                   vehicle: tr.vehicle, 
@@ -84,8 +62,19 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
           }
       });
 
-      updateParticipantTransfers(tourId, participant.id, flightsToSave, transfers);
-      alert('Uçuş ve Transfer bilgileri başarıyla atandı!');
+      if (flightsToSave.length === 0 && transfersToSave.length === 0) {
+          alert('Lütfen eklenecek en az bir uçuş veya transfer bilgisi girin.');
+          return;
+      }
+
+      const newParticipants = participants.map(p => {
+          const mergedFlights = [...(p.flights || []), ...flightsToSave];
+          const mergedTransfers = [...(p.transfers || []), ...transfersToSave];
+          return { ...p, flights: mergedFlights, transfers: mergedTransfers };
+      });
+
+      editTour(tourId, { participants: newParticipants });
+      alert(`Girilen veriler toplam ${participants.length} katılımcıya başarıyla eklendi!`);
       onClose();
   };
 
@@ -132,25 +121,25 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
 
   return (
     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1100, background: '#f8fafc', overflowY: 'auto', display: 'flex', flexDirection: 'column', animation: 'slideUp 0.2s' }}>
-        <div style={{ background: 'var(--primary)', color: 'white', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+        <div style={{ background: '#10b981', color: 'white', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div onClick={onClose} style={{ cursor: 'pointer', padding: '4px' }}>
                     <ChevronLeft size={24} />
                 </div>
                 <div>
-                    <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 2px' }}>Uçuş ve Transferler</h2>
-                    <div style={{ fontSize: '11px', opacity: 0.8 }}>{participant.name}</div>
+                    <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 2px' }}>Tüm Katılımcılara Bilet Ekle</h2>
+                    <div style={{ fontSize: '11px', opacity: 0.9 }}>Girilen veriler {participants.length} kişiye aynı anda atanacaktır.</div>
                 </div>
             </div>
         </div>
 
         <div style={{ padding: '20px 16px' }}>
             
-            <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981' }}>
                 <PlaneTakeoff size={18} /> Uçuş Biletleri Defteri
             </h3>
 
-            {flightsInput.map((flight, index) => (
+            {flightsInput.map((flight) => (
                <div key={flight.id} style={{ position: 'relative' }}>
                    {flightsInput.length > 1 && (
                         <div onClick={() => removeFlight(flight.id)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: '#ef4444', padding: '4px', zIndex: 5 }}>
@@ -164,13 +153,13 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
                             <div style={{ display: 'flex', gap: '6px', background: '#f1f5f9', padding: '4px', borderRadius: '10px' }}>
                                 <div 
                                     onClick={() => updateFlight(flight.id, 'type', 'Gidiş Uçuşu')}
-                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', background: flight.type === 'Gidiş Uçuşu' ? 'white' : 'transparent', color: flight.type === 'Gidiş Uçuşu' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 'bold', boxShadow: flight.type === 'Gidiş Uçuşu' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px' }}
+                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', background: flight.type === 'Gidiş Uçuşu' ? 'white' : 'transparent', color: flight.type === 'Gidiş Uçuşu' ? '#10b981' : 'var(--text-muted)', fontWeight: 'bold', boxShadow: flight.type === 'Gidiş Uçuşu' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px' }}
                                 >
                                     <PlaneTakeoff size={16} /> Gidiş Uçuşu
                                 </div>
                                 <div 
                                     onClick={() => updateFlight(flight.id, 'type', 'Dönüş Uçuşu')}
-                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', background: flight.type === 'Dönüş Uçuşu' ? 'white' : 'transparent', color: flight.type === 'Dönüş Uçuşu' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: 'bold', boxShadow: flight.type === 'Dönüş Uçuşu' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px' }}
+                                    style={{ flex: 1, padding: '10px', borderRadius: '8px', background: flight.type === 'Dönüş Uçuşu' ? 'white' : 'transparent', color: flight.type === 'Dönüş Uçuşu' ? '#10b981' : 'var(--text-muted)', fontWeight: 'bold', boxShadow: flight.type === 'Dönüş Uçuşu' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px' }}
                                 >
                                     <PlaneLanding size={16} /> Dönüş Uçuşu
                                 </div>
@@ -224,11 +213,11 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
             </button>
 
             {/* Transfer settings */}
-            <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981' }}>
                 <Bus size={18} /> Transfer Araç Ataması
             </h3>
             
-            {transfersInput.map((t, idx) => (
+            {transfersInput.map((t) => (
                 <div key={t.id} style={{ background: 'white', padding: '16px', paddingTop: transfersInput.length > 1 ? '36px' : '16px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: '16px', display: 'grid', gridTemplateColumns: '1fr', gap: '12px', position: 'relative' }}>
                     {transfersInput.length > 1 && (
                         <div onClick={() => removeTransfer(t.id)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: '#ef4444', padding: '4px' }}>
@@ -269,8 +258,8 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
                 <Plus size={18} /> Yeni Transfer Ekle
             </button>
 
-            <button className="btn-primary" onClick={handleSave} style={{ width: '100%', padding: '16px', borderRadius: '14px', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-             <Save size={20} /> Bilgileri Müşteriye Yayınla
+            <button className="btn-primary" onClick={handleSave} style={{ width: '100%', padding: '16px', borderRadius: '14px', fontSize: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', background: '#10b981' }}>
+             <Save size={20} /> Tüm Katılımcılara İşle
             </button>
             <div style={{height: '40px'}}></div>
         </div>

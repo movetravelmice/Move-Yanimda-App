@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Settings, Users, Database, ArrowRight, Play, CheckCircle2, UserCircle2, ArchiveRestore, Edit3, Search } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
-import { useTourStore } from '../../store/tourStore';
+import { useTourStore, calculateDaysAndNights } from '../../store/tourStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useUserStore } from '../../store/userStore';
 
@@ -98,10 +98,22 @@ export default function AdminDashboard() {
 
                     return (
                     <div key={tour.id || idx} style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                        <div style={{ height: '80px', width: '100%', position: 'relative' }}>
+                        <div style={{ height: '110px', width: '100%', position: 'relative' }}>
                             <img src={tour.avatar} alt="Tour" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }}></div>
-                            <div style={{ position: 'absolute', bottom: '10px', left: '16px', color: 'white', fontWeight: 'bold', fontSize: '15px' }}>{tour.name}</div>
+                            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }}></div>
+                            <div style={{ position: 'absolute', bottom: '12px', left: '16px', right: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ color: 'white', fontWeight: 'bold', fontSize: '15px', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.name}</div>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                    {calculateDaysAndNights(tour.dates) && (
+                                        <div style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
+                                            {calculateDaysAndNights(tour.dates)}
+                                        </div>
+                                    )}
+                                    <div style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.3)', whiteSpace: 'nowrap' }}>
+                                        {calculateDaysLeft(tour.dates)}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -118,14 +130,11 @@ export default function AdminDashboard() {
                                 </div>
                             </div>
                             <div style={{ display: 'flex', gap: '8px' }}>
-                                <div style={{ background: '#f0fdf4', color: '#166534', fontSize: '11px', fontWeight: 'bold', padding: '6px 10px', borderRadius: '8px', display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
-                                    {calculateDaysLeft(tour.dates)}
-                                </div>
                                 <button 
                                     onClick={() => setTourStatus(tour.id, 'past')}
-                                    style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                                    style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                                 >
-                                    <ArchiveRestore size={14} /> Bitir
+                                    <ArchiveRestore size={16} /> Bitir
                                 </button>
                             </div>
                         </div>

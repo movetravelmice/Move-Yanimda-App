@@ -5,6 +5,7 @@ import { useTourStore } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 import ParticipantTransferManager from '../../components/ParticipantTransferManager';
 import BulkTicketManager from '../../components/BulkTicketManager';
+import BulkDataEntryManager from '../../components/BulkDataEntryManager';
 import { useAuthStore } from '../../store/authStore';
 
 export default function ParticipantsList() {
@@ -29,6 +30,7 @@ export default function ParticipantsList() {
     const [isSavingIdentity, setIsSavingIdentity] = useState(false);
     const [showTransferSheet, setShowTransferSheet] = useState(false);
     const [showBulkUpload, setShowBulkUpload] = useState(false);
+    const [showBulkDataEntry, setShowBulkDataEntry] = useState(false);
     const [successPopup, setSuccessPopup] = useState(null);
     const [userToRemove, setUserToRemove] = useState(null);
 
@@ -302,9 +304,14 @@ export default function ParticipantsList() {
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
                     {(user?.role === 'admin' || user?.role === 'ticketing') && participants.length > 0 && (
-                        <div onClick={() => setShowBulkUpload(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Toplu Bilet İşlemleri">
-                            <FileSpreadsheet size={20} />
-                        </div>
+                        <>
+                            <div onClick={() => setShowBulkDataEntry(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Tümüne Bilet/Transfer Ekle">
+                                <PlaneTakeoff size={20} />
+                            </div>
+                            <div onClick={() => setShowBulkUpload(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Toplu Bilet İşlemleri (Excel)">
+                                <FileSpreadsheet size={20} />
+                            </div>
+                        </>
                     )}
                     <div onClick={() => setShowWizard(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                         <Plus size={20} />
@@ -745,6 +752,15 @@ export default function ParticipantsList() {
                     tourId={tourId}
                     participants={participants}
                     onClose={() => setShowBulkUpload(false)}
+                />
+            )}
+
+            {/* Bulk Data Entry Manager Layer */}
+            {showBulkDataEntry && (
+                <BulkDataEntryManager
+                    tourId={tourId}
+                    participants={participants}
+                    onClose={() => setShowBulkDataEntry(false)}
                 />
             )}
 

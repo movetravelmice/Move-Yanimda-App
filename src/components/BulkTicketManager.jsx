@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { useTourStore } from '../store/tourStore';
 
 export default function BulkTicketManager({ tourId, participants, onClose }) {
-  const { updateParticipantTransfers } = useTourStore();
+  const { editTour } = useTourStore();
   const fileInputRef = useRef(null);
 
   const getAirlineColor = (name) => {
@@ -58,7 +58,8 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
              'PNR': '',
              'Bilet No': '',
              'Tarih (GG.AA.YYYY)': '',
-             'Saat (SS:DD)': ''
+             'Kalkış Saati (SS:DD)': '',
+             'Varış Saati (SS:DD)': ''
            });
        } else {
            p.flights.forEach(f => {
@@ -73,7 +74,8 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
                  'PNR': f.pnr || '',
                  'Bilet No': f.ticketNo || '',
                  'Tarih (GG.AA.YYYY)': formatDateForExcel(f.date),
-                 'Saat (SS:DD)': f.time || ''
+                 'Kalkış Saati (SS:DD)': f.departureTime || '',
+                 'Varış Saati (SS:DD)': f.arrivalTime || ''
                });
            });
        }
@@ -83,7 +85,7 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Toplu Biletleme");
 
-    ws['!cols'] = [ {wch: 30}, {wch: 25}, {wch: 35}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 20}, {wch: 20}, {wch: 15} ];
+    ws['!cols'] = [ {wch: 30}, {wch: 25}, {wch: 35}, {wch: 20}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 20}, {wch: 20}, {wch: 20}, {wch: 20} ];
 
     XLSX.writeFile(wb, `TopluBilet_${tourId}.xlsx`);
   };
@@ -105,7 +107,7 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
         const flightsByEmail = {};
 
         data.forEach(row => {
-          const email = row['E-Posta (DEĞİŞTİRMEYİN)'];
+          const email = String(row['E-Posta (DEĞİŞTİRMEYİN)'] || '').trim();
           if (!email) return;
           if (!flightsByEmail[email]) flightsByEmail[email] = [];
           
@@ -120,25 +122,31 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
                   pnr: row['PNR'] || '',
                   ticketNo: row['Bilet No'] || '',
                   date: parseDateFromExcel(row['Tarih (GG.AA.YYYY)']),
-                  time: row['Saat (SS:DD)'] || '',
+                  departureTime: row['Kalkış Saati (SS:DD)'] || '',
+                  arrivalTime: row['Varış Saati (SS:DD)'] || '',
                   icon: (row['Uçuş Yönü (Gidiş Uçuşu / Dönüş Uçuşu)'] || '').includes('Dönüş') ? 'landing' : 'takeoff'
               });
           }
         });
 
         let processCount = 0;
+        const newParticipants = [...participants];
         
         Object.keys(flightsByEmail).forEach(email => {
-            const p = participants.find(part => part.email === email);
-            if (!p) return;
+            const pIndex = newParticipants.findIndex(part => part.email === email);
+            if (pIndex === -1) return;
 
             const extractedFlights = flightsByEmail[email];
-            // If they provided valid rows, overwrite their flights.
-            // If they left the whole rows blank for this email, extractedFlights might be empty, effectively deleting existing flights or just leaving alone.
-            const currentTransfers = p.transfers || []; 
-            updateParticipantTransfers(tourId, p.id, extractedFlights, currentTransfers);
+            newParticipants[pIndex] = {
+                ...newParticipants[pIndex],
+                flights: extractedFlights
+            };
             processCount++;
         });
+
+        if (processCount > 0) {
+            editTour(tourId, { participants: newParticipants });
+        }
 
         alert(`Başarılı! ${processCount} katılımcının uçuş verileri Excel'den sisteme işlendi.`);
         onClose();

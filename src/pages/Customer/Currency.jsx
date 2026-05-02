@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RefreshCw } from 'lucide-react';
 import Header from '../../components/Header';
 
@@ -29,18 +29,37 @@ export default function Currency() {
     CHF: "₣", CAD: "C$", AUD: "A$", CNY: "¥", RUB: "₽", AED: "د.إ"
   };
 
-  const executeRefreshLogic = () => {
-    setRates(prevRates => {
-        const newRates = { ...prevRates };
-        Object.keys(newRates).forEach(curr => {
-            if (curr !== 'TRY') {
-                const shift = (Math.random() - 0.5) * 0.05;
-                newRates[curr] = Math.max(0.01, newRates[curr] + shift);
-            }
+  const executeRefreshLogic = async () => {
+    try {
+      const res = await fetch('/api/tcmb-rates');
+      const text = await res.text();
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(text, "text/xml");
+      
+      const currencies = xmlDoc.getElementsByTagName("Currency");
+      const fetchedRates = { TRY: 1 };
+      
+      for (let i = 0; i < currencies.length; i++) {
+        const curr = currencies[i].getAttribute("CurrencyCode");
+        const forexSelling = currencies[i].getElementsByTagName("ForexSelling")[0]?.textContent;
+        if (curr && forexSelling) {
+            fetchedRates[curr] = parseFloat(forexSelling);
+        }
+      }
+      
+      setRates(prevRates => {
+        const updated = { ...prevRates };
+        Object.keys(updated).forEach(k => {
+          if (fetchedRates[k]) {
+            updated[k] = fetchedRates[k];
+          }
         });
-        return newRates;
-    });
-    setLastUpdate(new Date());
+        return updated;
+      });
+      setLastUpdate(new Date());
+    } catch (error) {
+      console.error("TCMB kur hatası:", error);
+    }
   };
 
   const handleManualRefresh = () => {
@@ -49,6 +68,9 @@ export default function Currency() {
   };
 
   useEffect(() => {
+    // İlk açılışta hemen kurları çek
+    executeRefreshLogic();
+    
     const timer = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -94,7 +116,7 @@ export default function Currency() {
       <div style={{ padding: '0 16px' }}>
         <div className="card">
           <div className="flex-row text-muted" style={{ justifyContent: 'space-between', marginBottom: '16px' }}>
-            <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-main)' }}>Canlı Kur Verisi (Mock TCMB)</span>
+            <span style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-main)' }}>Canlı Kur Verisi (TCMB)</span>
             <RefreshCw size={16} className="text-primary" style={{ cursor: 'pointer' }} onClick={handleManualRefresh} />
           </div>
 

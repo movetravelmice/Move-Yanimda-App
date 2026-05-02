@@ -139,6 +139,18 @@ app.post('/api/send-sms', async (req, res) => {
     }
 });
 
+app.get('/api/tcmb-rates', async (req, res) => {
+    try {
+        const response = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml');
+        const xml = await response.text();
+        res.header('Content-Type', 'application/xml');
+        res.send(xml);
+    } catch (error) {
+        console.error("TCMB Hata:", error);
+        res.status(500).json({ success: false, message: 'TCMB kurları alınamadı' });
+    }
+});
+
 app.listen(PORT, () => {
     console.log(`[Base44] Backend Mail Sunucusu ${PORT} portunda aktif!`);
 });

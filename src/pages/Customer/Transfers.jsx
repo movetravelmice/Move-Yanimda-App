@@ -9,7 +9,8 @@ export default function Transfers() {
   const { tours } = useTourStore();
   const { user } = useAuthStore();
 
-  const activeTour = tours.find(t => t.status === 'active');
+  const myTours = tours.filter(t => t.participants?.some(p => p.id === user?.id || p.email === user?.email));
+  const activeTour = myTours.find(t => t.status === 'active');
   
   // Find primary user and their linked family members
   const myParticipant = activeTour?.participants?.find(p => p.id === user?.id || p.email === user?.email);
@@ -126,12 +127,12 @@ export default function Transfers() {
                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.flightNo || '-'}</div>
                    </div>
                    <div>
-                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Saat</div>
-                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.time || '-'}</div>
+                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Kalkış Saati</div>
+                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.departureTime || '-'}</div>
                    </div>
                    <div>
-                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Koltuk</div>
-                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>-</div>
+                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Varış Saati</div>
+                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.arrivalTime || '-'}</div>
                    </div>
                    <div>
                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>PNR</div>

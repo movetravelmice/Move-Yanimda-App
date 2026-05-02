@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Search, UserCircle2, Edit3, Users, PlaneTakeoff, AlertTriangle, ChevronRight, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
-import { useTourStore } from '../../store/tourStore';
+import { useTourStore, calculateDaysAndNights } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 
 export default function TicketingDashboard() {
@@ -138,13 +138,20 @@ export default function TicketingDashboard() {
 
                     return (
                     <div key={tour.id || idx} style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.03)', transition: 'transform 0.2s' }}>
-                        <div style={{ height: '100px', width: '100%', position: 'relative' }}>
+                        <div style={{ height: '110px', width: '100%', position: 'relative' }}>
                             <img src={tour.avatar} alt="Tour" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }}></div>
-                            <div style={{ position: 'absolute', bottom: '12px', left: '16px', right: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                                <div style={{ color: 'white', fontWeight: 'bold', fontSize: '16px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>{tour.name}</div>
-                                <div style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.3)' }}>
-                                    {calculateDaysLeft(tour.dates)}
+                            <div style={{ position: 'absolute', bottom: '12px', left: '16px', right: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                <div style={{ color: 'white', fontWeight: 'bold', fontSize: '15px', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>{tour.name}</div>
+                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                    {calculateDaysAndNights(tour.dates) && (
+                                        <div style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
+                                            {calculateDaysAndNights(tour.dates)}
+                                        </div>
+                                    )}
+                                    <div style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.3)', whiteSpace: 'nowrap' }}>
+                                        {calculateDaysLeft(tour.dates)}
+                                    </div>
                                 </div>
                             </div>
                         </div>
