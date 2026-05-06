@@ -14,7 +14,7 @@ export default function ParticipantsList() {
     const { tourId } = useParams();
     const [searchParams, setSearchParams] = useSearchParams();
     const { user } = useAuthStore();
-    const { settings } = useSettingsStore();
+    const { smtpConfig, corporateName } = useSettingsStore();
 
     const { tours, addParticipantToTour, removeParticipantFromTour } = useTourStore();
     const { users, companies, findUserByEmail, addUser, addCompany, updateUser } = useUserStore();
@@ -184,7 +184,7 @@ export default function ParticipantsList() {
     };
 
     const sendTourAssignmentEmail = async (participantName, participantEmail, password = null) => {
-        if (settings?.smtp?.host && settings?.smtp?.user) {
+        if (smtpConfig?.host && smtpConfig?.user) {
             try {
                 // Determine base URL: Use current origin in dev, or the production cloud functions URL
                 const baseUrl = window.location.hostname === 'localhost' ? 'http://127.0.0.1:5001/travel-app-move/us-central1/backend' : 'https://us-central1-travel-app-move.cloudfunctions.net/backend';
@@ -192,9 +192,9 @@ export default function ParticipantsList() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        ...settings.smtp,
+                        ...smtpConfig,
                         to: participantEmail,
-                        corporateName: settings.corporateName,
+                        corporateName: corporateName,
                         participantName: participantName,
                         tourName: tour.name,
                         password: password
