@@ -139,6 +139,68 @@ app.post('/api/send-sms', async (req, res) => {
     }
 });
 
+app.post('/api/send-tour-email', async (req, res) => {
+    const { host, port, user, pass, to, corporateName, participantName, tourName, password } = req.body;
+    const senderBrand = corporateName || 'Move Travel & Mice';
+
+    if (!host || !port || !user || !pass || !to) {
+        return res.status(400).json({ success: false, message: 'SMTP ayarları eksik. Lütfen yapılandırmayı kontrol edin.' });
+    }
+
+    try {
+        const transporter = nodemailer.createTransport({
+            host: host,
+            port: Number(port),
+            secure: Number(port) === 465,
+            auth: { user: user, pass: pass }
+        });
+
+        await transporter.verify();
+
+        let htmlContent = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="width: 48px; height: 48px; background: #D7147A; color: white; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 900; letter-spacing: -1px;">
+                        M
+                    </div>
+                </div>
+                <h2 style="color: #D7147A; margin-top: 0; text-align: center;">Seyahat Kaydı Başarılı</h2>
+                <p>Sayın <strong>${participantName}</strong>,</p>
+                <p><strong>${tourName}</strong> seyahatine kaydınız başarıyla yapılmıştır.</p>
+        `;
+
+        if (password) {
+            htmlContent += `
+                <p>Sisteme giriş yapabilmeniz için kullanıcı adınız ve parolanız aşağıdadır:</p>
+                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px dashed #cbd5e1; text-align: center;">
+                    <div style="margin-bottom: 8px;"><strong>Kullanıcı Adı:</strong> ${to}</div>
+                    <div><strong>Şifre:</strong> ${password}</div>
+                </div>
+            `;
+        }
+
+        htmlContent += `
+                <p>Uygulamamıza giriş yaparak seyahatiniz ile ilgili uçuş, transfer, tur programı ve yetkili bilgilerine dilediğiniz zaman ulaşabilirsiniz.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="font-size: 11px; color: #94a3b8; text-align: center;">Bizi tercih ettiğiniz için teşekkür ederiz.<br/>${senderBrand}</p>
+            </div>
+        `;
+
+        await transporter.sendMail({
+            from: `"${senderBrand}" <${user}>`,
+            to: to,
+            subject: `${senderBrand}: ${tourName} Seyahati Kaydınız Alındı`,
+            html: htmlContent
+        });
+
+        return res.json({ success: true, message: `Bilgilendirme e-postası ${to} adresine başarıyla gönderildi.` });
+
+    } catch (error) {
+        console.error("SMTP Hata:", error);
+        return res.status(500).json({ success: false, message: `SMTP Hatası: ${error.message}` });
+    }
+});
+
 app.get('/api/tcmb-rates', async (req, res) => {
     try {
         const response = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml');

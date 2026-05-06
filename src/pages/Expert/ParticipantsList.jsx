@@ -187,7 +187,7 @@ export default function ParticipantsList() {
         if (smtpConfig?.host && smtpConfig?.user) {
             try {
                 // Determine base URL: Use current origin in dev, or the production cloud functions URL
-                const baseUrl = window.location.hostname === 'localhost' ? 'http://127.0.0.1:5001/travel-app-move/us-central1/backend' : 'https://us-central1-travel-app-move.cloudfunctions.net/backend';
+                const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
                 await fetch(`${baseUrl}/api/send-tour-email`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
