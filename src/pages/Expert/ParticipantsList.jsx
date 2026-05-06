@@ -188,7 +188,7 @@ export default function ParticipantsList() {
             try {
                 // Determine base URL: Use current origin in dev, or the production cloud functions URL
                 const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
-                await fetch(`${baseUrl}/api/send-tour-email`, {
+                const res = await fetch(`${baseUrl}/api/send-tour-email`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -200,9 +200,17 @@ export default function ParticipantsList() {
                         password: password
                     })
                 });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    alert("Mail Gönderim Hatası: " + (err.message || `Sunucu ${res.status} hatası döndürdü.`));
+                }
             } catch(e) {
                 console.error("Email send error", e);
+                alert("Mail Gönderim Hatası: Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.");
             }
+        } else {
+            alert("Uyarı: Sistem Ayarları (Admin) bölümünde E-Posta (SMTP) yapılandırması bulunamadığı için kullanıcıya e-posta GÖNDERİLEMEDİ.");
         }
     };
 
