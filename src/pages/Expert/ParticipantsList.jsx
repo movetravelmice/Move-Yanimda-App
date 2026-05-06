@@ -250,12 +250,27 @@ export default function ParticipantsList() {
             return;
         }
 
+        const generateSecurePassword = (fullName) => {
+            const nameStr = fullName.replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, '');
+            let base = nameStr.length > 0 ? nameStr : 'User';
+            let prefix = base.slice(0, 3).toLocaleLowerCase('tr-TR');
+            if (prefix.length < 3) prefix = prefix.padEnd(3, 'a');
+            prefix = prefix.charAt(0).toLocaleUpperCase('tr-TR') + prefix.slice(1);
+            
+            const numPart = Math.floor(1000 + Math.random() * 9000).toString(); // 4 digits
+            const chars = ['!', '?'];
+            const specialChar = chars[Math.floor(Math.random() * chars.length)];
+            
+            return prefix + numPart + specialChar;
+        };
+
         const compValue = isChild ? 'Move Travel & Mice' : (newCompany.trim() || 'Move Travel & Mice');
         if (!isChild && compValue && !companies.includes(compValue)) {
             addCompany(compValue);
         }
 
         const finalEmail = isChild ? `child_${Date.now()}@move.local` : emailQuery;
+        const newUserPassword = generateSecurePassword(newName);
 
         const newUser = await addUser({
             name: newName,
@@ -263,7 +278,7 @@ export default function ParticipantsList() {
             role: 'customer',
             phone: isChild ? '-' : (newPhone || '-'),
             company: compValue,
-            password: isChild ? '123456' : undefined,
+            password: newUserPassword,
             linkedTo: isChild && newParentIds.length > 0 ? newParentIds : null,
             isChildProfile: isChild
         });
@@ -311,10 +326,10 @@ export default function ParticipantsList() {
                 )
             });
         } else {
-            await sendTourAssignmentEmail(newUser.name, newUser.email, '123456');
+            await sendTourAssignmentEmail(newUser.name, newUser.email, newUserPassword);
             setSuccessPopup({
                 title: '✅ Yeni Profil Oluşturuldu!',
-                message: `Kullanıcı başarıyla oluşturuldu ve tura dahil edildi.\n\n📧 Müşteriye Gönderilen E-Posta:\n"Sayın ${newUser.name}, ${tour.name} seyahatine kaydınız yapıldı.\n\nKullanıcı Adınız: ${newUser.email}\nŞifreniz: 123456"`
+                message: `Kullanıcı başarıyla oluşturuldu ve tura dahil edildi.\n\n📧 Müşteriye Gönderilen E-Posta:\n"Sayın ${newUser.name}, ${tour.name} seyahatine kaydınız yapıldı.\n\nKullanıcı Adınız: ${newUser.email}\nŞifreniz: ${newUserPassword}"`
             });
         }
 
