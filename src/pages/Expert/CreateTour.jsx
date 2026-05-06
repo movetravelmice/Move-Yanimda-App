@@ -41,6 +41,28 @@ export default function CreateTour() {
                 setDestinations(tour.destinations);
                 setDatesText(tour.dates);
                 setCoverImage(tour.avatar);
+                
+                if (tour.dates && tour.dates.includes(' - ')) {
+                    try {
+                        const [startPart, endPart] = tour.dates.split(' - ');
+                        const parseDateTr = (dateStr) => {
+                            const monthsDict = { 'ocak': 1, 'şubat': 2, 'subat': 2, 'mart': 3, 'nisan': 4, 'mayıs': 5, 'mayis': 5, 'haziran': 6, 'temmuz': 7, 'ağustos': 8, 'agustos': 8, 'eylül': 9, 'eylul': 9, 'ekim': 10, 'kasım': 11, 'kasim': 11, 'aralık': 12, 'aralik': 12 };
+                            const p = dateStr.trim().split(' ');
+                            if (p.length >= 2) {
+                                const d = parseInt(p[0]);
+                                const mStr = p[1]?.toLowerCase().replace('ı', 'i').replace('ş', 's').replace('ğ', 'g').replace('ü', 'u').replace('ö', 'o').replace('ç', 'c');
+                                const m = monthsDict[mStr];
+                                const y = p[2] ? parseInt(p[2]) : new Date().getFullYear();
+                                if (!isNaN(d) && m !== undefined) {
+                                    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                                }
+                            }
+                            return '';
+                        };
+                        setStartDate(parseDateTr(startPart));
+                        setEndDate(parseDateTr(endPart));
+                    } catch(e) {}
+                }
             }
         }
     }, [tourId, tours]);
@@ -97,12 +119,11 @@ export default function CreateTour() {
         }
 
         let finalDates = datesText;
-        if (!finalDates) {
-            if (!startDate || !endDate) {
-               setPopupMsg({ show: true, type: 'error', title: 'Eksik Bilgi', text: 'Lütfen tarih alanlarını doldurun.' });
-               return;
-            }
+        if (startDate && endDate) {
             finalDates = `${new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(startDate))} - ${new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(endDate))}`;
+        } else if (!finalDates) {
+            setPopupMsg({ show: true, type: 'error', title: 'Eksik Bilgi', text: 'Lütfen tarih alanlarını doldurun.' });
+            return;
         }
 
         if (tourId) {
@@ -119,6 +140,11 @@ export default function CreateTour() {
                 destinations: destinations || "Belirtilmedi",
                 dates: finalDates,
                 guideName: currentUser?.name || 'Bilinmiyor',
+                expert: { 
+                    name: currentUser?.name || 'Bilinmiyor',
+                    avatar: currentUser?.avatar || '',
+                    email: currentUser?.email || ''
+                },
                 avatar: coverImage || "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=800"
             });
             setPopupMsg({ show: true, type: 'success', title: 'Muazzam!', text: 'Yeni tur başarıyla yaratıldı.' });
@@ -229,19 +255,6 @@ export default function CreateTour() {
                         />
                     </div>
 
-                    {tourId ? (
-                        <div style={{ marginBottom: '32px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <CalendarIcon size={14} /> Tarihler
-                            </label>
-                            <input 
-                                type="text" 
-                                value={datesText} 
-                                onChange={e => setDatesText(e.target.value)} 
-                                style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', outline: 'none', background: '#f8fafc', fontSize: '14px' }} 
-                            />
-                        </div>
-                    ) : (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '32px' }}>
                             <div>
                                 <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -266,7 +279,6 @@ export default function CreateTour() {
                                 />
                             </div>
                         </div>
-                    )}
 
                     <button 
                         className="btn-primary" 

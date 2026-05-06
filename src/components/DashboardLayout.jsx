@@ -57,7 +57,9 @@ export default function DashboardLayout() {
         <Route path="/" element={renderDashboard()} />
         <Route path="currency" element={<Currency />} />
         <Route path="transfers" element={<Transfers />} />
+        <Route path="transfers/:tourId" element={<Transfers />} />
         <Route path="program" element={<TourProgram />} />
+        <Route path="program/:tourId" element={<TourProgram />} />
         <Route path="chat" element={<ChatList />} />
         <Route path="chat/:chatId" element={<Chat />} />
         <Route path="notifications" element={<Notifications />} />

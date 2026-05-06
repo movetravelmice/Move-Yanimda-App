@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Calendar, PlaneTakeoff, Info, Star, MessageCircle, Phone, X, UserCheck, Eye, CloudSun, Map, Utensils, Landmark, Compass, ThermometerSun } from 'lucide-react';
 import Header from '../../components/Header';
-import { useTourStore } from '../../store/tourStore';
+import { useTourStore, calculateDaysAndNights } from '../../store/tourStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
@@ -91,8 +91,76 @@ export default function CustomerDashboard() {
            <p className="text-muted" style={{ fontSize: '13px', marginBottom: '24px' }}>Şu an kayıtlı olduğunuz aktif bir tur bulunmuyor.</p>
         )}
 
-        {activeTours.map(tour => (
-            <div key={tour.id} className="card" style={{ marginBottom: '24px' }}>
+        {activeTours.map(tour => {
+            let checkInWarning = null;
+            const myParticipant = tour.participants?.find(p => p.id === user?.id || p.email === user?.email);
+            const outgoingFlight = myParticipant?.flights?.find(f => f.type === 'Gidiş Uçuşu' || f.type === 'Gidis Ucusu') || myParticipant?.flights?.[0];
+
+            if (outgoingFlight && tour.dates) {
+                let flightDateObj = null;
+                const startDateStr = tour.dates.split(' - ')[0].trim();
+                const p = startDateStr.split(' ');
+                
+                if (p.length >= 2) {
+                    const d = parseInt(p[0]);
+                    const mStr = p[1]?.toLowerCase()
+                        .replace('ı', 'i').replace('ş', 's').replace('ğ', 'g').replace('ü', 'u').replace('ö', 'o').replace('ç', 'c');
+                    const monthsDict = { 'ocak': 0, 'subat': 1, 'mart': 2, 'nisan': 3, 'mayis': 4, 'haziran': 5, 'temmuz': 6, 'agustos': 7, 'eylul': 8, 'ekim': 9, 'kasim': 10, 'aralik': 11 };
+                    const m = monthsDict[mStr];
+                    const y = p[2] ? parseInt(p[2]) : new Date().getFullYear();
+                    
+                    if (!isNaN(d) && m !== undefined) {
+                        flightDateObj = new Date(y, m, d);
+                    }
+                }
+
+                // Fallback to DD.MM.YYYY
+                if (!flightDateObj && startDateStr.includes('.')) {
+                    const parts = startDateStr.split('.');
+                    if (parts.length >= 2) {
+                        const y = parts[2] ? parseInt(parts[2]) : new Date().getFullYear();
+                        flightDateObj = new Date(y, parseInt(parts[1]) - 1, parseInt(parts[0]));
+                    }
+                }
+
+                if (flightDateObj) {
+                    if (outgoingFlight.departureTime) {
+                        const timeParts = outgoingFlight.departureTime.split(':');
+                        if (timeParts.length === 2) {
+                            flightDateObj.setHours(parseInt(timeParts[0]) || 0);
+                            flightDateObj.setMinutes(parseInt(timeParts[1]) || 0);
+                        }
+                    }
+                    
+                    const now = new Date();
+                    const diffMs = flightDateObj.getTime() - now.getTime();
+                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                    
+                    if (diffHours > 0 && diffHours <= 48) {
+                        checkInWarning = {
+                            hoursLeft: diffHours,
+                            airline: outgoingFlight.airline || 'İlgili Havayolu'
+                        };
+                    }
+                }
+            }
+
+            return (
+            <div key={tour.id} style={{ position: 'relative' }}>
+              {checkInWarning && (
+                  <div style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', padding: '12px 16px', borderRadius: '12px', marginBottom: '12px', display: 'flex', gap: '12px', alignItems: 'center', boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)' }}>
+                      <div style={{ background: 'rgba(255,255,255,0.2)', padding: '8px', borderRadius: '50%' }}>
+                          <PlaneTakeoff size={20} color="white" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                          <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>Check-in Hatırlatması</h4>
+                          <p style={{ margin: '4px 0 0 0', fontSize: '13px', lineHeight: '1.4', opacity: 0.9 }}>
+                              Seyahatinize <strong>{checkInWarning.hoursLeft} saat</strong> kaldı. Lütfen <strong>{checkInWarning.airline.toUpperCase()}</strong> web sayfasını ziyaret ederek check-in işleminizi tamamlayınız.
+                          </p>
+                      </div>
+                  </div>
+              )}
+              <div className="card" style={{ marginBottom: '24px' }}>
               <div style={{ height: '140px', background: 'var(--primary-light)', borderRadius: '8px', marginBottom: '12px', overflow: 'hidden' }}>
                 <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
@@ -101,20 +169,27 @@ export default function CustomerDashboard() {
               <div className="flex-row text-muted" style={{ marginBottom: '6px', fontSize: '14px' }}>
                 <MapPin size={16} /> {tour.destinations}
               </div>
-              <div className="flex-row text-muted" style={{ marginBottom: '16px', fontSize: '14px' }}>
-                <Calendar size={16} /> {tour.dates}
+              <div className="flex-row text-muted" style={{ marginBottom: '16px', fontSize: '14px', justifyContent: 'space-between', width: '100%' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Calendar size={16} /> {tour.dates}
+                </div>
+                {calculateDaysAndNights(tour.dates) && (
+                    <div style={{ background: '#f8fafc', color: '#64748b', fontSize: '12px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                        {calculateDaysAndNights(tour.dates)}
+                    </div>
+                )}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
                 <div 
-                  onClick={() => navigate('/dashboard/transfers')}
+                  onClick={() => navigate('/dashboard/transfers/' + tour.id)}
                   style={{ background: '#f5f5f5', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }}
                 >
                   <PlaneTakeoff size={16} className="text-primary" />
                   <span style={{fontWeight: '600'}}>Uçuş & Transfer</span>
                 </div>
                 <div 
-                  onClick={() => navigate('/dashboard/program')}
+                  onClick={() => navigate('/dashboard/program/' + tour.id)}
                   style={{ background: '#f5f5f5', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }}
                 >
                   <Info size={16} className="text-primary" />
@@ -124,7 +199,7 @@ export default function CustomerDashboard() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div 
-                  onClick={() => setExpertModalData(tour.expert || { name: expertName })}
+                  onClick={() => setExpertModalData(tour.expert || { name: tour.guideName || expertName })}
                   style={{ background: '#f5f5f5', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }}
                 >
                   <UserCheck size={16} className="text-primary" />
@@ -139,7 +214,9 @@ export default function CustomerDashboard() {
                 </div>
               </div>
             </div>
-        ))}
+            </div>
+        );
+        })}
 
         <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginTop: '24px', marginBottom: '12px' }}>Geçmiş Turlarım</h2>
 
@@ -235,7 +312,7 @@ export default function CustomerDashboard() {
                <img loading="lazy" src={expertModalData.avatar || dynExpertUser?.avatar || "https://ui-avatars.com/api/?name=${expertName || 'U'}&background=D7147A&color=fff"} alt="Uzman" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
             </div>
             
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '4px', color: 'var(--text-main)' }}>{(expertName || expertModalData.name)}</h2>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '4px', color: 'var(--text-main)' }}>{expertModalData.name || expertName}</h2>
             <p className="text-muted" style={{ fontSize: '13px', marginBottom: '24px' }}>Bölge Seyahat Uzmanınız</p>
             
             <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
@@ -243,7 +320,7 @@ export default function CustomerDashboard() {
                   <Phone size={18} className="text-primary" /> Hemen Ara
                </a>
                
-               <a href={`https://wa.me/905321234567?text=Merhaba%20${(expertName || expertModalData.name).split(' ')[0]},%20turum%20hakk%C4%B1nda%20deste%C4%9Finize%20ihtiyac%C4%B1m%20var.`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: '#25D366', color: 'white', borderRadius: '12px', textDecoration: 'none', fontWeight: '600', transition: 'all 0.2s' }}>
+               <a href={`https://wa.me/905321234567?text=Merhaba%20${(expertModalData.name || expertName).split(' ')[0]},%20turum%20hakk%C4%B1nda%20deste%C4%9Finize%20ihtiyac%C4%B1m%20var.`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: '#25D366', color: 'white', borderRadius: '12px', textDecoration: 'none', fontWeight: '600', transition: 'all 0.2s' }}>
                   <MessageCircle size={18} color="#fff" /> WhatsApp'tan Yaz
                </a>
             </div>

@@ -410,7 +410,7 @@ export default function Chat() {
                         <div onClick={() => { 
                             setShowOptionsMenu(false); 
                             if(user?.role === 'customer') {
-                                navigate('/dashboard/program');
+                                navigate('/dashboard/program/' + (resolvedTour?.id || ''));
                             } else {
                                 navigate(`/dashboard/program-edit/${resolvedTour?.id}`); 
                             }

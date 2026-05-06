@@ -7,12 +7,14 @@ import ParticipantTransferManager from '../../components/ParticipantTransferMana
 import BulkTicketManager from '../../components/BulkTicketManager';
 import BulkDataEntryManager from '../../components/BulkDataEntryManager';
 import { useAuthStore } from '../../store/authStore';
+import { useSettingsStore } from '../../store/settingsStore';
 
 export default function ParticipantsList() {
     const navigate = useNavigate();
     const { tourId } = useParams();
     const [searchParams, setSearchParams] = useSearchParams();
     const { user } = useAuthStore();
+    const { settings } = useSettingsStore();
 
     const { tours, addParticipantToTour, removeParticipantFromTour } = useTourStore();
     const { users, companies, findUserByEmail, addUser, addCompany, updateUser } = useUserStore();
@@ -181,7 +183,30 @@ export default function ParticipantsList() {
         setShowSht(true);
     };
 
-    const handleEmailSearch = () => {
+    const sendTourAssignmentEmail = async (participantName, participantEmail, password = null) => {
+        if (settings?.smtp?.host && settings?.smtp?.user) {
+            try {
+                // Determine base URL: Use current origin in dev, or the production cloud functions URL
+                const baseUrl = window.location.hostname === 'localhost' ? 'http://127.0.0.1:5001/travel-app-move/us-central1/backend' : 'https://us-central1-travel-app-move.cloudfunctions.net/backend';
+                await fetch(`${baseUrl}/api/send-tour-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ...settings.smtp,
+                        to: participantEmail,
+                        corporateName: settings.corporateName,
+                        participantName: participantName,
+                        tourName: tour.name,
+                        password: password
+                    })
+                });
+            } catch(e) {
+                console.error("Email send error", e);
+            }
+        }
+    };
+
+    const handleEmailSearch = async () => {
         if (!emailQuery.trim()) return;
         setSearchError('');
 
@@ -192,9 +217,10 @@ export default function ParticipantsList() {
                 setSearchError('Bu müşteri zaten seyahate kayıtlı!');
             } else {
                 addParticipantToTour(tourId, existing);
+                await sendTourAssignmentEmail(existing.name, existing.email);
                 setSuccessPopup({
                     title: '✅ Başarıyla Eklendi!',
-                    message: `Kullanıcı sistemde bulundu (${existing.name}) ve seyahate dahil edildi.\n\n📧 Müşteriye Gönderilen E-Posta:\n"Sayın ${existing.name}, ${tour.name} loglu seyahat kaydınız yapılmıştır."`
+                    message: `Kullanıcı sistemde bulundu (${existing.name}) ve seyahate dahil edildi.\n\n📧 Müşteriye Gönderilen E-Posta:\n"Sayın ${existing.name}, ${tour.name} seyahati kaydınız yapılmıştır."`
                 });
                 resetWizard();
             }
@@ -277,6 +303,7 @@ export default function ParticipantsList() {
                 )
             });
         } else {
+            await sendTourAssignmentEmail(newUser.name, newUser.email, '123456');
             setSuccessPopup({
                 title: '✅ Yeni Profil Oluşturuldu!',
                 message: `Kullanıcı başarıyla oluşturuldu ve tura dahil edildi.\n\n📧 Müşteriye Gönderilen E-Posta:\n"Sayın ${newUser.name}, ${tour.name} seyahatine kaydınız yapıldı.\n\nKullanıcı Adınız: ${newUser.email}\nŞifreniz: 123456"`

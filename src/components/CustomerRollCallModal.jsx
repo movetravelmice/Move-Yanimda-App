@@ -15,14 +15,14 @@ export default function CustomerRollCallModal() {
         const now = Date.now();
         return tours.find(t => {
             // Is user a participant?
-            const isParticipant = t.participants?.some(p => p.id === user.id || p.email === user.email);
+            const isParticipant = t.participants?.some(p => p.id === user.id || (p.email && user.email && p.email.toLowerCase() === user.email.toLowerCase()));
             if (!isParticipant) return false;
 
-            // Is roll call active and in the future?
-            if (t.rollCall?.active && t.rollCall.endTime > now) {
+            // Is roll call active? (Rely strictly on the active flag to prevent client clock desync issues)
+            if (t.rollCall?.active) {
                 // Has current user NOT marked present yet?
                 const attendees = t.rollCall.attendees || [];
-                const hasMarkedPresent = attendees.some(p => p.id === user.id || p.email === user.email);
+                const hasMarkedPresent = attendees.some(p => p.id === user.id || (p.email && user.email && p.email.toLowerCase() === user.email.toLowerCase()));
                 return !hasMarkedPresent;
             }
             return false;
@@ -45,7 +45,7 @@ export default function CustomerRollCallModal() {
         return () => clearInterval(interval);
     }, [activeRollCallTour?.rollCall?.endTime, activeRollCallTour?.id]);
 
-    if (!activeRollCallTour || timeLeft <= 0) return null;
+    if (!activeRollCallTour) return null;
 
     const handleMarkHere = () => {
         markRollCallPresent(activeRollCallTour.id, user);
@@ -70,7 +70,7 @@ export default function CustomerRollCallModal() {
                 </p>
 
                 <div style={{ fontSize: '32px', fontWeight: '800', color: '#ef4444', marginBottom: '24px', fontFamily: 'monospace' }}>
-                    {formatTime(timeLeft)}
+                    {timeLeft > 0 ? formatTime(timeLeft) : 'Son Saniyeler...'}
                 </div>
                 
                 <button 

@@ -35,7 +35,7 @@ body {
   background-color: var(--bg-color);
   position: relative;
   overflow-x: hidden;
-  padding-bottom: 80px; /* Space for bottom nav */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom)); /* Space for bottom nav */
   box-shadow: 0 0 20px rgba(0,0,0,0.05);
 }
 
@@ -108,7 +108,7 @@ body {
 .top-header {
     background: var(--primary);
     color: white;
-    padding: 20px 16px;
+    padding: calc(20px + env(safe-area-inset-top, 0px)) 16px 20px 16px;
     border-bottom-left-radius: 20px;
     border-bottom-right-radius: 20px;
     display: flex;
@@ -151,7 +151,7 @@ body {
   background: var(--surface);
   display: flex;
   justify-content: space-around;
-  padding: 12px 0 24px;
+  padding: 12px 0 calc(24px + env(safe-area-inset-bottom, 0px));
   box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;

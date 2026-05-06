@@ -1,16 +1,17 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Map, Clock, Camera, Coffee, Bed, Bus, PlaneLanding, Activity } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
 
 export default function TourProgram() {
   const navigate = useNavigate();
+  const { tourId } = useParams();
   const { tours } = useTourStore();
   const { user } = useAuthStore();
   
   const myTours = tours.filter(t => t.participants?.some(p => p.id === user?.id || p.email === user?.email));
-  const activeTour = myTours.find(t => t.status === 'active');
+  const activeTour = tourId ? myTours.find(t => t.id === tourId) : myTours.find(t => t.status === 'active');
   const programDays = activeTour?.program || [];
 
 

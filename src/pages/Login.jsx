@@ -92,7 +92,7 @@ export default function Login() {
             justifyContent: 'center',
             alignItems: 'center',
             minHeight: '45vh',
-            paddingTop: '60px',
+            paddingTop: 'calc(60px + env(safe-area-inset-top, 0px))',
             paddingBottom: '120px',
             overflow: 'hidden'
         }}>
