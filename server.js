@@ -139,6 +139,56 @@ app.post('/api/send-sms', async (req, res) => {
     }
 });
 
+app.post('/api/send-ticket-email', async (req, res) => {
+    const { host, port, user, pass, to, participantName, tourName, flights } = req.body;
+    const senderBrand = 'Move Travel & Mice';
+
+    if (!host || !port || !user || !pass || !to) {
+        return res.status(400).json({ success: false, message: 'SMTP ayarları eksik.' });
+    }
+
+    try {
+        const transporter = nodemailer.createTransport({
+            host: host, port: Number(port), secure: Number(port) === 465, auth: { user, pass }
+        });
+
+        let flightsHtml = flights.map(f => `
+            <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 10px 0; border: 1px dashed #cbd5e1;">
+                <div style="font-weight:bold; color: #D7147A; margin-bottom: 8px;">${f.type || 'Uçuş'} - ${f.airline || ''}</div>
+                <div><strong>Kalkış:</strong> ${f.from || '-'} <strong>Varış:</strong> ${f.to || '-'}</div>
+                <div><strong>Tarih:</strong> ${f.date || '-'} ${f.departureTime || '-'}</div>
+                <div><strong>Uçuş Kodu:</strong> ${f.flightNo || '-'}</div>
+                <div><strong>PNR:</strong> ${f.pnr || '-'}</div>
+                <div><strong>Bilet No:</strong> ${f.ticketNo || '-'}</div>
+            </div>
+        `).join('');
+
+        let htmlContent = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px;">
+                <h2 style="color: #D7147A; margin-top: 0; text-align: center;">Biletleriniz Sisteme Eklendi</h2>
+                <p>Sayın <strong>${participantName}</strong>,</p>
+                <p><strong>${tourName}</strong> seyahatiniz için uçuş biletleriniz sisteme başarıyla işlenmiştir. Detayları aşağıda bulabilirsiniz:</p>
+                ${flightsHtml}
+                <p>Uygulamamıza giriş yaparak seyahatiniz ile ilgili detaylara dilediğiniz zaman ulaşabilirsiniz.</p>
+                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                <p style="font-size: 11px; color: #94a3b8; text-align: center;">Bizi tercih ettiğiniz için teşekkür ederiz.<br/>Move Travel & Mice</p>
+            </div>
+        `;
+
+        await transporter.sendMail({
+            from: `"${senderBrand}" <${user}>`,
+            to: to,
+            subject: `${senderBrand}: Uçuş Biletleriniz Sisteme Eklendi`,
+            html: htmlContent
+        });
+
+        return res.json({ success: true, message: `Bilet e-postası başarıyla gönderildi.` });
+    } catch (error) {
+        console.error("SMTP Hata:", error);
+        return res.status(500).json({ success: false, message: `SMTP Hatası: ${error.message}` });
+    }
+});
+
 app.post('/api/send-tour-email', async (req, res) => {
     const { host, port, user, pass, to, corporateName, participantName, tourName, password } = req.body;
     const senderBrand = corporateName || 'Move Travel & Mice';

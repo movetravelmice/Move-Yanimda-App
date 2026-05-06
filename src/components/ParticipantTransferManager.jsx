@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, PlaneTakeoff, PlaneLanding, Save, Bus, Plus, Trash2 } from 'lucide-react';
 import { useTourStore } from '../store/tourStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { useUserStore } from '../store/userStore';
 
 export default function ParticipantTransferManager({ tourId, participant, onClose }) {
   const { tours, updateParticipantTransfers } = useTourStore();
+  const { smtpConfig } = useSettingsStore();
+  const { users } = useUserStore();
   const tour = tours.find(t => t.id === tourId);
   const existingPart = tour?.participants.find(p => p.id === participant.id);
 
@@ -85,6 +89,28 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
       });
 
       updateParticipantTransfers(tourId, participant.id, flightsToSave, transfers);
+      
+      // Trigger Ticket Email Notification
+      if (flightsToSave.length > 0 && smtpConfig?.host && smtpConfig?.user) {
+          const globalUser = users.find(u => u.id === participant.id);
+          if (globalUser && globalUser.email && globalUser.email.includes('@')) {
+              try {
+                  const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                  fetch(`${baseUrl}/api/send-ticket-email`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                          ...smtpConfig,
+                          to: globalUser.email,
+                          participantName: participant.name,
+                          tourName: tour?.name || '',
+                          flights: flightsToSave
+                      })
+                  });
+              } catch (e) { console.error("Ticket email error", e); }
+          }
+      }
+
       alert('Uçuş ve Transfer bilgileri başarıyla atandı!');
       onClose();
   };

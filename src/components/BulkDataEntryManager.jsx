@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import { ChevronLeft, PlaneTakeoff, PlaneLanding, Save, Bus, Plus, Trash2 } from 'lucide-react';
 import { useTourStore } from '../store/tourStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { useUserStore } from '../store/userStore';
 
 export default function BulkDataEntryManager({ tourId, participants, onClose }) {
-  const { editTour } = useTourStore();
+  const { tours, editTour } = useTourStore();
+  const { smtpConfig } = useSettingsStore();
+  const { users } = useUserStore();
+  const tour = tours.find(t => t.id === tourId);
 
   const majorAirlines = [
       "Turkish Airlines", "Pegasus", "SunExpress", "AnadoluJet", "Corendon",
@@ -74,6 +79,30 @@ export default function BulkDataEntryManager({ tourId, participants, onClose }) 
       });
 
       editTour(tourId, { participants: newParticipants });
+      
+      // Trigger Ticket Email Notification for all affected users
+      if (flightsToSave.length > 0 && smtpConfig?.host && smtpConfig?.user) {
+          participants.forEach(p => {
+              const globalUser = users.find(u => u.id === p.id);
+              if (globalUser && globalUser.email && globalUser.email.includes('@')) {
+                  try {
+                      const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                      fetch(`${baseUrl}/api/send-ticket-email`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              ...smtpConfig,
+                              to: globalUser.email,
+                              participantName: p.name,
+                              tourName: tour?.name || '',
+                              flights: flightsToSave
+                          })
+                      });
+                  } catch (e) { console.error("Ticket email error", e); }
+              }
+          });
+      }
+
       alert(`Girilen veriler toplam ${participants.length} katılımcıya başarıyla eklendi!`);
       onClose();
   };

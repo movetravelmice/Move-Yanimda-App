@@ -2,10 +2,15 @@ import React, { useRef } from 'react';
 import { X, Download, Upload, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useTourStore } from '../store/tourStore';
+import { useSettingsStore } from '../store/settingsStore';
+import { useUserStore } from '../store/userStore';
 
 export default function BulkTicketManager({ tourId, participants, onClose }) {
-  const { editTour } = useTourStore();
+  const { tours, editTour } = useTourStore();
+  const { smtpConfig } = useSettingsStore();
+  const { users } = useUserStore();
   const fileInputRef = useRef(null);
+  const tour = tours.find(t => t.id === tourId);
 
   const getAirlineColor = (name) => {
       const n = (name || '').toLowerCase();
@@ -146,6 +151,30 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
 
         if (processCount > 0) {
             editTour(tourId, { participants: newParticipants });
+            
+            // Trigger Ticket Email Notification for all affected users
+            if (smtpConfig?.host && smtpConfig?.user) {
+                Object.keys(flightsByEmail).forEach(email => {
+                    const globalUser = users.find(u => u.email === email);
+                    const extractedFlights = flightsByEmail[email];
+                    if (globalUser && globalUser.email && globalUser.email.includes('@') && extractedFlights.length > 0) {
+                        try {
+                            const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                            fetch(`${baseUrl}/api/send-ticket-email`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    ...smtpConfig,
+                                    to: globalUser.email,
+                                    participantName: globalUser.name,
+                                    tourName: tour?.name || '',
+                                    flights: extractedFlights
+                                })
+                            });
+                        } catch (e) { console.error("Ticket email error", e); }
+                    }
+                });
+            }
         }
 
         alert(`Başarılı! ${processCount} katılımcının uçuş verileri Excel'den sisteme işlendi.`);
