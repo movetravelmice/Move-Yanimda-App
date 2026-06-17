@@ -145,6 +145,60 @@ export const useTourStore = create((set, get) => ({
               });
           } catch (e) {}
       }
+  },
+
+  checkAndSendFlightReminders: async (users, whatsappConfig, sendWhatsAppNotification) => {
+      const now = new Date();
+      const tours = get().tours;
+      
+      tours.forEach(async (tour) => {
+          if (tour.status !== 'active') return;
+          
+          let updatedParticipants = false;
+          const newParticipants = tour.participants.map(p => {
+              const globalUser = users.find(u => u.id === p.id || u.email === p.email) || p;
+              const outgoingFlight = p.flights?.find(f => f.type === 'Gidiş Uçuşu' || f.type === 'Gidis Ucusu') || p.flights?.[0];
+              
+              if (outgoingFlight && outgoingFlight.date && !p.checkInReminderSent) {
+                  try {
+                      const flightDateObj = new Date(outgoingFlight.date);
+                      if (outgoingFlight.departureTime) {
+                          const timeParts = outgoingFlight.departureTime.split(':');
+                          if (timeParts.length === 2) {
+                              flightDateObj.setHours(parseInt(timeParts[0]) || 0);
+                              flightDateObj.setMinutes(parseInt(timeParts[1]) || 0);
+                          }
+                      }
+                      
+                      const diffMs = flightDateObj.getTime() - now.getTime();
+                      const diffHours = diffMs / (1000 * 60 * 60);
+                      
+                      if (diffHours > 0 && diffHours <= 48) {
+                          if (globalUser.phone && globalUser.phone !== '-') {
+                              sendWhatsAppNotification(
+                                  globalUser.phone,
+                                  'checkInTemplate',
+                                  [p.name, tour.name, String(Math.floor(diffHours)), outgoingFlight.airline || 'Havayolu']
+                              );
+                          }
+                          updatedParticipants = true;
+                          return { ...p, checkInReminderSent: true };
+                      }
+                  } catch (err) {
+                      console.error("Failed parsing check-in flight date:", err);
+                  }
+              }
+              return p;
+          });
+          
+          if (updatedParticipants) {
+              try {
+                  await updateDoc(doc(db, 'tours', tour.id), { participants: newParticipants });
+              } catch (e) {
+                  console.error("Failed to save checkInReminderSent flag:", e);
+              }
+          }
+      });
   }
 }));
 

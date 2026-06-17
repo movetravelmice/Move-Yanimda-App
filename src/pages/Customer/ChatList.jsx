@@ -71,7 +71,13 @@ export default function ChatList() {
   };
 
   tours.forEach(tour => {
-     const isExpertForTour = user?.role === 'expert' && ((tour.guideName === user?.name) || (tour.expert?.name === user?.name)); 
+     const isExpertForTour = user?.role === 'expert' && (
+         (tour.guideName === user?.name) || 
+         (tour.expert?.name === user?.name) || 
+         (tour.expert?.email === user?.email) || 
+         (tour.expert2?.name === user?.name) || 
+         (tour.expert2?.email === user?.email)
+     ); 
      const isCustomerForTour = user?.role === 'customer' && tour.participants?.some(p => p.id === user?.id || p.email === user?.email);
      
      if (user?.role === 'admin' || isExpertForTour || isCustomerForTour) {

@@ -13,6 +13,17 @@ const defaultSettings = {
   smtpConfig: { host: 'smtp.gmail.com', port: '465', user: '', pass: '' },
   isSmtpVerified: false,
   netgsmConfig: { usercode: '', password: '', header: '' },
+  whatsappConfig: {
+    phoneId: '',
+    accessToken: '',
+    wabaId: '',
+    isEnabled: false,
+    newUserTemplate: 'new_user_welcome',
+    newTourTemplate: 'tour_registration',
+    passwordResetTemplate: 'password_reset',
+    ticketAddedTemplate: 'ticket_added',
+    checkInTemplate: 'checkin_reminder'
+  },
   expertStatus: 'offline',
   googlePlacesApiKey: 'AIzaSyDLKVedSDIIzh5fbRpUta9oShiW2omr7O4'
 };
@@ -63,6 +74,44 @@ export const useSettingsStore = create((set, get) => ({
   setNetgsmConfig: (config) => {
       const newConfig = { ...get().netgsmConfig, ...config };
       get().updateSetting('netgsmConfig', newConfig);
+  },
+  setWhatsappConfig: (config) => {
+      const newConfig = { ...get().whatsappConfig, ...config };
+      get().updateSetting('whatsappConfig', newConfig);
+  },
+  sendWhatsAppNotification: async (to, templateKey, parameters) => {
+      const config = get().whatsappConfig;
+      if (!config || !config.isEnabled || !config.phoneId || !config.accessToken) {
+          console.log("WhatsApp notifications disabled or unconfigured.");
+          return { success: false, message: 'WhatsApp bildirimleri kapalı veya yapılandırılmamış.' };
+      }
+
+      const templateName = config[templateKey];
+      if (!templateName) {
+          console.warn(`Template name for ${templateKey} is not configured.`);
+          return { success: false, message: `Şablon ismi (${templateKey}) yapılandırılmamış.` };
+      }
+
+      try {
+          const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+          const res = await fetch(`${baseUrl}/api/send-whatsapp`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  phoneId: config.phoneId,
+                  accessToken: config.accessToken,
+                  to: to,
+                  templateName: templateName,
+                  languageCode: 'tr',
+                  parameters: parameters
+              })
+          });
+          const data = await res.json();
+          return { success: res.ok, message: data.message };
+      } catch(e) {
+          console.error("WhatsApp notification error:", e);
+          return { success: false, message: e.message };
+      }
   },
   setExpertStatus: (status) => get().updateSetting('expertStatus', status),
   setGooglePlacesApiKey: (key) => get().updateSetting('googlePlacesApiKey', key)

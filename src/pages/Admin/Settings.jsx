@@ -12,7 +12,8 @@ export default function AdminSettings() {
       googlePlacesApiKey, setGooglePlacesApiKey,
       smtpConfig, setSmtpConfig,
       isSmtpVerified, setSmtpVerified,
-      netgsmConfig, setNetgsmConfig
+      netgsmConfig, setNetgsmConfig,
+      whatsappConfig, setWhatsappConfig
   } = useSettingsStore();
 
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
@@ -28,6 +29,11 @@ export default function AdminSettings() {
   const [testSmsNumber, setTestSmsNumber] = useState('');
   const [isSendingTestSms, setIsSendingTestSms] = useState(false);
   const [testSmsResult, setTestSmsResult] = useState(null);
+
+  const [testWaNumber, setTestWaNumber] = useState('');
+  const [testWaTemplate, setTestWaTemplate] = useState('new_user_welcome');
+  const [isSendingTestWa, setIsSendingTestWa] = useState(false);
+  const [testWaResult, setTestWaResult] = useState(null);
 
   const sendTestSms = async () => {
       if (!testSmsNumber) {
@@ -57,6 +63,52 @@ export default function AdminSettings() {
           setTestSmsResult({ success: false, message: 'Ağ hatası. Sunucu çalışmıyor olabilir.' });
       } finally {
           setIsSendingTestSms(false);
+      }
+  };
+
+  const sendTestWa = async () => {
+      if (!testWaNumber) {
+          setTestWaResult({ success: false, message: 'Lütfen geçerli bir numara girin.' });
+          return;
+      }
+      
+      setIsSendingTestWa(true);
+      setTestWaResult(null);
+
+      let parameters = [];
+      if (testWaTemplate === 'new_user_welcome') {
+          parameters = ['Ahmet Yılmaz', 'ahmet@sirket.com', 'Pass1234!'];
+      } else if (testWaTemplate === 'tour_registration') {
+          parameters = ['Ahmet Yılmaz', 'Klasik İtalya Turu'];
+      } else if (testWaTemplate === 'password_reset') {
+          parameters = ['Ahmet Yılmaz', 'Pass9988!'];
+      } else if (testWaTemplate === 'ticket_added') {
+          parameters = ['Ahmet Yılmaz', 'Klasik İtalya Turu', 'Pegasus', 'PC1234', 'ABCDEF'];
+      } else {
+          parameters = ['Ahmet Yılmaz', 'Klasik İtalya Turu', '48', 'Pegasus'];
+      }
+
+      try {
+          const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+          const res = await fetch(`${baseUrl}/api/send-whatsapp`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  phoneId: whatsappConfig.phoneId,
+                  accessToken: whatsappConfig.accessToken,
+                  to: testWaNumber,
+                  templateName: whatsappConfig[testWaTemplate === 'new_user_welcome' ? 'newUserTemplate' : (testWaTemplate === 'tour_registration' ? 'newTourTemplate' : (testWaTemplate === 'password_reset' ? 'passwordResetTemplate' : (testWaTemplate === 'ticket_added' ? 'ticketAddedTemplate' : 'checkInTemplate')))] || 'new_user_welcome',
+                  languageCode: 'tr',
+                  parameters: parameters
+              })
+          });
+
+          const data = await res.json();
+          setTestWaResult({ success: res.ok, message: data.message || (res.ok ? 'Mesaj başarıyla gönderildi!' : 'API hatası oluştu.') });
+      } catch (err) {
+          setTestWaResult({ success: false, message: 'Ağ hatası. Sunucuya bağlanılamadı.' });
+      } finally {
+          setIsSendingTestWa(false);
       }
   };
 
@@ -394,6 +446,173 @@ export default function AdminSettings() {
                     )}
                 </div>
 
+             </div>
+         </div>
+
+         {/* WhatsApp Business API */}
+         <div style={{ marginBottom: '32px' }}>
+             <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                 <Smartphone size={20} color="var(--primary)" /> WhatsApp Business Platform (API)
+             </h2>
+             <div className="card">
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>Müşterilerinize resmi WhatsApp Cloud API üzerinden otomatik işlem ve bilgilendirme bildirimleri gönderin.</p>
+                
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', padding: '12px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                    <input 
+                        type="checkbox"
+                        id="wa_enabled"
+                        checked={whatsappConfig?.isEnabled || false}
+                        onChange={e => setWhatsappConfig({ isEnabled: e.target.checked })}
+                        style={{ width: '18px', height: '18px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="wa_enabled" style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)', cursor: 'pointer' }}>WhatsApp Bildirim Entegrasyonunu Aktifleştir</label>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Telefon Numarası Kimliği (Phone ID)</label>
+                        <input 
+                            type="text"
+                            className="input-field"
+                            value={whatsappConfig?.phoneId || ''}
+                            onChange={e => setWhatsappConfig({ phoneId: e.target.value })}
+                            placeholder="Örn: 1023948293849283"
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px', background: '#f9f9f9' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>WABA ID (Hesap ID)</label>
+                        <input 
+                            type="text"
+                            className="input-field"
+                            value={whatsappConfig?.wabaId || ''}
+                            onChange={e => setWhatsappConfig({ wabaId: e.target.value })}
+                            placeholder="Örn: 987654321012345"
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px', background: '#f9f9f9' }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Kalıcı Erişim Jetonu (Permanent Access Token)</label>
+                        <textarea 
+                            rows={3}
+                            className="input-field"
+                            value={whatsappConfig?.accessToken || ''}
+                            onChange={e => setWhatsappConfig({ accessToken: e.target.value })}
+                            placeholder="EAAG..."
+                            style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px', background: '#f9f9f9', fontFamily: 'monospace', resize: 'none' }}
+                        />
+                    </div>
+                </div>
+
+                <h3 style={{ fontSize: '14px', fontWeight: 'bold', borderTop: '1px solid #f1f5f9', paddingTop: '16px', marginBottom: '12px' }}>WhatsApp Şablon İsimleri (Meta WABA)</h3>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '20px' }}>Meta panelinde onaylattığınız resmi şablon isimlerini (Template Name) girin.</p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>Yeni Kullanıcı Şablonu</label>
+                        <input 
+                            type="text"
+                            value={whatsappConfig?.newUserTemplate || ''}
+                            onChange={e => setWhatsappConfig({ newUserTemplate: e.target.value })}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px', marginBottom: '4px' }}
+                        />
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Meta Değişken Eşleşmesi: <code>{"{{1}}"}</code> = Müşteri Adı, <code>{"{{2}}"}</code> = Kullanıcı Adı (E-posta), <code>{"{{3}}"}</code> = Giriş Şifresi
+                        </div>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>Yeni Seyahat Kayıt Şablonu</label>
+                        <input 
+                            type="text"
+                            value={whatsappConfig?.newTourTemplate || ''}
+                            onChange={e => setWhatsappConfig({ newTourTemplate: e.target.value })}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px', marginBottom: '4px' }}
+                        />
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Meta Değişken Eşleşmesi: <code>{"{{1}}"}</code> = Müşteri Adı, <code>{"{{2}}"}</code> = Seyahat / Tur Adı
+                        </div>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>Şifre Sıfırlama Şablonu</label>
+                        <input 
+                            type="text"
+                            value={whatsappConfig?.passwordResetTemplate || ''}
+                            onChange={e => setWhatsappConfig({ passwordResetTemplate: e.target.value })}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px', marginBottom: '4px' }}
+                        />
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Meta Değişken Eşleşmesi: <code>{"{{1}}"}</code> = Müşteri Adı, <code>{"{{2}}"}</code> = Yeni Şifre
+                        </div>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>Bilet Ekleme Şablonu</label>
+                        <input 
+                            type="text"
+                            value={whatsappConfig?.ticketAddedTemplate || ''}
+                            onChange={e => setWhatsappConfig({ ticketAddedTemplate: e.target.value })}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px', marginBottom: '4px' }}
+                        />
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Meta Değişken Eşleşmesi: <code>{"{{1}}"}</code> = Müşteri Adı, <code>{"{{2}}"}</code> = Seyahat / Tur Adı, <code>{"{{3}}"}</code> = Havayolu, <code>{"{{4}}"}</code> = Uçuş Kodu, <code>{"{{5}}"}</code> = PNR Kodu
+                        </div>
+                    </div>
+                    <div>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>Son 48s & Check-in Uyarısı Şablonu</label>
+                        <input 
+                            type="text"
+                            value={whatsappConfig?.checkInTemplate || ''}
+                            onChange={e => setWhatsappConfig({ checkInTemplate: e.target.value })}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px', marginBottom: '4px' }}
+                        />
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                            Meta Değişken Eşleşmesi: <code>{"{{1}}"}</code> = Müşteri Adı, <code>{"{{2}}"}</code> = Seyahat / Tur Adı, <code>{"{{3}}"}</code> = Kalan Saat, <code>{"{{4}}"}</code> = Havayolu Şirketi
+                        </div>
+                    </div>
+                </div>
+
+                <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', margin: '0 -8px -8px -8px' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>Bağlantıyı doğrulamak için test numarası (Ülke kodlu, örn: 905XXXXXXXXX) girerek deneme şablon mesajı gönderin.</p>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '12px' }}>
+                        <select 
+                            value={testWaTemplate} 
+                            onChange={e => setTestWaTemplate(e.target.value)}
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '12px', background: 'white' }}
+                        >
+                            <option value="new_user_welcome">Yeni Kullanıcı Karşılama</option>
+                            <option value="tour_registration">Seyahat Kaydı Bildirimi</option>
+                            <option value="password_reset">Parola Sıfırlama</option>
+                            <option value="ticket_added">Bilet Tanımlama Bildirimi</option>
+                            <option value="checkin_reminder">Son 48 Saat / Check-in Uyarısı</option>
+                        </select>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                        <div style={{ flex: 1 }}>
+                            <input 
+                                type="text" 
+                                placeholder="905..." 
+                                value={testWaNumber}
+                                onChange={e => setTestWaNumber(e.target.value)}
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px' }}
+                            />
+                        </div>
+                        <button 
+                            onClick={sendTestWa}
+                            disabled={isSendingTestWa || !testWaNumber}
+                            style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: isSendingTestWa || !testWaNumber ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '8px', opacity: isSendingTestWa || !testWaNumber ? 0.7 : 1 }}>
+                            {isSendingTestWa ? <Loader2 size={16} className="spin" /> : <Smartphone size={16} />} 
+                            {isSendingTestWa ? 'Gönderiliyor...' : 'Test WhatsApp Mesajı'}
+                        </button>
+                    </div>
+                    
+                    {testWaResult && (
+                        <div style={{ marginTop: '12px', padding: '12px', borderRadius: '8px', fontSize: '12px', background: testWaResult.success ? '#ecfdf5' : '#fee2e2', color: testWaResult.success ? '#047857' : '#b91c1c', border: `1px solid ${testWaResult.success ? '#bbf7d0' : '#fecaca'}`, display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <Info size={16} /> 
+                            {testWaResult.message}
+                        </div>
+                    )}
+                </div>
              </div>
          </div>
 

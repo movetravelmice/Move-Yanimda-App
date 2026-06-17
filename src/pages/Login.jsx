@@ -67,6 +67,13 @@ export default function Login() {
               setError(data.message || 'Gönderim sırasında hata oluştu.');
           } else {
               setSuccessMsg(`✅ Şifreniz e-posta adresinize iletildi.`);
+              if (userRecord.phone && userRecord.phone !== '-') {
+                  useSettingsStore.getState().sendWhatsAppNotification(
+                      userRecord.phone,
+                      'passwordResetTemplate',
+                      [userRecord.name, userRecord.password]
+                  );
+              }
           }
       } catch (err) {
           setError('Kritik Hata: Bulut sunucusuna (Firebase Functions) ulaşılamadı. Lütfen sunucunun (deploy) yayınlandığından emin olun.');

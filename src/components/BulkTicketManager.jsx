@@ -62,6 +62,7 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
              'Uçuş Kodu': '',
              'PNR': '',
              'Bilet No': '',
+             'Sınıf (Ekonomi / Business)': '',
              'Tarih (GG.AA.YYYY)': '',
              'Kalkış Saati (SS:DD)': '',
              'Varış Saati (SS:DD)': ''
@@ -78,6 +79,7 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
                  'Uçuş Kodu': f.flightNo || '',
                  'PNR': f.pnr || '',
                  'Bilet No': f.ticketNo || '',
+                 'Sınıf (Ekonomi / Business)': f.cabinClass || 'Ekonomi',
                  'Tarih (GG.AA.YYYY)': formatDateForExcel(f.date),
                  'Kalkış Saati (SS:DD)': f.departureTime || '',
                  'Varış Saati (SS:DD)': f.arrivalTime || ''
@@ -126,6 +128,7 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
                   flightNo: row['Uçuş Kodu'] || '',
                   pnr: row['PNR'] || '',
                   ticketNo: row['Bilet No'] || '',
+                  cabinClass: row['Sınıf (Ekonomi / Business)'] || 'Ekonomi',
                   date: parseDateFromExcel(row['Tarih (GG.AA.YYYY)']),
                   departureTime: row['Kalkış Saati (SS:DD)'] || '',
                   arrivalTime: row['Varış Saati (SS:DD)'] || '',
@@ -152,12 +155,12 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
         if (processCount > 0) {
             editTour(tourId, { participants: newParticipants });
             
-            // Trigger Ticket Email Notification for all affected users
-            if (smtpConfig?.host && smtpConfig?.user) {
-                Object.keys(flightsByEmail).forEach(email => {
-                    const globalUser = users.find(u => u.email === email);
-                    const extractedFlights = flightsByEmail[email];
-                    if (globalUser && globalUser.email && globalUser.email.includes('@') && extractedFlights.length > 0) {
+            // Trigger Notifications
+            Object.keys(flightsByEmail).forEach(email => {
+                const globalUser = users.find(u => u.email === email);
+                const extractedFlights = flightsByEmail[email];
+                if (globalUser && extractedFlights.length > 0) {
+                    if (smtpConfig?.host && smtpConfig?.user && globalUser.email && globalUser.email.includes('@')) {
                         try {
                             const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
                             fetch(`${baseUrl}/api/send-ticket-email`, {
@@ -173,8 +176,16 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
                             });
                         } catch (e) { console.error("Ticket email error", e); }
                     }
-                });
-            }
+
+                    if (globalUser.phone && globalUser.phone !== '-') {
+                        useSettingsStore.getState().sendWhatsAppNotification(
+                            globalUser.phone,
+                            'ticketAddedTemplate',
+                            [globalUser.name, tour?.name || '', extractedFlights[0]?.airline || '-', extractedFlights[0]?.flightNo || '-', extractedFlights[0]?.pnr || '-']
+                        );
+                    }
+                }
+            });
         }
 
         alert(`Başarılı! ${processCount} katılımcının uçuş verileri Excel'den sisteme işlendi.`);

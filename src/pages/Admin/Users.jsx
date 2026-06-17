@@ -52,7 +52,7 @@ export default function AdminUsers() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
-  const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', role: 'expert', avatar: null, password: '', phone: '', company: '', parentIds: [], childrenIds: [] });
+  const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', role: 'expert', avatar: null, password: '', phone: '', company: '', parentIds: [], childrenIds: [], tcNo: '' });
   const avatarFileRef = useRef(null);
 
   const [customerType, setCustomerType] = useState('parent');
@@ -132,7 +132,7 @@ export default function AdminUsers() {
   };
 
   const handleOpenModal = () => {
-      setFormData({ firstName: '', lastName: '', email: '', role: activeTab, avatar: null, password: '', phone: '', company: '', parentIds: [], childrenIds: [] });
+      setFormData({ firstName: '', lastName: '', email: '', role: activeTab, avatar: null, password: '', phone: '', company: '', parentIds: [], childrenIds: [], tcNo: '' });
       setCustomerType('parent');
       setChildSearchQuery('');
       setEditingUserId(null);
@@ -163,7 +163,8 @@ export default function AdminUsers() {
           company: user.company || '',
           password: '',
           parentIds: isChildUser ? existingLinkedTo : [],
-          childrenIds: childrenIds
+          childrenIds: childrenIds,
+          tcNo: user.tcNo || ''
       });
       setCustomerType(isChildUser ? 'child' : 'parent');
       setChildSearchQuery('');
@@ -241,7 +242,8 @@ export default function AdminUsers() {
               avatar: formData.avatar,
               phone: isChild ? '-' : (formData.phone || '-'),
               company: formData.role === 'customer' ? (isChild ? 'Move Travel & Mice' : (formData.company || 'Move Travel & Mice')) : 'Move Travel & Mice',
-              isChildProfile: isChild
+              isChildProfile: isChild,
+              tcNo: formData.role === 'customer' ? (formData.tcNo || '') : ''
           };
           if (formData.role === 'customer') {
               if (isChild) {
@@ -625,6 +627,20 @@ export default function AdminUsers() {
                                   />
                               </div>
                           </div>
+
+                          {formData.role === 'customer' && (
+                              <div>
+                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>T.C. Kimlik Numarası</label>
+                                  <input 
+                                      type="text" 
+                                      maxLength={11}
+                                      placeholder="Örn: 12345678901" 
+                                      value={formData.tcNo || ''}
+                                      onChange={e => setFormData({...formData, tcNo: e.target.value.replace(/\D/g, '')})}
+                                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px' }}
+                                  />
+                              </div>
+                          )}
                           
                               {!(formData.role === 'customer' && customerType === 'child') && (
                                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>

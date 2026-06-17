@@ -109,6 +109,7 @@ export default function ProfileSettings() {
     passportCountry: targetUser?.passportCountry || '',
     passportNo: targetUser?.passportNo || '',
     passportExp: targetUser?.passportExp || '',
+    tcNo: targetUser?.tcNo || '',
     bloodType: targetUser?.bloodType || '',
     birthDate: targetUser?.birthDate || '',
     emergencyContactName: targetUser?.emergencyContactName || '',
@@ -132,6 +133,7 @@ export default function ProfileSettings() {
         passportCountry: targetUser?.passportCountry || '',
         passportNo: targetUser?.passportNo || '',
         passportExp: targetUser?.passportExp || '',
+        tcNo: targetUser?.tcNo || '',
         bloodType: targetUser?.bloodType || '',
         birthDate: targetUser?.birthDate || '',
         emergencyContactName: targetUser?.emergencyContactName || '',
@@ -157,6 +159,7 @@ export default function ProfileSettings() {
         passportCountry: formData.passportCountry,
         passportNo: formData.passportNo,
         passportExp: formData.passportExp,
+        tcNo: formData.tcNo,
         bloodType: formData.bloodType,
         birthDate: formData.birthDate,
         emergencyContactName: formData.emergencyContactName,
@@ -355,6 +358,35 @@ export default function ProfileSettings() {
                  
                  {targetUser?.role === 'customer' && (
                      <>
+                     <div style={{ background: 'white', borderRadius: '16px', padding: '16px', marginBottom: '24px', border: '1px solid #e2e8f0' }}>
+                          <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {isChildProfile ? 'Çocuğa Ait Kimlik & Pasaport Bilgileri' : 'Kimlik & Pasaport Bilgileri'}
+                          </h3>
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                              <div style={{ gridColumn: '1 / -1' }}>
+                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>T.C. Kimlik Numarası</label>
+                                  <input type="text" maxLength={11} placeholder="Örn: 12345678901" value={formData.tcNo} onChange={e => setFormData({...formData, tcNo: e.target.value.replace(/\D/g, '')})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                              </div>
+                              <div>
+                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Ülke Pasaportu</label>
+                                  <input type="text" placeholder="Örn: Türkiye" value={formData.passportCountry} onChange={e => setFormData({...formData, passportCountry: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                              </div>
+                              <div>
+                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Pasaport No</label>
+                                  <input type="text" placeholder="Örn: U12345678" value={formData.passportNo} onChange={e => setFormData({...formData, passportNo: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                              </div>
+                              <div>
+                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>P. Geçerlilik T.</label>
+                                  <input type="date" value={formData.passportExp} onChange={e => setFormData({...formData, passportExp: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                              </div>
+                              <div>
+                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Doğum Tarihi</label>
+                                  <input type="date" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                              </div>
+                          </div>
+                      </div>
+
                      <div style={{ background: '#fdfce8', padding: '16px', borderRadius: '16px', marginBottom: '24px', border: '1px solid #fef08a' }}>
                          <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px', color: '#a16207', display: 'flex', alignItems: 'center', gap: '8px' }}>
                              {isChildProfile ? 'Çocuğa Ait Sağlık & Acil Durum Bilgileri' : 'Sağlık & Acil Durum Bilgileri'}

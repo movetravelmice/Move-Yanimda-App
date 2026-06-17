@@ -105,6 +105,44 @@ function PastOperationsContent() {
                     avgRating = (totalScore / filteredFeedbacks.length).toFixed(1);
                 }
 
+                const ratingLabels = {
+                    program: 'Genel Olarak Program',
+                    acentaHizmeti: 'Acenta Yetkililerinin Hizmeti',
+                    ucakHizmeti: 'Uçak Yolculuğu Ve Hizmeti',
+                    turlar: 'Katılım Sağladığınız Turlar',
+                    konaklamaTemizlik: 'Konaklama Temizlik & Konforu',
+                    konaklamaKonum: 'Konaklama Yer & Konumu'
+                };
+
+                const detailedAverages = {
+                    program: 0,
+                    acentaHizmeti: 0,
+                    ucakHizmeti: 0,
+                    turlar: 0,
+                    konaklamaTemizlik: 0,
+                    konaklamaKonum: 0
+                };
+
+                if (filteredFeedbacks.length > 0) {
+                    const counts = { program: 0, acentaHizmeti: 0, ucakHizmeti: 0, turlar: 0, konaklamaTemizlik: 0, konaklamaKonum: 0 };
+                    filteredFeedbacks.forEach(p => {
+                        const det = p.feedback.detailedRatings || {};
+                        Object.keys(detailedAverages).forEach(key => {
+                            if (det[key] !== undefined && Number(det[key]) > 0) {
+                                detailedAverages[key] += Number(det[key]);
+                                counts[key]++;
+                            }
+                        });
+                    });
+                    Object.keys(detailedAverages).forEach(key => {
+                        if (counts[key] > 0) {
+                            detailedAverages[key] = (detailedAverages[key] / counts[key]).toFixed(1);
+                        } else {
+                            detailedAverages[key] = null;
+                        }
+                    });
+                }
+
                 return (
                     <div key={tour.id || idx} style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)', marginBottom: '24px', overflow: 'hidden' }}>
                         
@@ -134,6 +172,27 @@ function PastOperationsContent() {
                             </div>
                         </div>
 
+                        {/* Category Averages Section */}
+                        {filteredFeedbacks.length > 0 && (
+                            <div style={{ padding: '16px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                <h4 style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '12px' }}>Kategori Bazlı Değerlendirme Ortalamaları</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
+                                    {Object.keys(detailedAverages).map(key => {
+                                        const score = detailedAverages[key];
+                                        if (score === null) return null;
+                                        return (
+                                            <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{ratingLabels[key]}</span>
+                                                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#b45309', display: 'flex', alignItems: 'center', gap: '4px', background: '#fef3c7', padding: '2px 6px', borderRadius: '4px' }}>
+                                                    <Star size={12} fill="#d97706" color="#d97706" /> {score}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Participant Listing & Feedback */}
                         <div style={{ padding: '20px' }}>
                             <h3 style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '16px', borderBottom: '1px solid #e2e8f0', paddingBottom: '8px' }}>Müşteri Geri Bildirimleri</h3>
@@ -155,13 +214,66 @@ function PastOperationsContent() {
                                                 )}
                                             </div>
 
-                                            {user?.feedback?.comment ? (
-                                                <div style={{ fontSize: '13px', color: '#334155', background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #6366f1', fontStyle: 'italic' }}>
-                                                    "{user.feedback.comment}"
+                                            {user?.feedback ? (
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                                                    {/* Detailed Ratings */}
+                                                    {user.feedback.detailedRatings && (
+                                                        <div style={{ background: 'white', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                                            <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Soru Bazlı Değerlendirme</div>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                                {Object.keys(ratingLabels).map(key => {
+                                                                    const val = user.feedback.detailedRatings[key] || 0;
+                                                                    return (
+                                                                        <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                            <span style={{ fontSize: '12px', color: '#475569' }}>{ratingLabels[key]}</span>
+                                                                            <div style={{ display: 'flex', gap: '2px' }}>
+                                                                                {[1, 2, 3, 4, 5].map(star => (
+                                                                                    <Star 
+                                                                                        key={star} 
+                                                                                        size={12} 
+                                                                                        fill={star <= val ? '#f59e0b' : 'none'} 
+                                                                                        color={star <= val ? '#f59e0b' : '#cbd5e1'} 
+                                                                                    />
+                                                                                ))}
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Contact preferences & Next year places */}
+                                                    {(user.feedback.contactPref || user.feedback.nextYearPlaces) && (
+                                                        <div style={{ background: 'white', padding: '12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                                            {user.feedback.contactPref && (
+                                                                <div style={{ fontSize: '12px' }}>
+                                                                    <strong style={{ color: 'var(--text-main)' }}>İletişim Tercihi: </strong>
+                                                                    <span style={{ color: '#475569' }}>
+                                                                        {user.feedback.contactPref === 'telefon' && 'Telefon İle Bilgi Almak İstiyorum'}
+                                                                        {user.feedback.contactPref === 'brosur' && 'Broşür Gönderimi İle Bilgi Almak İstiyorum'}
+                                                                        {user.feedback.contactPref === 'istemiyorum' && 'Bilgi Almak İstemiyorum'}
+                                                                        {user.feedback.contactPref !== 'telefon' && user.feedback.contactPref !== 'brosur' && user.feedback.contactPref !== 'istemiyorum' && user.feedback.contactPref}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                            {user.feedback.nextYearPlaces && (
+                                                                <div style={{ fontSize: '12px' }}>
+                                                                    <strong style={{ color: 'var(--text-main)' }}>Önümüzdeki Yıl Seyahat Etmek İstediği Yerler: </strong>
+                                                                    <span style={{ color: '#475569' }}>{user.feedback.nextYearPlaces}</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Written Comment */}
+                                                    <div style={{ fontSize: '13px', color: '#334155', background: 'white', padding: '12px', borderRadius: '8px', borderLeft: '3px solid #6366f1', fontStyle: 'italic' }}>
+                                                        "{user.feedback.comment || 'Detaylı puanlama yaptı, yazılı görüş belirtmedi.'}"
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <div style={{ fontSize: '12px', color: '#94a3b8', fontStyle: 'italic', background: 'white', padding: '8px', borderRadius: '8px' }}>
-                                                    Müşteri henüz yorum bırakmadı.
+                                                    Müşteri henüz değerlendirme bırakmadı.
                                                 </div>
                                             )}
                                         </div>

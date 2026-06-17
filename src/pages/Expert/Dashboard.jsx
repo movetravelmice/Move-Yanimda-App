@@ -10,9 +10,15 @@ import ExpertRollCallPanel from '../../components/ExpertRollCallPanel';
 export default function ExpertDashboard() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
-  const { tours, editTour, startRollCall, endRollCall } = useTourStore();
+  const { tours, editTour, startRollCall, endRollCall, setTourStatus } = useTourStore();
   const { addNotification } = useNotificationStore();
-  const myTours = tours.filter(t => (t.guideName === user?.name) || (t.expert?.name === user?.name));
+  const myTours = tours.filter(t => 
+      (t.guideName === user?.name) || 
+      (t.expert?.name === user?.name) || 
+      (t.expert?.email === user?.email) || 
+      (t.expert2?.name === user?.name) || 
+      (t.expert2?.email === user?.email)
+  );
   const activeTours = myTours.filter(t => t.status === 'active');
   const pastTours = myTours.filter(t => t.status === 'past');
 
@@ -27,9 +33,23 @@ export default function ExpertDashboard() {
   const [rollCallDuration, setRollCallDuration] = useState(3);
   const [missingListModal, setMissingListModal] = useState({ show: false, tourId: null, missing: [] });
 
+  const [completeTourPromptId, setCompleteTourPromptId] = useState(null);
+
   const handleStartRollCallPrompt = (tourId) => {
       setPromptTourId(tourId);
       setRollCallDuration(3);
+  };
+
+  const handleCompleteTourPrompt = (tourId) => {
+      setCompleteTourPromptId(tourId);
+  };
+
+  const confirmCompleteTour = async () => {
+      if (completeTourPromptId) {
+          await setTourStatus(completeTourPromptId, 'past');
+          setCompleteTourPromptId(null);
+          setPopupMsg({ show: true, type: 'success', title: 'Tamamlandı!', text: 'Seyahat başarıyla tamamlandı ve geçmiş turlara atıldı.' });
+      }
   };
 
   const confirmStartRollCall = () => {
@@ -164,6 +184,9 @@ export default function ExpertDashboard() {
                 <div style={{ display: 'flex', gap: '8px' }}>
                     <div onClick={() => handleStartRollCallPrompt(tour.id)} style={{ cursor: 'pointer', background: '#fdf2f8', padding: '6px', borderRadius: '6px' }} title="Sayım Başlat">
                        <Timer size={16} className="text-primary" />
+                    </div>
+                    <div onClick={() => handleCompleteTourPrompt(tour.id)} style={{ cursor: 'pointer', background: '#ecfdf5', padding: '6px', borderRadius: '6px' }} title="Seyahati Tamamla">
+                       <CheckCircle2 size={16} style={{ color: '#10b981' }} />
                     </div>
                     <div onClick={() => navigate(`/dashboard/create-tour/${tour.id}`)} style={{ cursor: 'pointer', background: '#f1f5f9', padding: '6px', borderRadius: '6px' }} title="Turu Düzenle">
                        <Edit3 size={16} className="text-primary" />
@@ -325,6 +348,31 @@ export default function ExpertDashboard() {
                   </button>
               </div>
           </div>
+      )}
+
+      {completeTourPromptId && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
+            <div className="card" style={{ width: '100%', maxWidth: '340px', padding: '28px 24px', animation: 'scaleUp 0.2s ease-out', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: '24px', background: 'white' }}>
+                <div onClick={() => setCompleteTourPromptId(null)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                    <X size={20} />
+                </div>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', border: '4px solid #fecaca' }}>
+                    <CheckCircle2 size={32} color="#ef4444" />
+                </div>
+                <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 8px 0', color: 'var(--text-main)', textAlign: 'center' }}>Emin misiniz?</h2>
+                <p style={{ fontSize: '14px', color: 'var(--text-muted)', textAlign: 'center', margin: 0, marginBottom: '24px', lineHeight: 1.5 }}>
+                    Bu seyahati süresi dolmadan tamamlamak istediğinize emin misiniz? Seyahat geçmiş turlara taşınacaktır.
+                </p>
+                <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
+                    <button onClick={() => setCompleteTourPromptId(null)} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'white', color: 'var(--text-main)', fontWeight: 'bold', cursor: 'pointer' }}>
+                        Vazgeç
+                    </button>
+                    <button onClick={confirmCompleteTour} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
+                        Evet, Tamamla
+                    </button>
+                </div>
+            </div>
+        </div>
       )}
 
     </div>

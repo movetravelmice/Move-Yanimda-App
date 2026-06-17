@@ -253,6 +253,68 @@ app.post('/api/send-tour-email', async (req, res) => {
     }
 });
 
+app.post('/api/send-whatsapp', async (req, res) => {
+    const { phoneId, accessToken, to, templateName, languageCode, parameters } = req.body;
+
+    if (!phoneId || !accessToken || !to || !templateName) {
+        return res.status(400).json({ success: false, message: 'WhatsApp API ayarları veya alıcı/şablon bilgisi eksik.' });
+    }
+
+    const cleanPhone = to.replace(/[^0-9]/g, '');
+
+    try {
+        const bodyData = {
+            messaging_product: "whatsapp",
+            recipient_type: "individual",
+            to: cleanPhone,
+            type: "template",
+            template: {
+                name: templateName,
+                language: {
+                    code: languageCode || 'tr'
+                }
+            }
+        };
+
+        if (parameters && parameters.length > 0) {
+            bodyData.template.components = [
+                {
+                    type: "body",
+                    parameters: parameters.map(p => ({
+                        type: "text",
+                        text: String(p)
+                    }))
+                }
+            ];
+        }
+
+        const response = await fetch(`https://graph.facebook.com/v20.0/${phoneId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(bodyData)
+        });
+
+        const resData = await response.json();
+
+        if (response.ok) {
+            return res.json({ success: true, message: 'WhatsApp mesajı başarıyla sıraya alındı.', data: resData });
+        } else {
+            console.error("WhatsApp API Error:", resData);
+            return res.status(response.status).json({ 
+                success: false, 
+                message: `WhatsApp API Hatası: ${resData.error?.message || 'Bilinmeyen Hata'}`, 
+                data: resData 
+            });
+        }
+    } catch (error) {
+        console.error("WhatsApp Sunucu Hatası:", error);
+        return res.status(500).json({ success: false, message: `WhatsApp Sunucu Hatası: ${error.message}` });
+    }
+});
+
 app.get('/api/tcmb-rates', async (req, res) => {
     try {
         const response = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml');

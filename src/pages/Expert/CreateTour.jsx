@@ -3,12 +3,17 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Sparkles, Image as ImageIcon, CheckCircle2, ChevronLeft, Map, Calendar as CalendarIcon, Upload } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
+import { useUserStore } from '../../store/userStore';
 
 export default function CreateTour() {
     const navigate = useNavigate();
     const { tourId } = useParams();
     const { tours, addTour, editTour } = useTourStore();
     const currentUser = useAuthStore(state => state.user);
+    
+    const allUsers = useUserStore(state => state.users);
+    const expertsList = allUsers.filter(u => u.role === 'expert');
+    const otherExperts = expertsList.filter(u => u.email !== currentUser?.email);
 
     const [tourName, setTourName] = useState('');
     const [destinations, setDestinations] = useState('');
@@ -16,6 +21,7 @@ export default function CreateTour() {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [coverImage, setCoverImage] = useState('');
+    const [selectedExpert2, setSelectedExpert2] = useState('');
     
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [isManualImage, setIsManualImage] = useState(false);
@@ -41,6 +47,12 @@ export default function CreateTour() {
                 setDestinations(tour.destinations);
                 setDatesText(tour.dates);
                 setCoverImage(tour.avatar);
+                
+                if (tour.expert2) {
+                    setSelectedExpert2(tour.expert2.email || '');
+                } else {
+                    setSelectedExpert2('');
+                }
                 
                 if (tour.dates && tour.dates.includes(' - ')) {
                     try {
@@ -126,12 +138,21 @@ export default function CreateTour() {
             return;
         }
 
+        const secondExpertObj = otherExperts.find(u => u.email === selectedExpert2);
+        const expert2Data = secondExpertObj ? {
+            name: secondExpertObj.name,
+            avatar: secondExpertObj.avatar,
+            email: secondExpertObj.email,
+            phone: secondExpertObj.phone || '+905321234568'
+        } : null;
+
         if (tourId) {
             editTour(tourId, {
                 name: tourName,
                 destinations: destinations || "Belirtilmedi",
                 dates: finalDates,
-                avatar: coverImage || "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=800"
+                avatar: coverImage || "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=800",
+                expert2: expert2Data || null
             });
             setPopupMsg({ show: true, type: 'success', title: 'Başarılı', text: 'Tur başarıyla güncellendi!' });
         } else {
@@ -145,6 +166,7 @@ export default function CreateTour() {
                     avatar: currentUser?.avatar || '',
                     email: currentUser?.email || ''
                 },
+                expert2: expert2Data || null,
                 avatar: coverImage || "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&q=80&w=800"
             });
             setPopupMsg({ show: true, type: 'success', title: 'Muazzam!', text: 'Yeni tur başarıyla yaratıldı.' });
@@ -253,6 +275,20 @@ export default function CreateTour() {
                             placeholder="Örn: Roma, Floransa, Venedik" 
                             style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', outline: 'none', background: '#f8fafc', fontSize: '15px' }} 
                         />
+                    </div>
+
+                    <div style={{ marginBottom: '20px' }}>
+                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>2. Seyahat Uzmanı (Seçmeli)</label>
+                        <select
+                            value={selectedExpert2}
+                            onChange={e => setSelectedExpert2(e.target.value)}
+                            style={{ width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', outline: 'none', background: '#f8fafc', fontSize: '15px', color: 'var(--text-main)', cursor: 'pointer' }}
+                        >
+                            <option value="">-- Uzman Seçin (Yok) --</option>
+                            {otherExperts.map(exp => (
+                                <option key={exp.id} value={exp.email}>{exp.name} ({exp.email})</option>
+                            ))}
+                        </select>
                     </div>
 
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '32px' }}>

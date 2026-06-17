@@ -23,11 +23,11 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
 
   useEffect(() => {
     if (existingPart?.flights?.length > 0) {
-       setFlightsInput(existingPart.flights.map(f => ({ ...f, id: Math.random() })));
+       setFlightsInput(existingPart.flights.map(f => ({ ...f, cabinClass: f.cabinClass || 'Ekonomi', id: Math.random() })));
     } else {
        // Start with one empty departure flight for convenience
        setFlightsInput([
-         { id: Date.now(), type: 'Gidiş Uçuşu', airline: '', from: '', to: '', flightNo: '', date: '', departureTime: '', arrivalTime: '', pnr: '', ticketNo: '' }
+         { id: Date.now(), type: 'Gidiş Uçuşu', airline: '', from: '', to: '', flightNo: '', date: '', departureTime: '', arrivalTime: '', pnr: '', ticketNo: '', cabinClass: 'Ekonomi' }
        ]);
     }
     
@@ -72,6 +72,7 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
           arrivalTime: f.arrivalTime,
           pnr: f.pnr,
           ticketNo: f.ticketNo,
+          cabinClass: f.cabinClass || 'Ekonomi',
           icon: f.type === 'Gidiş Uçuşu' ? 'takeoff' : 'landing'
       }));
       
@@ -90,24 +91,34 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
 
       updateParticipantTransfers(tourId, participant.id, flightsToSave, transfers);
       
-      // Trigger Ticket Email Notification
-      if (flightsToSave.length > 0 && smtpConfig?.host && smtpConfig?.user) {
-          const globalUser = users.find(u => u.id === participant.id);
-          if (globalUser && globalUser.email && globalUser.email.includes('@')) {
-              try {
-                  const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
-                  fetch(`${baseUrl}/api/send-ticket-email`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                          ...smtpConfig,
-                          to: globalUser.email,
-                          participantName: participant.name,
-                          tourName: tour?.name || '',
-                          flights: flightsToSave
-                      })
-                  });
-              } catch (e) { console.error("Ticket email error", e); }
+      // Trigger Notifications
+      if (flightsToSave.length > 0) {
+          const globalUser = users.find(u => u.id === participant.id) || participant;
+          if (globalUser) {
+              if (smtpConfig?.host && smtpConfig?.user && globalUser.email && globalUser.email.includes('@')) {
+                  try {
+                      const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                      fetch(`${baseUrl}/api/send-ticket-email`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              ...smtpConfig,
+                              to: globalUser.email,
+                              participantName: participant.name,
+                              tourName: tour?.name || '',
+                              flights: flightsToSave
+                          })
+                      });
+                  } catch (e) { console.error("Ticket email error", e); }
+              }
+
+              if (globalUser.phone && globalUser.phone !== '-') {
+                  useSettingsStore.getState().sendWhatsAppNotification(
+                      globalUser.phone,
+                      'ticketAddedTemplate',
+                      [participant.name, tour?.name || '', flightsToSave[0]?.airline || '-', flightsToSave[0]?.flightNo || '-', flightsToSave[0]?.pnr || '-']
+                  );
+              }
           }
       }
 
@@ -119,7 +130,7 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
       setFlightsInput(prev => prev.map(f => f.id === id ? { ...f, [field]: value } : f));
   };
   
-  const addFlight = () => setFlightsInput(p => [...p, { id: Date.now(), type: 'Gidiş Uçuşu', airline: '', from: '', to: '', flightNo: '', date: '', departureTime: '', arrivalTime: '', pnr: '', ticketNo: '' }]);
+  const addFlight = () => setFlightsInput(p => [...p, { id: Date.now(), type: 'Gidiş Uçuşu', airline: '', from: '', to: '', flightNo: '', date: '', departureTime: '', arrivalTime: '', pnr: '', ticketNo: '', cabinClass: 'Ekonomi' }]);
   const removeFlight = (id) => setFlightsInput(p => p.filter(f => f.id !== id));
 
   const updateTransfer = (id, field, value) => {
@@ -146,11 +157,12 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
                     <span style={{ fontSize: '24px', fontWeight: 'bold', lineHeight: 1 }}>{flight.to || '???'}</span>
                 </div>
             </div>
-            <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', background: 'var(--surface)' }}>
+            <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', background: 'var(--surface)', flexWrap: 'wrap', gap: '12px' }}>
                 <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UÇUŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.flightNo || '-'}</div></div>
                 <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TARİH</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.date || '-'} {flight.departureTime || '-'} - {flight.arrivalTime || '-'}</div></div>
                 <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>PNR</div><div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)' }}>{flight.pnr || '-'}</div></div>
                 <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>BİLET NO</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.ticketNo || '-'}</div></div>
+                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>SINIF</div><div style={{ fontSize: '13px', fontWeight: 'bold', color: flight.cabinClass === 'Business' ? 'var(--primary)' : 'var(--text-main)' }}>{flight.cabinClass || 'Ekonomi'}</div></div>
             </div>
         </div>
       );
@@ -202,11 +214,18 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
                                 </div>
                             </div>
                         </div>
-                        <div style={{ gridColumn: '1 / -1' }}>
+                        <div>
                             <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Havayolu</label>
                             <select value={flight.airline} onChange={e => updateFlight(flight.id, 'airline', e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', background: 'white' }}>
                                 <option value="">Seçim Yapın...</option>
                                 {majorAirlines.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Bilet Sınıfı</label>
+                            <select value={flight.cabinClass || 'Ekonomi'} onChange={e => updateFlight(flight.id, 'cabinClass', e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', background: 'white' }}>
+                                <option value="Ekonomi">Ekonomi</option>
+                                <option value="Business">Business</option>
                             </select>
                         </div>
                         <div>

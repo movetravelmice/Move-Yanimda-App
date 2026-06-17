@@ -135,10 +135,14 @@ export default function Transfers() {
                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Varış Saati</div>
                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.arrivalTime || '-'}</div>
                    </div>
-                   <div>
-                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>PNR</div>
-                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--primary)' }}>{flight.pnr || '-'}</div>
-                   </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>PNR</div>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--primary)' }}>{flight.pnr || '-'}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Sınıf</div>
+                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: flight.cabinClass === 'Business' ? 'var(--primary)' : 'var(--text-main)' }}>{flight.cabinClass || 'Ekonomi'}</div>
+                    </div>
                    <div style={{ width: '100%', borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '-6px' }}>
                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Bilet No</div>
                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.ticketNo || '-'}</div>

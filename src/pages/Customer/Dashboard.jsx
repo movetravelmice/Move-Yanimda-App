@@ -28,10 +28,19 @@ const StarRating = ({ value, onChange, size = 16 }) => {
 
 
 export default function CustomerDashboard() {
+  const ratingLabels = {
+    program: 'Genel Olarak Program',
+    acentaHizmeti: 'Acenta Yetkililerinin Hizmeti',
+    ucakHizmeti: 'Uçak Yolculuğu Ve Hizmeti',
+    turlar: 'Katılım Sağladığınız Turlar',
+    konaklamaTemizlik: 'Konaklama Temizlik & Konforu',
+    konaklamaKonum: 'Konaklama Yer & Konumu'
+  };
 
   const navigate = useNavigate();
   const { tours } = useTourStore();
   const user = useAuthStore(state => state.user);
+  const allUsers = useUserStore(state => state.users);
   const { expertName } = useSettingsStore();
   const dynExpertUser = useUserStore(state => state.users.find(u => u.name === expertName));
   const myTours = tours.filter(t => t.participants?.some(p => p.id === user?.id || p.email === user?.email)); const activeTours = myTours.filter(t => t.status === 'active');
@@ -48,22 +57,31 @@ export default function CustomerDashboard() {
   
   const [expertModalData, setExpertModalData] = useState(null);
 
+  const [contactPref, setContactPref] = useState('');
+  const [nextYearPlaces, setNextYearPlaces] = useState('');
+
   const [detailedRatings, setDetailedRatings] = useState({
-    ulasim: 0,
-    konaklama: 0,
-    yemek: 0,
-    rehber: 0
+    program: 0,
+    acentaHizmeti: 0,
+    ucakHizmeti: 0,
+    turlar: 0,
+    konaklamaTemizlik: 0,
+    konaklamaKonum: 0
   });
   const [reviewMsg, setReviewMsg] = useState('');
 
   const handleGeneralRating = (val) => {
     setGeneralRating(val);
     setDetailedRatings({
-      ulasim: 0,
-      konaklama: 0,
-      yemek: 0,
-      rehber: 0
+      program: 0,
+      acentaHizmeti: 0,
+      ucakHizmeti: 0,
+      turlar: 0,
+      konaklamaTemizlik: 0,
+      konaklamaKonum: 0
     });
+    setContactPref('');
+    setNextYearPlaces('');
     setReviewMsg('');
     setShowDetailedModal(true);
   };
@@ -76,7 +94,13 @@ export default function CustomerDashboard() {
     const newReviews = { ...reviewedTours, [ratingTourId]: finalScore };
     setReviewedTours(newReviews);
     localStorage.setItem("base44_reviews", JSON.stringify(newReviews));
-    useTourStore.getState().addParticipantFeedback(ratingTourId, user?.id || "cust_1", { rating: finalScore, comment: reviewMsg || finalScore.toFixed(1) + " Yildizli degerlendirme" });
+    useTourStore.getState().addParticipantFeedback(ratingTourId, user?.id || "cust_1", { 
+        rating: finalScore, 
+        comment: reviewMsg || `${finalScore.toFixed(1)} Yıldızlı değerlendirme`,
+        detailedRatings,
+        contactPref,
+        nextYearPlaces
+    });
     setRatingTourId(null);
   };
 
@@ -199,7 +223,23 @@ export default function CustomerDashboard() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div 
-                  onClick={() => setExpertModalData(tour.expert || { name: tour.guideName || expertName })}
+                  onClick={() => {
+                    const pExpertUser = allUsers.find(u => u.email === tour.expert?.email || u.name === tour.expert?.name || u.name === tour.guideName || u.name === expertName);
+                    const pPhone = (pExpertUser && pExpertUser.phone && pExpertUser.phone !== '-') ? pExpertUser.phone : '+905321234567';
+                    const expert1 = {
+                      name: tour.expert?.name || tour.guideName || expertName || 'Bölge Uzmanı',
+                      avatar: tour.expert?.avatar || pExpertUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(tour.expert?.name || tour.guideName || expertName || 'U')}&background=D7147A&color=fff`,
+                      email: tour.expert?.email || pExpertUser?.email || '',
+                      phone: pPhone
+                    };
+                    const expert2 = tour.expert2 ? {
+                      name: tour.expert2.name,
+                      avatar: tour.expert2.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(tour.expert2.name)}&background=25D366&color=fff`,
+                      email: tour.expert2.email,
+                      phone: tour.expert2.phone || '+905321234568'
+                    } : null;
+                    setExpertModalData({ expert1, expert2 });
+                  }}
                   style={{ background: '#f5f5f5', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }}
                 >
                   <UserCheck size={16} className="text-primary" />
@@ -254,32 +294,81 @@ export default function CustomerDashboard() {
 
       {showDetailedModal && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '400px', padding: '24px', animation: 'fadeIn 0.2s ease-out' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '420px', padding: '24px', animation: 'scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)', maxHeight: '90vh', overflowY: 'auto', borderRadius: '24px', background: 'white' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>Detaylı Değerlendirme</h2>
             <p className="text-muted" style={{ fontSize: '13px', marginBottom: '24px', textAlign: 'center', lineHeight: '1.4' }}>
               Seyahati genel olarak <strong>{generalRating} yıldız</strong> ile değerlendirdiniz. Daha iyi bir deneyim sunabilmemiz için detayları puanlayın.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
               {Object.keys(detailedRatings).map(key => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '14px', textTransform: 'capitalize', fontWeight: '600', color: 'var(--text-main)' }}>{key}</span>
-                  <StarRating
-                    value={detailedRatings[key]}
-                    onChange={(v) => setDetailedRatings(prev => ({ ...prev, [key]: v }))}
-                    size={22}
-                  />
+                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-main)', textAlign: 'left' }}>{ratingLabels[key] || key}</span>
+                  <div style={{ flexShrink: 0 }}>
+                    <StarRating
+                      value={detailedRatings[key]}
+                      onChange={(v) => setDetailedRatings(prev => ({ ...prev, [key]: v }))}
+                      size={20}
+                    />
+                  </div>
                 </div>
               ))}
             </div>
 
-            <textarea
-              placeholder="Seyahatiniz hakkında düşüncelerinizi paylaşın..."
-              className="input-field"
-              style={{ width: '100%', minHeight: '90px', padding: '12px', fontSize: '13px', resize: 'none', marginBottom: '20px' }}
-              value={reviewMsg}
-              onChange={e => setReviewMsg(e.target.value)}
-            />
+            {/* Selection Question */}
+            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <label style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '8px', display: 'block' }}>
+                Yeni Seyahat Haberlerimizi Size Nasıl Ulaştırabiliriz?
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {[
+                  { value: 'telefon', label: 'Telefon İle Bilgi Almak İstiyorum' },
+                  { value: 'brosur', label: 'Broşür Gönderimi İle Bilgi Almak İstiyorum' },
+                  { value: 'istemiyorum', label: 'Bilgi Almak İstemiyorum' }
+                ].map(opt => (
+                  <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-main)', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: '#f8fafc', border: contactPref === opt.value ? '1px solid var(--primary)' : '1px solid #e2e8f0', transition: 'all 0.15s' }}>
+                    <input 
+                      type="radio" 
+                      name="contactPref" 
+                      value={opt.value} 
+                      checked={contactPref === opt.value} 
+                      onChange={() => setContactPref(opt.value)} 
+                      style={{ accentColor: 'var(--primary)' }}
+                    />
+                    <span>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Text Question */}
+            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
+              <label style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '8px', display: 'block' }}>
+                Önümüzdeki Yıl Seyahat Etmek İstediğiniz 3 Yer:
+              </label>
+              <input 
+                type="text" 
+                placeholder="Örn: Roma, Tokyo, Paris" 
+                className="input-field" 
+                style={{ width: '100%', padding: '12px', fontSize: '13px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none' }}
+                value={nextYearPlaces}
+                onChange={e => setNextYearPlaces(e.target.value)}
+              />
+            </div>
+
+            {/* General Feedback Textarea */}
+            <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+              <label style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '8px', display: 'block' }}>
+                Eklemek İstediğiniz Diğer Görüşleriniz:
+              </label>
+              <textarea
+                placeholder="Seyahatiniz hakkında diğer düşüncelerinizi paylaşın..."
+                className="input-field"
+                style={{ width: '100%', minHeight: '80px', padding: '12px', fontSize: '13px', resize: 'none', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none' }}
+                value={reviewMsg}
+                onChange={e => setReviewMsg(e.target.value)}
+              />
+            </div>
 
             <div style={{ display: 'flex', gap: '12px' }}>
               <button className="btn-secondary" style={{ flex: 1, border: 'none', background: '#f5f5f5', color: 'var(--text-muted)', fontSize: '14px' }} onClick={() => setShowDetailedModal(false)}>İptal</button>
@@ -303,26 +392,37 @@ export default function CustomerDashboard() {
 
       {expertModalData && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '340px', padding: '24px', animation: 'fadeIn 0.2s ease-out', textAlign: 'center', position: 'relative' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '360px', padding: '24px', animation: 'fadeIn 0.2s ease-out', textAlign: 'center', position: 'relative' }}>
             <div onClick={() => setExpertModalData(null)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 <X size={20} />
             </div>
 
-            <div style={{ width: '80px', height: '80px', borderRadius: '50%', margin: '0 auto 16px', overflow: 'hidden', border: '3px solid var(--primary-light)', padding: '2px' }}>
-               <img loading="lazy" src={expertModalData.avatar || dynExpertUser?.avatar || "https://ui-avatars.com/api/?name=${expertName || 'U'}&background=D7147A&color=fff"} alt="Uzman" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-            </div>
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-main)' }}>
+                {expertModalData.expert2 ? 'Seyahat Uzmanlarımız' : 'Seyahat Uzmanı'}
+            </h2>
             
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '4px', color: 'var(--text-main)' }}>{expertModalData.name || expertName}</h2>
-            <p className="text-muted" style={{ fontSize: '13px', marginBottom: '24px' }}>Bölge Seyahat Uzmanınız</p>
-            
-            <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
-               <a href="tel:+905321234567" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: 'var(--surface)', border: '1px solid var(--border-color)', borderRadius: '12px', textDecoration: 'none', color: 'var(--text-main)', fontWeight: '600', transition: 'all 0.2s' }}>
-                  <Phone size={18} className="text-primary" /> Hemen Ara
-               </a>
-               
-               <a href={`https://wa.me/905321234567?text=Merhaba%20${(expertModalData.name || expertName).split(' ')[0]},%20turum%20hakk%C4%B1nda%20deste%C4%9Finize%20ihtiyac%C4%B1m%20var.`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '12px', background: '#25D366', color: 'white', borderRadius: '12px', textDecoration: 'none', fontWeight: '600', transition: 'all 0.2s' }}>
-                  <MessageCircle size={18} color="#fff" /> WhatsApp'tan Yaz
-               </a>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {[expertModalData.expert1, expertModalData.expert2].filter(Boolean).map((exp, idx) => (
+                    <div key={idx} style={{ background: '#f8fafc', borderRadius: '16px', padding: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', marginBottom: '12px' }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--primary-light)', flexShrink: 0 }}>
+                               <img loading="lazy" src={exp.avatar} alt={exp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                            <div style={{ textAlign: 'left', flex: 1 }}>
+                                <h3 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 2px', color: 'var(--text-main)' }}>{exp.name}</h3>
+                                <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>{idx === 0 ? 'Ana Seyahat Uzmanı' : '2. Seyahat Uzmanı'}</p>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                           <a href={`tel:${exp.phone}`} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px', background: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', textDecoration: 'none', color: 'var(--text-main)', fontSize: '12px', fontWeight: '600', transition: 'all 0.2s' }}>
+                              <Phone size={14} className="text-primary" /> Ara
+                           </a>
+                           <a href={`https://wa.me/${exp.phone.replace(/[^0-9]/g, '')}?text=Merhaba%20${exp.name.split(' ')[0]},%20turum%20hakk%C4%B1nda%20deste%C4%9Finize%20ihtiyac%C4%B1m%20var.`} target="_blank" rel="noreferrer" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px', background: '#25D366', color: 'white', borderRadius: '8px', textDecoration: 'none', fontSize: '12px', fontWeight: '600', transition: 'all 0.2s' }}>
+                              <MessageCircle size={14} color="#fff" /> WhatsApp
+                           </a>
+                        </div>
+                    </div>
+                ))}
             </div>
           </div>
         </div>

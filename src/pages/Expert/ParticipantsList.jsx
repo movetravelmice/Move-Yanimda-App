@@ -6,6 +6,7 @@ import { useUserStore } from '../../store/userStore';
 import ParticipantTransferManager from '../../components/ParticipantTransferManager';
 import BulkTicketManager from '../../components/BulkTicketManager';
 import BulkDataEntryManager from '../../components/BulkDataEntryManager';
+import BulkParticipantManager from '../../components/BulkParticipantManager';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 
@@ -25,7 +26,7 @@ export default function ParticipantsList() {
     const [showSht, setShowSht] = useState(false); // Bottom sheet for user details
     const [selectedUser, setSelectedUser] = useState(null);
     const [identityForm, setIdentityForm] = useState({
-        passportCountry: '', passportNo: '', passportExp: '',
+        passportCountry: '', passportNo: '', passportExp: '', tcNo: '',
         bloodType: '', birthDate: '', emergencyContactName: '', emergencyContactPhone: '',
         allergies: '', medications: '', dietaryReq: ''
     });
@@ -33,6 +34,7 @@ export default function ParticipantsList() {
     const [showTransferSheet, setShowTransferSheet] = useState(false);
     const [showBulkUpload, setShowBulkUpload] = useState(false);
     const [showBulkDataEntry, setShowBulkDataEntry] = useState(false);
+    const [showBulkParticipant, setShowBulkParticipant] = useState(false);
     const [successPopup, setSuccessPopup] = useState(null);
     const [userToRemove, setUserToRemove] = useState(null);
 
@@ -100,6 +102,7 @@ export default function ParticipantsList() {
     const [showAutocomplete, setShowAutocomplete] = useState(false);
 
     const filteredUsers = users.filter(u =>
+        u.role === 'customer' &&
         (u.email.toLowerCase().includes(emailQuery.toLowerCase()) ||
             u.name.toLowerCase().includes(emailQuery.toLowerCase())) &&
         emailQuery.length > 0
@@ -110,6 +113,7 @@ export default function ParticipantsList() {
     const [newName, setNewName] = useState('');
     const [newPhone, setNewPhone] = useState('');
     const [newCompany, setNewCompany] = useState('');
+    const [newTcNo, setNewTcNo] = useState('');
     const [showCompanyAutocomplete, setShowCompanyAutocomplete] = useState(false);
 
     // Parent selection (for child users)
@@ -136,6 +140,7 @@ export default function ParticipantsList() {
         setNewName('');
         setNewPhone('');
         setNewCompany('');
+        setNewTcNo('');
         setShowCompanyAutocomplete(false);
         setNewParentIds([]);
         setParentSearchQuery('');
@@ -171,6 +176,7 @@ export default function ParticipantsList() {
             passportCountry: globalUser.passportCountry || '',
             passportNo: globalUser.passportNo || '',
             passportExp: globalUser.passportExp || '',
+            tcNo: globalUser.tcNo || '',
             bloodType: globalUser.bloodType || '',
             birthDate: globalUser.birthDate || '',
             emergencyContactName: globalUser.emergencyContactName || '',
@@ -184,6 +190,25 @@ export default function ParticipantsList() {
     };
 
     const sendTourAssignmentEmail = async (participantName, participantEmail, password = null) => {
+        const targetUser = users.find(u => u.email === participantEmail);
+        const phone = targetUser?.phone || '';
+
+        if (phone && phone !== '-') {
+            if (password) {
+                useSettingsStore.getState().sendWhatsAppNotification(
+                    phone,
+                    'newUserTemplate',
+                    [participantName, participantEmail, password]
+                );
+            } else {
+                useSettingsStore.getState().sendWhatsAppNotification(
+                    phone,
+                    'newTourTemplate',
+                    [participantName, tour.name]
+                );
+            }
+        }
+
         if (smtpConfig?.host && smtpConfig?.user) {
             try {
                 // Determine base URL: Use current origin in dev, or the production cloud functions URL
@@ -220,6 +245,10 @@ export default function ParticipantsList() {
 
         const existing = findUserByEmail(emailQuery);
         if (existing) {
+            if (existing.role !== 'customer') {
+                setSearchError('Sadece müşteri rolündeki kullanıcılar katılımcı olarak eklenebilir!');
+                return;
+            }
             const isAlreadyInTour = participants.some(p => p.id === existing.id || p.email === existing.email);
             if (isAlreadyInTour) {
                 setSearchError('Bu müşteri zaten seyahate kayıtlı!');
@@ -280,7 +309,8 @@ export default function ParticipantsList() {
             company: compValue,
             password: newUserPassword,
             linkedTo: isChild && newParentIds.length > 0 ? newParentIds : null,
-            isChildProfile: isChild
+            isChildProfile: isChild,
+            tcNo: newTcNo
         });
 
         // Link existing children to this new parent (if parent)
@@ -363,7 +393,10 @@ export default function ParticipantsList() {
                             </div>
                         </>
                     )}
-                    <div onClick={() => setShowWizard(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                    <div onClick={() => setShowBulkParticipant(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Excel ile Toplu Katılımcı Ekle">
+                        <FileSpreadsheet size={20} />
+                    </div>
+                    <div onClick={() => setShowWizard(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Münferit Katılımcı Ekle">
                         <Plus size={20} />
                     </div>
                 </div>
@@ -497,6 +530,10 @@ export default function ParticipantsList() {
                                     </div>
 
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>T.C. Kimlik Numarası</label>
+                                            <input type="text" maxLength={11} placeholder="Örn: 12345678901" value={identityForm.tcNo || ''} onChange={e => setIdentityForm({ ...identityForm, tcNo: e.target.value.replace(/\D/g, '') })} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px', background: '#f8fafc' }} />
+                                        </div>
                                         <div>
                                             <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Ülke Pasaportu</label>
                                             <input type="text" placeholder="Örn: Türkiye" value={identityForm.passportCountry} onChange={e => setIdentityForm({ ...identityForm, passportCountry: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '13px', background: '#f8fafc' }} />
@@ -814,6 +851,14 @@ export default function ParticipantsList() {
                 />
             )}
 
+            {/* Excel Bulk Participant Import Layer */}
+            {showBulkParticipant && (
+                <BulkParticipantManager
+                    tourId={tourId}
+                    onClose={() => setShowBulkParticipant(false)}
+                />
+            )}
+
             {/* Addition Wizard Modal */}
             {showWizard && (
                 <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
@@ -940,6 +985,11 @@ export default function ParticipantsList() {
                                     <div>
                                         <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>İsim Soyisim</label>
                                         <input type="text" placeholder="Örn: Ahmet Yılmaz" value={newName} onChange={e => setNewName(e.target.value)} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                                    </div>
+
+                                    <div>
+                                        <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>T.C. Kimlik Numarası</label>
+                                        <input type="text" maxLength={11} placeholder="Örn: 12345678901" value={newTcNo} onChange={e => setNewTcNo(e.target.value.replace(/\D/g, ''))} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
                                     </div>
 
                                     {newCustomerType === 'parent' && (
