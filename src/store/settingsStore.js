@@ -25,7 +25,8 @@ const defaultSettings = {
     checkInTemplate: 'checkin_reminder'
   },
   expertStatus: 'offline',
-  googlePlacesApiKey: 'AIzaSyDLKVedSDIIzh5fbRpUta9oShiW2omr7O4'
+  googlePlacesApiKey: 'AIzaSyDLKVedSDIIzh5fbRpUta9oShiW2omr7O4',
+  akbankApiKey: ''
 };
 
 export const useSettingsStore = create((set, get) => ({
@@ -114,5 +115,6 @@ export const useSettingsStore = create((set, get) => ({
       }
   },
   setExpertStatus: (status) => get().updateSetting('expertStatus', status),
-  setGooglePlacesApiKey: (key) => get().updateSetting('googlePlacesApiKey', key)
+  setGooglePlacesApiKey: (key) => get().updateSetting('googlePlacesApiKey', key),
+  setAkbankApiKey: (key) => get().updateSetting('akbankApiKey', key)
 }));

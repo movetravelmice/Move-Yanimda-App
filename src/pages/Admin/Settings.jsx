@@ -13,7 +13,8 @@ export default function AdminSettings() {
       smtpConfig, setSmtpConfig,
       isSmtpVerified, setSmtpVerified,
       netgsmConfig, setNetgsmConfig,
-      whatsappConfig, setWhatsappConfig
+      whatsappConfig, setWhatsappConfig,
+      akbankApiKey, setAkbankApiKey
   } = useSettingsStore();
 
   const [isTestingSmtp, setIsTestingSmtp] = useState(false);
@@ -446,6 +447,32 @@ export default function AdminSettings() {
                     )}
                 </div>
 
+             </div>
+         </div>
+
+         {/* Akbank API Settings */}
+         <div style={{ marginBottom: '32px' }}>
+             <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                 <Cpu size={20} color="var(--primary)" /> Akbank API Ayarları
+             </h2>
+             <div className="card">
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>
+                    Kur sayfasında Akbank döviz kurlarını canlı API üzerinden çekebilmek için <strong>Akbank API Portalından</strong> aldığınız API anahtarını (API Key) giriniz.
+                </p>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div>
+                        <label style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Akbank API Key (apikey)</label>
+                        <input 
+                            type="text"
+                            className="input-field"
+                            value={akbankApiKey || ''}
+                            onChange={e => setAkbankApiKey(e.target.value)}
+                            placeholder="Örn: l7xx..."
+                            style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px', background: '#f9f9f9' }}
+                        />
+                    </div>
+                </div>
              </div>
          </div>
 

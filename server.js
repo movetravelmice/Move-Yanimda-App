@@ -316,13 +316,94 @@ app.post('/api/send-whatsapp', async (req, res) => {
 app.get('/api/tcmb-rates', async (req, res) => {
     try {
         const response = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml');
-        const xml = await response.text();
-        res.header('Content-Type', 'application/xml');
-        res.send(xml);
+        const xmlText = await response.text();
+        const rates = { TRY: 1 };
+        const regex = /<Currency\s+CrossOrder="[^"]*"\s+Cod="([^"]*)"\s+CurrencyCode="([^"]*)">[\s\S]*?<ForexSelling>([^<]*?)<\/ForexSelling>/g;
+        let match;
+        while ((match = regex.exec(xmlText)) !== null) {
+            const code = match[2];
+            const selling = parseFloat(match[3]);
+            if (code && !isNaN(selling)) {
+                rates[code.toUpperCase()] = selling;
+            }
+        }
+        res.json({ success: true, rates });
     } catch (error) {
         console.error("TCMB Hata:", error);
         res.status(500).json({ success: false, message: 'TCMB kurları alınamadı' });
     }
+});
+
+app.get('/api/akbank-rates', async (req, res) => {
+    const apikey = req.query.apikey;
+
+    if (apikey) {
+        try {
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const response = await fetch(`https://api.akbank.com/api/v2/investment/currency-exchangerates?currencyDate=${todayStr}`, {
+                headers: {
+                    'apikey': apikey,
+                    'Content-Type': 'application/json'
+                }
+            });
+            const resData = await response.json();
+            
+            if (response.ok) {
+                const rates = { TRY: 1 };
+                let list = [];
+                if (resData && resData.data && Array.isArray(resData.data.currencyExchangeRates)) {
+                    list = resData.data.currencyExchangeRates;
+                } else if (resData && Array.isArray(resData.currencyExchangeRates)) {
+                    list = resData.currencyExchangeRates;
+                } else if (Array.isArray(resData)) {
+                    list = resData;
+                }
+
+                list.forEach(item => {
+                    const code = item.currencyCode || item.code;
+                    const val = item.currencySellRate || item.sellRate || item.rate;
+                    if (code && val) {
+                        rates[code.toUpperCase()] = parseFloat(val);
+                    }
+                });
+
+                if (Object.keys(rates).length > 1) {
+                    return res.json({ success: true, provider: 'akbank-api', rates });
+                }
+            }
+        } catch (apiError) {
+            console.error("Akbank API hatası:", apiError);
+        }
+    }
+
+    // Fallback: Fetch TCMB rates and add a +0.2% retail spread to simulate Akbank rates
+    try {
+        const tcmbResponse = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml');
+        const xmlText = await tcmbResponse.text();
+        const rates = { TRY: 1 };
+        const regex = /<Currency\s+CrossOrder="[^"]*"\s+Cod="([^"]*)"\s+CurrencyCode="([^"]*)">[\s\S]*?<ForexSelling>([^<]*?)<\/ForexSelling>/g;
+        let match;
+        while ((match = regex.exec(xmlText)) !== null) {
+            const code = match[2];
+            const selling = parseFloat(match[3]);
+            if (code && !isNaN(selling)) {
+                rates[code.toUpperCase()] = parseFloat((selling * 1.002).toFixed(4));
+            }
+        }
+        
+        if (Object.keys(rates).length > 1) {
+            return res.json({ success: true, provider: 'akbank-simulated', rates });
+        }
+    } catch (err) {
+        console.error("Fallback TCMB hatası:", err);
+    }
+
+    // Hardcoded fallback
+    const baseRates = {
+        TRY: 1, USD: 33.5200, EUR: 36.2800, GBP: 42.1800, JPY: 0.2220,
+        CHF: 37.2200, CAD: 24.5800, AUD: 22.1500, CNY: 4.6200, RUB: 0.3630, AED: 9.1500
+    };
+    return res.json({ success: true, provider: 'akbank-hardcoded', rates: baseRates });
 });
 
 app.listen(PORT, () => {
