@@ -320,11 +320,11 @@ app.get('/api/tcmb-rates', async (req, res) => {
         const response = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml');
         const xmlText = await response.text();
         const rates = { TRY: 1 };
-        const regex = /<Currency\s+CrossOrder="[^"]*"\s+Cod="([^"]*)"\s+CurrencyCode="([^"]*)">[\s\S]*?<ForexSelling>([^<]*?)<\/ForexSelling>/g;
+        const regex = /<Currency[^>]*?CurrencyCode="([^"]*)"[\s\S]*?<ForexSelling>([^<]*?)<\/ForexSelling>/g;
         let match;
         while ((match = regex.exec(xmlText)) !== null) {
-            const code = match[2];
-            const selling = parseFloat(match[3]);
+            const code = match[1];
+            const selling = parseFloat(match[2]);
             if (code && !isNaN(selling)) {
                 rates[code.toUpperCase()] = selling;
             }
@@ -383,11 +383,11 @@ app.get('/api/akbank-rates', async (req, res) => {
         const tcmbResponse = await fetch('https://www.tcmb.gov.tr/kurlar/today.xml');
         const xmlText = await tcmbResponse.text();
         const rates = { TRY: 1 };
-        const regex = /<Currency\s+CrossOrder="[^"]*"\s+Cod="([^"]*)"\s+CurrencyCode="([^"]*)">[\s\S]*?<ForexSelling>([^<]*?)<\/ForexSelling>/g;
+        const regex = /<Currency[^>]*?CurrencyCode="([^"]*)"[\s\S]*?<ForexSelling>([^<]*?)<\/ForexSelling>/g;
         let match;
         while ((match = regex.exec(xmlText)) !== null) {
-            const code = match[2];
-            const selling = parseFloat(match[3]);
+            const code = match[1];
+            const selling = parseFloat(match[2]);
             if (code && !isNaN(selling)) {
                 rates[code.toUpperCase()] = parseFloat((selling * 1.002).toFixed(4));
             }
