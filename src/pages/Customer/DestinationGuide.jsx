@@ -20,42 +20,59 @@ export default function DestinationGuide() {
     const [localTimezone, setLocalTimezone] = useState("Europe/Istanbul");
     const [currentTime, setCurrentTime] = useState(new Date());
 
+    const destinationsList = React.useMemo(() => {
+        if (!tour || !tour.destinations) return [];
+        return tour.destinations.split(/\s*[-&,]\s*|\s+ve\s+/i).map(d => d.trim()).filter(Boolean);
+    }, [tour]);
+
+    const [activeDestIndex, setActiveDestIndex] = useState(0);
+    const activeCityName = destinationsList[activeDestIndex] || 'Istanbul';
+
+    const cleanCityName = (name) => {
+        if (!name) return "";
+        return name
+            .replace(/[\uD83C-\uDBFF\uDC00-\uDFFF]+/g, '') // Strips emojis / flags
+            .replace(/[^\p{L}\p{N}\s,-]/gu, '') // Keep letters, numbers, spaces, commas, hyphens
+            .trim();
+    };
+
+    const searchCityQuery = cleanCityName(activeCityName);
+
     useEffect(() => {
         const timer = setInterval(() => setCurrentTime(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
 
     useEffect(() => {
-        if (!tour) return;
-        
-        // Extract main city from destinations (e.g. "Paris - Roma" -> "Paris")
-        const cityName = tour.destinations ? tour.destinations.split('-')[0].trim() : 'Istanbul';
+        if (!tour || !searchCityQuery) return;
         
         // Fetch Weather via Open-Meteo
         const fetchWeather = async () => {
             setLoadingWeather(true);
             try {
                 // 1. Geocoding
-                let geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1&language=tr&format=json`);
+                let geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchCityQuery)}&count=1&language=tr&format=json`);
                 let geoData = await geoRes.json();
                 
-                // Fallback for generic country names like "Fransa" which Open-Meteo might fail to geocode
+                // Fallback for generic country names
                 if (!geoData.results || geoData.results.length === 0) {
                     const fallbackName = tour.name.split('-')[1] ? tour.name.split('-')[1].split('&')[0].trim() : "Paris";
-                    geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(fallbackName)}&count=1&language=tr&format=json`);
+                    const cleanFallback = cleanCityName(fallbackName);
+                    geoRes = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cleanFallback)}&count=1&language=tr&format=json`);
                     geoData = await geoRes.json();
                 }
 
                 if (geoData.results && geoData.results.length > 0) {
                     const { latitude, longitude, timezone } = geoData.results[0];
                     if (timezone) setLocalTimezone(timezone);
+                    else setLocalTimezone("Europe/Istanbul");
+                    
                     // 2. Forecast
                     const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`);
                     const weatherData = await weatherRes.json();
                     
                     if (weatherData.daily) {
                         const todayTemp = Math.round(weatherData.daily.temperature_2m_max[0]);
-                        // Mapped simplified weather conditions from WMO code
                         const code = weatherData.daily.weather_code[0];
                         let condition = "Açık";
                         if (code >= 1 && code <= 3) condition = "Parçalı Bulutlu";
@@ -71,11 +88,11 @@ export default function DestinationGuide() {
                                 date: new Date(weatherData.daily.time[i]).toLocaleDateString('tr-TR', {weekday: 'short'}),
                                 max: Math.round(t),
                                 min: Math.round(weatherData.daily.temperature_2m_min[i])
-                            })).slice(0, 5) // Show next 5 days
+                            })).slice(0, 5)
                         });
                     }
                 } else {
-                    // Fallback when city returns zero coordinates (like generic country "Fransa" failing lookup sometimes)
+                    setLocalTimezone("Europe/Istanbul");
                     setWeather({ temp: "-", condition: "Bulunamadı", forecast: [] });
                 }
             } catch (err) {
@@ -87,28 +104,26 @@ export default function DestinationGuide() {
         };
 
         fetchWeather();
-    }, [tour]);
+    }, [searchCityQuery, tour]);
 
     useEffect(() => {
-        if (!tour) return;
-        const cityName = tour.destinations ? tour.destinations.split('-')[0].trim() : 'Istanbul';
+        if (!tour || !searchCityQuery) return;
+        setLoadingPlaces(true);
 
         const loadGooglePlaces = () => {
             if (!googlePlacesApiKey) {
-                // Fallback demo verisi eğer API key girilmemişse
                 setPlaces([{ name: "Lütfen Admin Panelinden", desc: "Google Places API Key Giriniz." }]);
                 setRestaurants([{ name: "API Key Eksik", cuisine: "Ayar Gerekli", rating: "-" }]);
                 setLoadingPlaces(false);
                 return;
             }
 
-            // Script zaten eklenmiş mi kontrol et
             if (!window.google || !window.google.maps) {
                 const script = document.createElement('script');
                 script.src = `https://maps.googleapis.com/maps/api/js?key=${googlePlacesApiKey}&libraries=places`;
                 script.async = true;
                 script.defer = true;
-                script.onload = () => fetchPlacesData(cityName);
+                script.onload = () => fetchPlacesData(searchCityQuery);
                 script.onerror = () => {
                    setPlaces([{ name: "API Yüklenemedi", desc: "Geçersiz API Anahtarı veya Bağlantı Hatası" }]);
                    setRestaurants([]);
@@ -116,7 +131,7 @@ export default function DestinationGuide() {
                 };
                 document.head.appendChild(script);
             } else {
-                fetchPlacesData(cityName);
+                fetchPlacesData(searchCityQuery);
             }
         };
 
@@ -124,12 +139,10 @@ export default function DestinationGuide() {
             const dummyDiv = document.createElement('div');
             const service = new window.google.maps.places.PlacesService(dummyDiv);
 
-            // 1. Places (Attractions)
             service.textSearch({ query: `top tourist attractions in ${city}` }, (results, status) => {
                 if (status === window.google.maps.places.PlacesServiceStatus.OK && results) {
                     setPlaces(results.slice(0, 3).map(p => {
                         let address = p.formatted_address || "Popüler Turistik Mekan";
-                        // Strip Google Plus Codes (e.g., 8944+R39,)
                         address = address.replace(/\b[A-Z0-9]{4}\+[A-Z0-9]{2,4}\b,?\s*/g, '');
                         return { name: p.name, desc: address };
                     }));
@@ -137,13 +150,11 @@ export default function DestinationGuide() {
                     setPlaces([{ name: "Sonuç Bulunamadı", desc: "API Limit veya İzin Hatası" }]);
                 }
 
-                // 2. Restaurants
                 service.textSearch({ query: `best rated restaurants in ${city}` }, (restResults, restStatus) => {
                     if (restStatus === window.google.maps.places.PlacesServiceStatus.OK && restResults) {
                         setRestaurants(restResults.slice(0, 4).map(r => {
                             let cuisine = "Restoran";
                             if (r.types) {
-                                // Filter out generic types to get a specific one (e.g. italian_restaurant)
                                 const validTypes = r.types.filter(t => !['establishment', 'point_of_interest', 'food', 'restaurant', 'store'].includes(t));
                                 if (validTypes.length > 0) {
                                     cuisine = validTypes[0].replace(/_/g, ' ');
@@ -164,7 +175,7 @@ export default function DestinationGuide() {
         };
 
         loadGooglePlaces();
-    }, [tour, googlePlacesApiKey]);
+    }, [searchCityQuery, googlePlacesApiKey]);
 
     if (!tour) {
         return <div style={{padding: '24px', textAlign: 'center'}}>Tur bulunamadı.</div>;
@@ -174,12 +185,72 @@ export default function DestinationGuide() {
         <div style={{ paddingBottom: '90px', background: '#fff', minHeight: '100vh' }}>
             <Header title="Şehir Rehberi" showBack />
             
+            {destinationsList.length > 1 && (
+                <div style={{ 
+                    width: '100%',
+                    background: '#f8fafc',
+                    borderBottom: '1px solid #e2e8f0',
+                    padding: '12px 16px',
+                    boxSizing: 'border-box'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        background: '#e2e8f0',
+                        borderRadius: '12px',
+                        padding: '4px',
+                        gap: '4px',
+                        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.08)'
+                    }}>
+                        {destinationsList.map((dest, idx) => {
+                            const isActive = activeDestIndex === idx;
+                            return (
+                                <button
+                                    key={idx}
+                                    onClick={() => { setActiveDestIndex(idx); setWeather(null); setPlaces([]); setRestaurants([]); }}
+                                    style={{
+                                        flex: 1,
+                                        border: 'none',
+                                        outline: 'none',
+                                        padding: '10px 14px',
+                                        borderRadius: '10px',
+                                        fontSize: '13px',
+                                        fontWeight: '700',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease-in-out',
+                                        background: isActive ? 'linear-gradient(135deg, var(--primary), #ec4899)' : 'transparent',
+                                        color: isActive ? '#ffffff' : '#475569',
+                                        boxShadow: isActive ? '0 4px 10px rgba(215, 20, 122, 0.3)' : 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px'
+                                    }}
+                                    onMouseEnter={e => {
+                                        if (!isActive) {
+                                            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.5)';
+                                        }
+                                    }}
+                                    onMouseLeave={e => {
+                                        if (!isActive) {
+                                            e.currentTarget.style.background = 'transparent';
+                                        }
+                                    }}
+                                >
+                                    <MapPin size={14} style={{ opacity: isActive ? 1 : 0.7 }} />
+                                    {dest}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             <div style={{ height: '240px', width: '100%', position: 'relative', backgroundColor: '#e2e8f0' }}>
                 <img src={tour.avatar} alt="City Banner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '40px 20px 20px', background: 'linear-gradient(transparent, rgba(0,0,0,0.8))', color: 'white' }}>
-                    <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 4px', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>{tour.destinations}</h2>
+                    <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 4px', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>{activeCityName}</h2>
                     <p style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', opacity: 0.9 }}>
-                        <MapPin size={14} /> Canlı Veri Rehberi
+                        <MapPin size={14} /> {tour.destinations}
                     </p>
                 </div>
             </div>

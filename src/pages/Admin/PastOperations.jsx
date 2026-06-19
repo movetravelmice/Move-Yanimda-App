@@ -111,7 +111,8 @@ function PastOperationsContent() {
                     ucakHizmeti: 'Uçak Yolculuğu Ve Hizmeti',
                     turlar: 'Katılım Sağladığınız Turlar',
                     konaklamaTemizlik: 'Konaklama Temizlik & Konforu',
-                    konaklamaKonum: 'Konaklama Yer & Konumu'
+                    konaklamaKonum: 'Konaklama Yer & Konumu',
+                    restoranYemek: 'Restoran & Yemek'
                 };
 
                 const detailedAverages = {
@@ -120,11 +121,12 @@ function PastOperationsContent() {
                     ucakHizmeti: 0,
                     turlar: 0,
                     konaklamaTemizlik: 0,
-                    konaklamaKonum: 0
+                    konaklamaKonum: 0,
+                    restoranYemek: 0
                 };
 
                 if (filteredFeedbacks.length > 0) {
-                    const counts = { program: 0, acentaHizmeti: 0, ucakHizmeti: 0, turlar: 0, konaklamaTemizlik: 0, konaklamaKonum: 0 };
+                    const counts = { program: 0, acentaHizmeti: 0, ucakHizmeti: 0, turlar: 0, konaklamaTemizlik: 0, konaklamaKonum: 0, restoranYemek: 0 };
                     filteredFeedbacks.forEach(p => {
                         const det = p.feedback.detailedRatings || {};
                         Object.keys(detailedAverages).forEach(key => {

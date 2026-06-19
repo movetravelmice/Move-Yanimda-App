@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, MapPin, Calendar, Star, Users, MessageSquareQuote } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
@@ -65,9 +65,49 @@ export default function PastTourDetails() {
     const totalParticipants = participants.length;
     
     // Analytics calculations
-    const feedbacks = participants.filter(p => p.feedback);
+    const feedbacks = participants.filter(p => p && p.feedback);
     const totalFeedbackCount = feedbacks.length;
     const avgRating = totalFeedbackCount > 0 ? (feedbacks.reduce((sum, p) => sum + p.feedback.rating, 0) / totalFeedbackCount) : 0;
+
+    const ratingLabels = {
+        program: 'Genel Olarak Program',
+        acentaHizmeti: 'Acenta Yetkililerinin Hizmeti',
+        ucakHizmeti: 'Uçak Yolculuğu Ve Hizmeti',
+        turlar: 'Katılım Sağladığınız Turlar',
+        konaklamaTemizlik: 'Konaklama Temizlik & Konforu',
+        konaklamaKonum: 'Konaklama Yer & Konumu',
+        restoranYemek: 'Restoran & Yemek'
+    };
+
+    const detailedAverages = {
+        program: 0,
+        acentaHizmeti: 0,
+        ucakHizmeti: 0,
+        turlar: 0,
+        konaklamaTemizlik: 0,
+        konaklamaKonum: 0,
+        restoranYemek: 0
+    };
+
+    if (totalFeedbackCount > 0) {
+        const counts = { program: 0, acentaHizmeti: 0, ucakHizmeti: 0, turlar: 0, konaklamaTemizlik: 0, konaklamaKonum: 0, restoranYemek: 0 };
+        feedbacks.forEach(p => {
+            const det = p.feedback.detailedRatings || {};
+            Object.keys(detailedAverages).forEach(key => {
+                if (det[key] !== undefined && Number(det[key]) > 0) {
+                    detailedAverages[key] += Number(det[key]);
+                    counts[key]++;
+                }
+            });
+        });
+        Object.keys(detailedAverages).forEach(key => {
+            if (counts[key] > 0) {
+                detailedAverages[key] = (detailedAverages[key] / counts[key]).toFixed(1);
+            } else {
+                detailedAverages[key] = null;
+            }
+        });
+    }
 
     return (
         <div style={{ paddingBottom: '90px', minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
@@ -122,6 +162,26 @@ export default function PastTourDetails() {
                                 <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--primary)' }}>{totalFeedbackCount}</div>
                             </div>
                         </div>
+
+                        {totalFeedbackCount > 0 && (
+                            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '20px', marginTop: '4px' }}>
+                                <h4 style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '12px' }}>Kategori Bazlı Değerlendirme Ortalamaları</h4>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px' }}>
+                                    {Object.keys(detailedAverages).map(key => {
+                                        const score = detailedAverages[key];
+                                        if (score === null) return null;
+                                        return (
+                                            <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', padding: '8px 12px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                                                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{ratingLabels[key]}</span>
+                                                <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#b45309', display: 'flex', alignItems: 'center', gap: '4px', background: '#fef3c7', padding: '2px 6px', borderRadius: '6px' }}>
+                                                    <Star size={12} fill="#d97706" color="#d97706" /> {score}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -148,10 +208,63 @@ export default function PastTourDetails() {
                             </div>
                             
                             {p.feedback ? (
-                                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: '1.5', marginTop: '8px', fontStyle: 'italic', background: '#f8fafc', padding: '12px', borderRadius: '12px', position: 'relative' }}>
-                                    <MessageSquareQuote size={16} style={{ position: 'absolute', top: '-8px', left: '-6px', fill: '#e2e8f0', color: 'white' }} />
-                                    "{p.feedback.comment}"
-                                </p>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '12px' }}>
+                                    {/* Detailed Ratings */}
+                                    {p.feedback.detailedRatings && (
+                                        <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                                            <div style={{ fontSize: '11px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Soru Bazlı Değerlendirme</div>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                {Object.keys(ratingLabels).map(key => {
+                                                    const val = p.feedback.detailedRatings[key] || 0;
+                                                    return (
+                                                        <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <span style={{ fontSize: '12px', color: 'var(--text-main)' }}>{ratingLabels[key]}</span>
+                                                            <div style={{ display: 'flex', gap: '2px' }}>
+                                                                {[1, 2, 3, 4, 5].map(star => (
+                                                                    <Star 
+                                                                        key={star} 
+                                                                        size={12} 
+                                                                        fill={star <= val ? '#f59e0b' : 'none'} 
+                                                                        color={star <= val ? '#f59e0b' : '#cbd5e1'} 
+                                                                    />
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Contact preferences & Next year places */}
+                                    {(p.feedback.contactPref || p.feedback.nextYearPlaces) && (
+                                        <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            {p.feedback.contactPref && (
+                                                <div style={{ fontSize: '12px' }}>
+                                                    <strong style={{ color: 'var(--text-main)' }}>İletişim Tercihi: </strong>
+                                                    <span style={{ color: 'var(--text-muted)' }}>
+                                                        {p.feedback.contactPref === 'telefon' && 'Telefon İle Bilgi Almak İstiyorum'}
+                                                        {p.feedback.contactPref === 'brosur' && 'Broşür Gönderimi İle Bilgi Almak İstiyorum'}
+                                                        {p.feedback.contactPref === 'istemiyorum' && 'Bilgi Almak İstemiyorum'}
+                                                        {p.feedback.contactPref !== 'telefon' && p.feedback.contactPref !== 'brosur' && p.feedback.contactPref !== 'istemiyorum' && p.feedback.contactPref}
+                                                    </span>
+                                                </div>
+                                            )}
+                                            {p.feedback.nextYearPlaces && (
+                                                <div style={{ fontSize: '12px' }}>
+                                                    <strong style={{ color: 'var(--text-main)' }}>Önümüzdeki Yıl Seyahat Etmek İstediği Yerler: </strong>
+                                                    <span style={{ color: 'var(--text-muted)' }}>{p.feedback.nextYearPlaces}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Written Comment */}
+                                    <div style={{ fontSize: '13px', color: 'var(--text-main)', background: '#f8fafc', padding: '12px', borderRadius: '12px', borderLeft: '3px solid var(--primary)', fontStyle: 'italic', position: 'relative' }}>
+                                        <MessageSquareQuote size={16} style={{ position: 'absolute', top: '-8px', left: '-6px', fill: '#e2e8f0', color: 'white' }} />
+                                        "{p.feedback.comment || 'Detaylı puanlama yaptı, yazılı görüş belirtmedi.'}"
+                                    </div>
+                                </div>
                             ) : (
                                 <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <div style={{ width: '6px', height: '6px', background: '#d1d5db', borderRadius: '50%' }}></div>

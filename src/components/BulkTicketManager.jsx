@@ -154,38 +154,6 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
 
         if (processCount > 0) {
             editTour(tourId, { participants: newParticipants });
-            
-            // Trigger Notifications
-            Object.keys(flightsByEmail).forEach(email => {
-                const globalUser = users.find(u => u.email === email);
-                const extractedFlights = flightsByEmail[email];
-                if (globalUser && extractedFlights.length > 0) {
-                    if (smtpConfig?.host && smtpConfig?.user && globalUser.email && globalUser.email.includes('@')) {
-                        try {
-                            const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
-                            fetch(`${baseUrl}/api/send-ticket-email`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    ...smtpConfig,
-                                    to: globalUser.email,
-                                    participantName: globalUser.name,
-                                    tourName: tour?.name || '',
-                                    flights: extractedFlights
-                                })
-                            });
-                        } catch (e) { console.error("Ticket email error", e); }
-                    }
-
-                    if (globalUser.phone && globalUser.phone !== '-') {
-                        useSettingsStore.getState().sendWhatsAppNotification(
-                            globalUser.phone,
-                            'ticketAddedTemplate',
-                            [globalUser.name, tour?.name || '', extractedFlights[0]?.airline || '-', extractedFlights[0]?.flightNo || '-', extractedFlights[0]?.pnr || '-']
-                        );
-                    }
-                }
-            });
         }
 
         alert(`Başarılı! ${processCount} katılımcının uçuş verileri Excel'den sisteme işlendi.`);

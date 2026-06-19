@@ -7,8 +7,10 @@ import { useTourStore } from './store/tourStore';
 import { useUserStore } from './store/userStore';
 import { useChatStore } from './store/chatStore';
 import { useNotificationStore } from './store/notificationStore';
+import { useAuthStore } from './store/authStore';
 
 function App() {
+  const user = useAuthStore(state => state.user);
   const corporateName = useSettingsStore(state => state.corporateName);
   const deleteTour = useTourStore(state => state.deleteTour);
   const initFirestoreTours = useTourStore(state => state.initFirestoreTours);
@@ -53,7 +55,7 @@ function App() {
     <BrowserRouter>
       <div className="container">
         <Routes>
-          <Route path="/" element={<Navigate to="/login" />} />
+          <Route path="/" element={user ? <Navigate to="/dashboard" /> : <Navigate to="/login" />} />
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard/*" element={<DashboardLayout />} />
         </Routes>

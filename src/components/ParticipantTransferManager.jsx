@@ -90,37 +90,6 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
       });
 
       updateParticipantTransfers(tourId, participant.id, flightsToSave, transfers);
-      
-      // Trigger Notifications
-      if (flightsToSave.length > 0) {
-          const globalUser = users.find(u => u.id === participant.id) || participant;
-          if (globalUser) {
-              if (smtpConfig?.host && smtpConfig?.user && globalUser.email && globalUser.email.includes('@')) {
-                  try {
-                      const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
-                      fetch(`${baseUrl}/api/send-ticket-email`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                              ...smtpConfig,
-                              to: globalUser.email,
-                              participantName: participant.name,
-                              tourName: tour?.name || '',
-                              flights: flightsToSave
-                          })
-                      });
-                  } catch (e) { console.error("Ticket email error", e); }
-              }
-
-              if (globalUser.phone && globalUser.phone !== '-') {
-                  useSettingsStore.getState().sendWhatsAppNotification(
-                      globalUser.phone,
-                      'ticketAddedTemplate',
-                      [participant.name, tour?.name || '', flightsToSave[0]?.airline || '-', flightsToSave[0]?.flightNo || '-', flightsToSave[0]?.pnr || '-']
-                  );
-              }
-          }
-      }
 
       alert('Uçuş ve Transfer bilgileri başarıyla atandı!');
       onClose();

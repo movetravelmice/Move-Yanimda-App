@@ -34,7 +34,8 @@ export default function CustomerDashboard() {
     ucakHizmeti: 'Uçak Yolculuğu Ve Hizmeti',
     turlar: 'Katılım Sağladığınız Turlar',
     konaklamaTemizlik: 'Konaklama Temizlik & Konforu',
-    konaklamaKonum: 'Konaklama Yer & Konumu'
+    konaklamaKonum: 'Konaklama Yer & Konumu',
+    restoranYemek: 'Restoran & Yemek'
   };
 
   const navigate = useNavigate();
@@ -66,7 +67,8 @@ export default function CustomerDashboard() {
     ucakHizmeti: 0,
     turlar: 0,
     konaklamaTemizlik: 0,
-    konaklamaKonum: 0
+    konaklamaKonum: 0,
+    restoranYemek: 0
   });
   const [reviewMsg, setReviewMsg] = useState('');
 
@@ -78,7 +80,8 @@ export default function CustomerDashboard() {
       ucakHizmeti: 0,
       turlar: 0,
       konaklamaTemizlik: 0,
-      konaklamaKonum: 0
+      konaklamaKonum: 0,
+      restoranYemek: 0
     });
     setContactPref('');
     setNextYearPlaces('');

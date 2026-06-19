@@ -122,42 +122,38 @@ export default function Transfers() {
                 </div>
                 
                 {/* Middle details section */}
-                <div style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: '16px', background: 'var(--surface)' }}>
-                   <div>
-                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Uçuş Kodu</div>
-                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.flightNo || '-'}</div>
+                <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', background: 'var(--surface)' }}>
+                   {/* Top details row */}
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Uçuş Kodu</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.flightNo || '-'}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Kalkış Saati</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.departureTime || '-'}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Varış Saati</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.arrivalTime || '-'}</div>
+                      </div>
                    </div>
-                   <div>
-                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Kalkış Saati</div>
-                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.departureTime || '-'}</div>
+
+                   {/* Bottom ticket details row */}
+                   <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Bilet No</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.ticketNo || '-'}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>PNR</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--primary)' }}>{flight.pnr || '-'}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Sınıf</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: flight.cabinClass === 'Business' ? 'var(--primary)' : 'var(--text-main)' }}>{flight.cabinClass || 'Ekonomi'}</div>
+                      </div>
                    </div>
-                   <div>
-                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Varış Saati</div>
-                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.arrivalTime || '-'}</div>
-                   </div>
-                    <div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>PNR</div>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--primary)' }}>{flight.pnr || '-'}</div>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Sınıf</div>
-                      <div style={{ fontSize: '15px', fontWeight: 'bold', color: flight.cabinClass === 'Business' ? 'var(--primary)' : 'var(--text-main)' }}>{flight.cabinClass || 'Ekonomi'}</div>
-                    </div>
-                   <div style={{ width: '100%', borderTop: '1px solid var(--border-color)', paddingTop: '10px', marginTop: '-6px' }}>
-                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase' }}>Bilet No</div>
-                     <div style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>{flight.ticketNo || '-'}</div>
-                   </div>
-                </div>
-                
-                {/* Cuttable Dashed separator with 3D semi-circles */}
-                <div style={{ height: '2px', background: 'transparent', position: 'relative', borderTop: '2px dashed var(--border-color)', margin: '0 20px' }}>
-                  <div style={{ position: 'absolute', left: '-30px', top: '-10px', width: '20px', height: '20px', background: 'var(--bg-color)', borderRadius: '50%', boxShadow: 'inset -3px 0 4px rgba(0,0,0,0.04)' }}></div>
-                  <div style={{ position: 'absolute', right: '-30px', top: '-10px', width: '20px', height: '20px', background: 'var(--bg-color)', borderRadius: '50%', boxShadow: 'inset 3px 0 4px rgba(0,0,0,0.04)' }}></div>
-                </div>
-                
-                {/* Barcode section */}
-                <div style={{ padding: '24px 20px', background: '#fafafa', display: 'flex', justifyContent: 'center' }}>
-                   {renderBarcode(flight.pnr || 'NOPNR')}
                 </div>
               </div>
             </div>

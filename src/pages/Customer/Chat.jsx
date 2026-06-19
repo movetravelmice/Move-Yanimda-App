@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Send, Paperclip, MoreVertical, Check, CheckCheck, Speaker, Mic, MapPin, Image as ImageIcon, Play, Archive, Trash2, BellOff, Bell, Info, Map, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, Send, Paperclip, MoreVertical, Check, CheckCheck, Speaker, Mic, MapPin, Image as ImageIcon, Play, Archive, Trash2, BellOff, Bell, Info, Map, AlertTriangle, Lock, Unlock } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useChatStore } from '../../store/chatStore';
@@ -14,7 +14,7 @@ export default function Chat() {
   const { chatId } = useParams();
   const user = useAuthStore(state => state.user);
   const { systemAnnouncementAvatar, tourGroupAvatar, expertStatus, expertName } = useSettingsStore();
-  const { tours } = useTourStore();
+  const { tours, editTour } = useTourStore();
   
   // Real expert resolution
   const resolvedExpertUser = useUserStore.getState().users.find(u => u.name === expertName);
@@ -25,6 +25,10 @@ export default function Chat() {
 
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
   const [confirmClearPopup, setConfirmClearPopup] = useState(false);
+  const [showPlaceSearchModal, setShowPlaceSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
   
   const isExpertGrouped = chatId.startsWith('direct_grouped_') && !chatId.includes('cust_1');
   const isCustomerGrouped = chatId === 'direct_grouped_cust_1';
@@ -70,6 +74,12 @@ export default function Chat() {
   let isReadOnlyArchive = false;
   let resolvedTour = null;
 
+  let resolvedDirectUser = null;
+  if (chatId.startsWith('direct_') || chatId.startsWith('direct_grouped_')) {
+      const sortedUsers = [...users].sort((a, b) => b.id.length - a.id.length);
+      resolvedDirectUser = sortedUsers.find(u => u.id !== user?.id && chatId.includes(u.id));
+  }
+
   if (chatId.startsWith('tour_')) {
       resolvedTour = tours.find(t => t.id === chatId);
       if (resolvedTour) {
@@ -78,33 +88,44 @@ export default function Chat() {
           headerAvatar = resolvedTour.avatar || tourGroupAvatar;
           isReadOnlyArchive = resolvedTour.status === 'past';
       }
-  } else if (chatId.startsWith('direct_admin_') && chatId.includes('_expert_')) {
-      const match = chatId.match(/^direct_admin_(.+?)_expert_(.+)$/);
-      if (match) {
-          const adminId = match[1];
-          const expertId = match[2];
-
-          if (user?.role === 'admin') {
-              const expObj = users.find(u => String(u.id) === String(expertId));
-              headerName = expObj?.name || 'Kayıtsız Uzman';
-              subtitle = "Yetkili Seyahat Uzmanı";
-              headerAvatar = expObj?.avatar || "https://ui-avatars.com/api/?name=" + headerName.charAt(0) + "&background=3b82f6&color=fff";
-          } else {
-              const admObj = users.find(u => String(u.id) === String(adminId));
-              headerName = admObj?.name || (adminId === 'sysadmin' ? 'Sistem Yöneticisi' : `Hata: Bulunamadi - ID: ${adminId} (Kullanicilar: ${users.length})`);
-              subtitle = "Yönetim Ekibi";
-              headerAvatar = admObj?.avatar || "https://ui-avatars.com/api/?name=" + (headerName.charAt(0)) + "&background=1e293b&color=fff";
-          }
+  } else if (chatId === 'expert_direct') {
+      resolvedTour = tours.find(t => t.id === 'tour_avrupa_ruyasi');
+      if (user?.role === 'expert' || user?.role === 'admin') {
+          const p = resolvedTour?.participants?.find(x => x.id === 'cust_1');
+          headerName = p?.name || "Demo Müşterisi";
+          subtitle = resolvedTour?.name || "Aktif Sohbet";
+          headerAvatar = p?.avatar || "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=150";
           sColor = '#4ade80';
+      } else {
+          const dynName = resolvedTour?.expert?.name || resolvedTour?.guideName || safeExpertName;
+          headerName = dynName;
+          const dynExpertUser = useUserStore.getState().users.find(u => u.name === dynName);  
+          headerAvatar = dynExpertUser?.avatar || resolvedTour?.expert?.avatar || "https://ui-avatars.com/api/?name=" + dynName.charAt(0) + "&background=D7147A&color=fff";
       }
-  } else if (isGroupedDirect || chatId.startsWith('direct_') || chatId === 'expert_direct') {
-      let pId = pIdMatched;
+  } else if (resolvedDirectUser) {
+      headerName = resolvedDirectUser.name;
+      headerAvatar = resolvedDirectUser.avatar || "https://ui-avatars.com/api/?name=" + encodeURIComponent(resolvedDirectUser.name.charAt(0)) + "&background=3b82f6&color=fff";
+      sColor = '#4ade80';
       
+      const pId = resolvedDirectUser.id;
+      const sharedTours = tours.filter(t => t.status === 'active' && t.participants?.some(p => p.id === pId || p.email === resolvedDirectUser.email));
+      resolvedTour = sharedTours[0] || tours.find(t => t.participants?.some(p => p.id === pId || p.email === resolvedDirectUser.email));
+      
+      if (resolvedDirectUser.role === 'customer') {
+          subtitle = resolvedTour ? resolvedTour.name : "Müşteri";
+      } else if (resolvedDirectUser.role === 'expert') {
+          subtitle = "Seyahat Uzmanı";
+      } else if (resolvedDirectUser.role === 'ticketing') {
+          subtitle = "Biletleme Uzmanı";
+      } else if (resolvedDirectUser.role === 'admin') {
+          subtitle = "Yönetim Ekibi";
+      } else {
+          subtitle = "Müşteri";
+      }
+  } else if (isGroupedDirect || chatId.startsWith('direct_')) {
+      let pId = pIdMatched;
       if (isGroupedDirect) {
           resolvedTour = tours.find(t => t.id === selectedTourId) || sharedTours[0];
-      } else if (chatId === 'expert_direct') {
-          resolvedTour = tours.find(t => t.id === 'tour_avrupa_ruyasi');
-          pId = 'cust_1';
       } else {
           const match = chatId.match(/^direct_(tour_[a-zA-Z0-9_]+)_(cust_[0-9]+)$/);
           if (match) {
@@ -120,11 +141,17 @@ export default function Chat() {
 
       if (user?.role === 'expert' || user?.role === 'admin') {
           const p = resolvedTour?.participants?.find(x => x.id === pId);
+          const globalUser = users.find(u => String(u.id) === String(pId));
           if (p) {
               headerName = `${p.name}`;
               subtitle = resolvedTour?.name;
               headerAvatar = p.avatar || "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=150";
               sColor = '#4ade80'; 
+          } else if (globalUser) {
+              headerName = `${globalUser.name}`;
+              subtitle = "Müşteri";
+              headerAvatar = globalUser.avatar || "https://ui-avatars.com/api/?name=" + encodeURIComponent(globalUser.name.charAt(0)) + "&background=3b82f6&color=fff";
+              sColor = '#4ade80';
           } else {
               headerName = "Müşteri";
               subtitle = "Aktif Sohbet";
@@ -134,7 +161,6 @@ export default function Chat() {
           if (resolvedTour) {
               const dynName = resolvedTour.expert?.name || resolvedTour.guideName || safeExpertName;
               headerName = dynName;
-
               const dynExpertUser = useUserStore.getState().users.find(u => u.name === dynName);  
               headerAvatar = dynExpertUser?.avatar || resolvedTour.expert?.avatar || "https://ui-avatars.com/api/?name=" + dynName.charAt(0) + "&background=D7147A&color=fff";
           }
@@ -145,6 +171,15 @@ export default function Chat() {
   if (user?.role === 'admin' && isGroupChat) {
       isReadOnlyArchive = true;
   }
+
+  const isChatLockedForUser = isGroupChat && resolvedTour?.onlyAdminsCanWrite && (user?.role !== 'expert' && user?.role !== 'admin');
+
+  const toggleOnlyAdminsCanWrite = async () => {
+    if (!resolvedTour) return;
+    const newValue = !resolvedTour.onlyAdminsCanWrite;
+    await editTour(resolvedTour.id, { onlyAdminsCanWrite: newValue });
+    setShowOptionsMenu(false);
+  };
 
   if (isReadOnlyArchive) {
       subtitle = (resolvedTour?.status === 'past') ? "Tarihi Geçmiş Seyahat - Salt Okunur Arşiv" : "Salt Okunur Görüntüleme Modu";
@@ -271,15 +306,50 @@ export default function Chat() {
       setShowAttachMenu(false);
   };
 
+  const searchPlaces = async (query) => {
+      if (!query.trim()) return;
+      setIsSearchingPlaces(true);
+      try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`);
+          const data = await res.json();
+          setSearchResults(data || []);
+      } catch (err) {
+          console.error("Mekan arama hatası:", err);
+          alert("Arama yapılırken bir hata oluştu.");
+      } finally {
+          setIsSearchingPlaces(false);
+      }
+  };
+
+  const sharePlace = (place) => {
+      const lat = parseFloat(place.lat);
+      const lng = parseFloat(place.lon);
+      const name = place.display_name.split(',')[0];
+      const gmapsUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+      
+      sendCustomMessage({
+          type: 'location',
+          lat,
+          lng,
+          mapUrl: gmapsUrl,
+          text: name
+      });
+      setShowPlaceSearchModal(false);
+      setSearchQuery('');
+      setSearchResults([]);
+  };
+
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!inputText.trim()) return;
+    if (isChatLockedForUser) return;
 
     sendCustomMessage({ type: 'text', text: inputText });
     setInputText("");
   };
 
   const sendCustomMessage = (data) => {
+    if (isChatLockedForUser) return;
     const isExpert = user?.role === 'expert';
     let senderKey = isExpert ? 'expert' : 'customer';
     if (user?.role === 'admin') senderKey = 'admin';
@@ -335,7 +405,7 @@ export default function Chat() {
   };
 
   return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f0f2f5', position: 'relative' }}>
+      <div style={{ height: 'calc(100vh - 80px - env(safe-area-inset-bottom, 0px))', display: 'flex', flexDirection: 'column', backgroundColor: '#f0f2f5', position: 'relative', boxSizing: 'border-box' }}>
         
         {/* Custom Confirm Popup */}
         {confirmClearPopup && (
@@ -406,7 +476,7 @@ export default function Chat() {
                 </div>
                 
                 {showOptionsMenu && (
-                    <div style={{ position: 'absolute', top: '100%', right: '0', background: 'white', borderRadius: '12px', padding: '8px 0', minWidth: '200px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', zIndex: 100, color: 'var(--text-main)', marginTop: '8px', animation: 'fadeIn 0.15s' }}>
+                    <div style={{ position: 'absolute', top: '100%', right: '0', background: 'white', borderRadius: '12px', padding: '8px 0', minWidth: '240px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)', zIndex: 100, color: 'var(--text-main)', marginTop: '8px', animation: 'fadeIn 0.15s' }}>
                         <div onClick={() => { 
                             setShowOptionsMenu(false); 
                             if(user?.role === 'customer') {
@@ -414,15 +484,24 @@ export default function Chat() {
                             } else {
                                 navigate(`/dashboard/program-edit/${resolvedTour?.id}`); 
                             }
-                        }} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}>
+                        }} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', whiteSpace: 'nowrap' }}>
                             <Map size={16} className="text-muted" /> Tur Programına Git
                         </div>
                         {user?.role === 'expert' && (
-                            <div onClick={() => { setShowOptionsMenu(false); navigate(`/dashboard/participants/${resolvedTour?.id}`); }} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}>
+                            <div onClick={() => { setShowOptionsMenu(false); navigate(`/dashboard/participants/${resolvedTour?.id}`); }} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', whiteSpace: 'nowrap' }}>
                                 <Info size={16} className="text-muted" /> Katılımcı Profili
                             </div>
                         )}
-                        <div onClick={() => { setShowOptionsMenu(false); toggleMute(effectiveChatId); }} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}>
+                        {isGroupChat && (user?.role === 'expert' || user?.role === 'admin') && (
+                            <div onClick={toggleOnlyAdminsCanWrite} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', whiteSpace: 'nowrap' }}>
+                                {resolvedTour?.onlyAdminsCanWrite ? (
+                                    <><Unlock size={16} className="text-muted" /> Sohbeti Herkese Aç</>
+                                ) : (
+                                    <><Lock size={16} className="text-muted" /> Sadece Yöneticiler Yazabilsin</>
+                                )}
+                            </div>
+                        )}
+                        <div onClick={() => { setShowOptionsMenu(false); toggleMute(effectiveChatId); }} style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', whiteSpace: 'nowrap' }}>
                             {mutedChats?.includes(effectiveChatId) ? <><Bell size={16} className="text-muted" /> Sesi Aç</> : <><BellOff size={16} className="text-muted" /> Bildirimleri Sessize Al</>}
                         </div>
                         <div 
@@ -430,7 +509,7 @@ export default function Chat() {
                                 setShowOptionsMenu(false);
                                 setConfirmClearPopup(true);
                             }} 
-                            style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', color: '#ef4444' }}
+                            style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', color: '#ef4444', whiteSpace: 'nowrap' }}
                         >
                             <Trash2 size={16} /> Sohbeti Temizle
                         </div>
@@ -473,6 +552,11 @@ export default function Chat() {
                     } else if (msg.type === 'location') {
                         return (
                             <div style={{ padding: '6px', width: '220px' }}>
+                                {msg.text && (
+                                    <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {msg.text}
+                                    </div>
+                                )}
                                 <div style={{ borderRadius: '12px', overflow: 'hidden', marginBottom: '8px', background: '#ccc' }}>
                                     <iframe 
                                       width="100%" 
@@ -549,6 +633,12 @@ export default function Chat() {
                 <b>Bu Seyahat Arşivlenmiştir</b>
                 Mesaj geçmişi okunabilir ancak yeni mesaj gönderilemez veya eylem gerçekleştirilemez.
             </div>
+        ) : isChatLockedForUser ? (
+            <div style={{ padding: '20px', background: 'var(--surface)', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', boxShadow: '0 -4px 20px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                <Lock size={24} color="var(--primary)" />
+                <b>Sadece Yöneticiler Mesaj Gönderebilir</b>
+                Bu grup geçici olarak yeni mesaj gönderimine kapatılmıştır.
+            </div>
         ) : (
             <div style={{ position: 'relative', padding: '12px 16px', background: '#f0f2f5', display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
                 
@@ -565,6 +655,12 @@ export default function Chat() {
                                 <MapPin size={20} />
                             </div>
                             <span style={{ fontWeight: '500', fontSize: '14px' }}>Konumunu Paylaş</span>
+                        </div>
+                        <div onClick={() => { setShowAttachMenu(false); setShowPlaceSearchModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', cursor: 'pointer', borderRadius: '8px', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, #F59E0B, #EF4444)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                                <MapPin size={20} />
+                            </div>
+                            <span style={{ fontWeight: '500', fontSize: '14px' }}>Mekan Ara ve Paylaş</span>
                         </div>
                     </div>
                 )}
@@ -609,6 +705,72 @@ export default function Chat() {
                         isRecording ? <Send size={20} style={{ transform: 'translateX(-1px)' }} /> : <Mic size={22} />
                     )}
                 </button>
+            </div>
+        )}
+        {/* Place Search Modal */}
+        {showPlaceSearchModal && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backdropFilter: 'blur(4px)' }}>
+                <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '400px', padding: '24px', display: 'flex', flexDirection: 'column', maxHeight: '80vh', animation: 'scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)', background: 'white', borderRadius: '16px', boxShadow: '0 8px 32px rgba(0,0,0,0.15)' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 16px 0', color: 'var(--text-main)' }}>Mekan Ara ve Paylaş</h3>
+                    
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                        <input 
+                            type="text" 
+                            placeholder="Mekan veya restoran adı..." 
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && searchPlaces(searchQuery)}
+                            style={{ flex: 1, padding: '10px 14px', border: '1px solid #e2e8f0', borderRadius: '12px', outline: 'none', fontSize: '14px', background: 'transparent', color: 'var(--text-main)' }}
+                        />
+                        <button 
+                            onClick={() => searchPlaces(searchQuery)}
+                            style={{ padding: '10px 16px', border: 'none', background: 'var(--primary)', color: 'white', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                            {isSearchingPlaces ? 'Aranıyor...' : 'Ara'}
+                        </button>
+                    </div>
+
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px', minHeight: '150px' }}>
+                        {isSearchingPlaces ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '14px' }}>
+                                Mekanlar aranıyor...
+                            </div>
+                        ) : searchResults.length === 0 ? (
+                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', color: 'var(--text-muted)', fontSize: '14px', textAlign: 'center', padding: '16px' }}>
+                                Arama yapmak için bir yer adı yazın.
+                            </div>
+                        ) : (
+                            searchResults.map((place) => (
+                                <div 
+                                    key={place.place_id} 
+                                    onClick={() => sharePlace(place)}
+                                    style={{ display: 'flex', gap: '12px', padding: '12px', border: '1px solid #f1f5f9', borderRadius: '12px', cursor: 'pointer', transition: 'all 0.2s', background: '#f8fafc' }}
+                                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = 'var(--primary)'; }}
+                                    onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#f1f5f9'; }}
+                                >
+                                    <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', flexShrink: 0 }}>
+                                        <MapPin size={18} />
+                                    </div>
+                                    <div style={{ overflow: 'hidden' }}>
+                                        <div style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {place.display_name.split(',')[0]}
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                            {place.display_name.split(',').slice(1).join(',').trim()}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    <button 
+                        onClick={() => { setShowPlaceSearchModal(false); setSearchQuery(''); setSearchResults([]); }}
+                        style={{ padding: '12px', borderRadius: '12px', border: 'none', background: '#f1f5f9', color: '#64748b', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}
+                    >
+                        Kapat
+                    </button>
+                </div>
             </div>
         )}
       </div>

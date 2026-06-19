@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
@@ -14,8 +14,15 @@ export default function Login() {
   const [successMsg, setSuccessMsg] = useState('');
   const [isSending, setIsSending] = useState(false);
   const login = useAuthStore(state => state.login);
+  const user = useAuthStore(state => state.user);
   const { corporateLogo, corporateName, isFirebaseInitialized } = useSettingsStore();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard');
+    }
+  }, [user, navigate]);
 
   const handleLogin = (e) => {
     e.preventDefault();

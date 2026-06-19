@@ -360,7 +360,9 @@ export default function ProfileSettings() {
                      <>
                      <div style={{ background: 'white', borderRadius: '16px', padding: '16px', marginBottom: '24px', border: '1px solid #e2e8f0' }}>
                           <h3 style={{ fontSize: '15px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              {isChildProfile ? 'Çocuğa Ait Kimlik & Pasaport Bilgileri' : 'Kimlik & Pasaport Bilgileri'}
+                              {isChildProfile 
+                                  ? (user?.role === 'customer' ? 'Çocuğa Ait Kimlik Bilgileri' : 'Çocuğa Ait Kimlik & Pasaport Bilgileri')
+                                  : (user?.role === 'customer' ? 'Kimlik Bilgileri' : 'Kimlik & Pasaport Bilgileri')}
                           </h3>
                           
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -368,22 +370,26 @@ export default function ProfileSettings() {
                                   <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>T.C. Kimlik Numarası</label>
                                   <input type="text" maxLength={11} placeholder="Örn: 12345678901" value={formData.tcNo} onChange={e => setFormData({...formData, tcNo: e.target.value.replace(/\D/g, '')})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
                               </div>
-                              <div>
-                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Ülke Pasaportu</label>
-                                  <input type="text" placeholder="Örn: Türkiye" value={formData.passportCountry} onChange={e => setFormData({...formData, passportCountry: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
-                              </div>
-                              <div>
-                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Pasaport No</label>
-                                  <input type="text" placeholder="Örn: U12345678" value={formData.passportNo} onChange={e => setFormData({...formData, passportNo: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
-                              </div>
-                              <div>
-                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>P. Geçerlilik T.</label>
-                                  <input type="date" value={formData.passportExp} onChange={e => setFormData({...formData, passportExp: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
-                              </div>
-                              <div>
-                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Doğum Tarihi</label>
-                                  <input type="date" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
-                              </div>
+                              {user?.role !== 'customer' && (
+                                  <>
+                                      <div>
+                                          <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Ülke Pasaportu</label>
+                                          <input type="text" placeholder="Örn: Türkiye" value={formData.passportCountry} onChange={e => setFormData({...formData, passportCountry: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                                      </div>
+                                      <div>
+                                          <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Pasaport No</label>
+                                          <input type="text" placeholder="Örn: U12345678" value={formData.passportNo} onChange={e => setFormData({...formData, passportNo: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                                      </div>
+                                      <div>
+                                          <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>P. Geçerlilik T.</label>
+                                          <input type="date" value={formData.passportExp} onChange={e => setFormData({...formData, passportExp: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                                      </div>
+                                      <div>
+                                          <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '4px', display: 'block' }}>Doğum Tarihi</label>
+                                          <input type="date" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-color)', background: 'white' }} />
+                                      </div>
+                                  </>
+                              )}
                           </div>
                       </div>
 

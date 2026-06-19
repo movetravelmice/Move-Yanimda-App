@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronDown, Plus, Phone, MessageCircle, X, Search, User as UserIcon, Building, Mail, CheckCircle2, History, Activity, Users, PlaneTakeoff, BellRing, BellOff, Trash2, AlertTriangle, FileSpreadsheet, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronDown, Plus, Phone, MessageCircle, X, Search, User as UserIcon, Building, Mail, CheckCircle2, History, Activity, Users, PlaneTakeoff, BellRing, BellOff, Trash2, AlertTriangle, FileSpreadsheet, Lock, UserPlus } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 import ParticipantTransferManager from '../../components/ParticipantTransferManager';
@@ -22,6 +22,69 @@ export default function ParticipantsList() {
 
     const tour = tours.find(t => t.id === tourId);
     const participants = tour?.participants || [];
+
+    const missingTicketsCount = participants.filter(p => !p.flights || p.flights.length < 2 || !p.flights[0]?.pnr || !p.flights[1]?.pnr).length;
+    const allTicketsCompleted = participants.length > 0 && missingTicketsCount === 0;
+
+    const [sendingNotifications, setSendingNotifications] = useState(false);
+
+    const handleSendNotifications = async () => {
+        if (!allTicketsCompleted || sendingNotifications) return;
+        setSendingNotifications(true);
+        try {
+            const sendWhatsAppNotification = useSettingsStore.getState().sendWhatsAppNotification;
+            
+            let sentCount = 0;
+            
+            for (const p of participants) {
+                const globalUser = users.find(u => u.id === p.id || u.email === p.email);
+                if (!globalUser) continue;
+                
+                const flights = p.flights || [];
+                
+                // Send Email
+                if (smtpConfig?.host && smtpConfig?.user && globalUser.email && globalUser.email.includes('@')) {
+                    try {
+                        const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                        await fetch(`${baseUrl}/api/send-ticket-email`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                ...smtpConfig,
+                                to: globalUser.email,
+                                participantName: globalUser.name,
+                                tourName: tour?.name || '',
+                                flights: flights
+                            })
+                        });
+                    } catch (e) {
+                        console.error("Email send error for " + globalUser.name, e);
+                    }
+                }
+                
+                // Send WhatsApp
+                if (globalUser.phone && globalUser.phone !== '-') {
+                    try {
+                        sendWhatsAppNotification(
+                            globalUser.phone,
+                            'ticketAddedTemplate',
+                            [globalUser.name, tour?.name || '', flights[0]?.airline || '-', flights[0]?.flightNo || '-', flights[0]?.pnr || '-']
+                        );
+                    } catch (e) {
+                        console.error("WhatsApp notification error for " + globalUser.name, e);
+                    }
+                }
+                
+                sentCount++;
+            }
+            
+            alert(`Başarılı! Biletleme bilgilendirmesi ${sentCount} katılımcıya gönderildi.`);
+        } catch (err) {
+            alert("Gönderim sırasında bir hata oluştu: " + err.message);
+        } finally {
+            setSendingNotifications(false);
+        }
+    };
 
     const [showSht, setShowSht] = useState(false); // Bottom sheet for user details
     const [selectedUser, setSelectedUser] = useState(null);
@@ -394,7 +457,7 @@ export default function ParticipantsList() {
                         </>
                     )}
                     <div onClick={() => setShowBulkParticipant(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Excel ile Toplu Katılımcı Ekle">
-                        <FileSpreadsheet size={20} />
+                        <UserPlus size={20} />
                     </div>
                     <div onClick={() => setShowWizard(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Münferit Katılımcı Ekle">
                         <Plus size={20} />
@@ -471,6 +534,66 @@ export default function ParticipantsList() {
                                 </div>
                             );
                         })}
+                    </div>
+                )}
+
+                {participants.length > 0 && (
+                    <div style={{ 
+                        marginTop: '32px', 
+                        background: 'white', 
+                        borderRadius: '20px', 
+                        padding: '20px', 
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+                        border: '1px solid #e2e8f0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ 
+                                width: '8px', 
+                                height: '8px', 
+                                borderRadius: '50%', 
+                                background: allTicketsCompleted ? '#10b981' : '#f59e0b' 
+                            }}></div>
+                            <span style={{ fontSize: '13px', fontWeight: 'bold', color: allTicketsCompleted ? '#10b981' : '#d97706' }}>
+                                {allTicketsCompleted 
+                                    ? 'Tüm katılımcıların uçuş biletleri (gidiş/dönüş PNR) tamamlandı.' 
+                                    : `Biletleme tamamlanmadı (${missingTicketsCount} katılımcının uçuş bilgisi eksik).`}
+                            </span>
+                        </div>
+                        
+                        <button
+                            onClick={handleSendNotifications}
+                            disabled={!allTicketsCompleted || sendingNotifications}
+                            style={{
+                                width: '100%',
+                                padding: '14px',
+                                borderRadius: '12px',
+                                fontSize: '14px',
+                                fontWeight: 'bold',
+                                border: 'none',
+                                cursor: allTicketsCompleted && !sendingNotifications ? 'pointer' : 'not-allowed',
+                                background: allTicketsCompleted 
+                                    ? 'linear-gradient(135deg, var(--primary), #ec4899)' 
+                                    : '#cbd5e1',
+                                color: allTicketsCompleted ? 'white' : '#94a3b8',
+                                boxShadow: allTicketsCompleted && !sendingNotifications 
+                                    ? '0 6px 16px rgba(215, 20, 122, 0.25)' 
+                                    : 'none',
+                                transition: 'all 0.25s ease-in-out',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px'
+                            }}
+                        >
+                            {sendingNotifications ? (
+                                <>Katılımcılar Bilgilendiriliyor...</>
+                            ) : (
+                                <>Biletleme bilgisini müşterilere gönder</>
+                            )}
+                        </button>
                     </div>
                 )}
             </div>

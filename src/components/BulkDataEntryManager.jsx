@@ -80,39 +80,6 @@ export default function BulkDataEntryManager({ tourId, participants, onClose }) 
       });
 
       editTour(tourId, { participants: newParticipants });
-      
-      // Trigger Notifications for all affected users
-      if (flightsToSave.length > 0) {
-          participants.forEach(p => {
-              const globalUser = users.find(u => u.id === p.id);
-              if (globalUser) {
-                  if (smtpConfig?.host && smtpConfig?.user && globalUser.email && globalUser.email.includes('@')) {
-                      try {
-                          const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
-                          fetch(`${baseUrl}/api/send-ticket-email`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({
-                                  ...smtpConfig,
-                                  to: globalUser.email,
-                                  participantName: p.name,
-                                  tourName: tour?.name || '',
-                                  flights: flightsToSave
-                              })
-                          });
-                      } catch (e) { console.error("Ticket email error", e); }
-                  }
-
-                  if (globalUser.phone && globalUser.phone !== '-') {
-                      useSettingsStore.getState().sendWhatsAppNotification(
-                          globalUser.phone,
-                          'ticketAddedTemplate',
-                          [p.name, tour?.name || '', flightsToSave[0]?.airline || '-', flightsToSave[0]?.flightNo || '-', flightsToSave[0]?.pnr || '-']
-                      );
-                  }
-              }
-          });
-      }
 
       alert(`Girilen veriler toplam ${participants.length} katılımcıya başarıyla eklendi!`);
       onClose();
