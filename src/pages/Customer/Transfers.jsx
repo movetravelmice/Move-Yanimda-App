@@ -4,6 +4,37 @@ import { ChevronLeft, PlaneTakeoff, PlaneLanding, MapPin, Bus, CalendarClock } f
 import { useTourStore } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
 
+const formatDateWithMonthName = (dateStr) => {
+    if (!dateStr) return '-';
+    const parts = dateStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+        const months = [
+            'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
+            'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+        ];
+        const day = parseInt(parts[2], 10);
+        const monthIndex = parseInt(parts[1], 10) - 1;
+        const year = parts[0];
+        if (monthIndex >= 0 && monthIndex < 12) {
+            return `${day} ${months[monthIndex]} ${year}`;
+        }
+    }
+    const partsDot = dateStr.split('.');
+    if (partsDot.length === 3 && partsDot[2].length === 4) {
+        const months = [
+            'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
+            'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+        ];
+        const day = parseInt(partsDot[0], 10);
+        const monthIndex = parseInt(partsDot[1], 10) - 1;
+        const year = partsDot[2];
+        if (monthIndex >= 0 && monthIndex < 12) {
+            return `${day} ${months[monthIndex]} ${year}`;
+        }
+    }
+    return dateStr;
+};
+
 export default function Transfers() {
   const navigate = useNavigate();
   const { tourId } = useParams();
@@ -95,7 +126,7 @@ export default function Transfers() {
             <div key={index} style={{ marginBottom: '32px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: 'bold', margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Icon size={18} className="text-primary" /> {flight.type} <span style={{fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal'}}>({flight.date})</span>
+                  <Icon size={18} className="text-primary" /> {flight.type} <span style={{fontSize: '12px', color: 'var(--text-muted)', fontWeight: 'normal'}}>({formatDateWithMonthName(flight.date)})</span>
                 </h3>
                 <div style={{ background: flight.isFamily ? '#fffbeb' : '#f8fafc', color: flight.isFamily ? '#d97706' : '#475569', fontSize: '12px', fontWeight: 'bold', padding: '6px 10px', borderRadius: '8px', border: `1px solid ${flight.isFamily ? '#fde68a' : '#e2e8f0'}`, display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
                     👤 Yolcu: {flight.passengerName}

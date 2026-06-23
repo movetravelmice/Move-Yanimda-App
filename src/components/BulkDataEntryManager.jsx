@@ -4,6 +4,37 @@ import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore } from '../store/userStore';
 
+const formatDateWithMonthName = (dateStr) => {
+    if (!dateStr) return '-';
+    const parts = dateStr.split('-');
+    if (parts.length === 3 && parts[0].length === 4) {
+        const months = [
+            'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
+            'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+        ];
+        const day = parseInt(parts[2], 10);
+        const monthIndex = parseInt(parts[1], 10) - 1;
+        const year = parts[0];
+        if (monthIndex >= 0 && monthIndex < 12) {
+            return `${day} ${months[monthIndex]} ${year}`;
+        }
+    }
+    const partsDot = dateStr.split('.');
+    if (partsDot.length === 3 && partsDot[2].length === 4) {
+        const months = [
+            'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
+            'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+        ];
+        const day = parseInt(partsDot[0], 10);
+        const monthIndex = parseInt(partsDot[1], 10) - 1;
+        const year = partsDot[2];
+        if (monthIndex >= 0 && monthIndex < 12) {
+            return `${day} ${months[monthIndex]} ${year}`;
+        }
+    }
+    return dateStr;
+};
+
 export default function BulkDataEntryManager({ tourId, participants, onClose }) {
   const { tours, editTour } = useTourStore();
   const { smtpConfig } = useSettingsStore();
@@ -120,7 +151,7 @@ export default function BulkDataEntryManager({ tourId, participants, onClose }) 
                 {/* Birinci Satır */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                     <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UÇUŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.flightNo || '-'}</div></div>
-                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TARİH</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.date || '-'}</div></div>
+                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TARİH</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{formatDateWithMonthName(flight.date)}</div></div>
                     <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>KALKIŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.departureTime || '-'}</div></div>
                     <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>VARIŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.arrivalTime || '-'}</div></div>
                 </div>
