@@ -37,14 +37,93 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
       return dateStr;
   };
 
-  const parseDateFromExcel = (dateStr) => {
+  const excelSerialToDate = (serial) => {
+      const s = Number(serial);
+      if (isNaN(s) || s < 1) return null;
+      const days = s - (s < 60 ? 0 : 1);
+      const ms = Math.round((days - 25568) * 86400 * 1000);
+      const date = new Date(ms);
+      const yyyy = date.getUTCFullYear();
+      const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(date.getUTCDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const excelSerialToTime = (serial) => {
+      const s = Number(serial);
+      if (isNaN(s) || s < 0 || s >= 1) return null;
+      const totalMinutes = Math.round(s * 1440);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const hh = String(hours).padStart(2, '0');
+      const mm = String(minutes).padStart(2, '0');
+      return `${hh}:${mm}`;
+  };
+
+  const parseStandardDate = (dateStr) => {
       if (!dateStr) return '';
       const cleanDate = String(dateStr).replace(/\//g, '.').replace(/-/g, '.');
       const parts = cleanDate.split('.');
-      if (parts.length === 3 && parts[2].length === 4) {
-          return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      if (parts.length === 3) {
+          if (parts[2].length === 4) {
+              return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+          }
+          if (parts[0].length === 4) {
+              return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+          }
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+          return dateStr;
       }
       return String(dateStr);
+  };
+
+  const parseExcelDateValue = (val) => {
+      if (!val) return { date: '', departureTime: '', arrivalTime: '' };
+      const str = String(val).trim();
+      const parts = str.split(/\s*(?:-|\s)\s*/).filter(Boolean);
+      
+      let date = '';
+      let departureTime = '';
+      let arrivalTime = '';
+      
+      if (parts.length > 0) {
+          const part1 = parts[0];
+          if (/^\d+$/.test(part1)) {
+              date = excelSerialToDate(part1) || '';
+          } else {
+              date = parseStandardDate(part1);
+          }
+      }
+      
+      if (parts.length > 1) {
+          const part2 = parts[1];
+          if (/^0\.\d+$/.test(part2) || /^\d+$/.test(part2)) {
+              departureTime = excelSerialToTime(part2) || '';
+          } else {
+              departureTime = part2;
+          }
+      }
+      
+      if (parts.length > 2) {
+          const part3 = parts[2];
+          if (/^0\.\d+$/.test(part3) || /^\d+$/.test(part3)) {
+              arrivalTime = excelSerialToTime(part3) || '';
+          } else {
+              arrivalTime = part3;
+          }
+      }
+      
+      return { date, departureTime, arrivalTime };
+  };
+
+  const parseTimeValue = (val) => {
+      if (!val) return '';
+      const str = String(val).trim();
+      if (/^0\.\d+$/.test(str) || /^\d+$/.test(str)) {
+          return excelSerialToTime(str) || str;
+      }
+      return str;
   };
 
   const handleExport = () => {
@@ -129,9 +208,14 @@ export default function BulkTicketManager({ tourId, participants, onClose }) {
                   pnr: row['PNR'] || '',
                   ticketNo: row['Bilet No'] || '',
                   cabinClass: row['Sınıf (Ekonomi / Business)'] || 'Ekonomi',
-                  date: parseDateFromExcel(row['Tarih (GG.AA.YYYY)']),
-                  departureTime: row['Kalkış Saati (SS:DD)'] || '',
-                  arrivalTime: row['Varış Saati (SS:DD)'] || '',
+                  ...(() => {
+                      const parsed = parseExcelDateValue(row['Tarih (GG.AA.YYYY)']);
+                      return {
+                          date: parsed.date,
+                          departureTime: parseTimeValue(row['Kalkış Saati (SS:DD)']) || parsed.departureTime || '',
+                          arrivalTime: parseTimeValue(row['Varış Saati (SS:DD)']) || parsed.arrivalTime || ''
+                      };
+                  })(),
                   icon: (row['Uçuş Yönü (Gidiş Uçuşu / Dönüş Uçuşu)'] || '').includes('Dönüş') ? 'landing' : 'takeoff'
               });
           }
