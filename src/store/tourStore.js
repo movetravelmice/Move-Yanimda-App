@@ -2,6 +2,129 @@ import { create } from 'zustand';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
+const excelSerialToDate = (serial) => {
+    const s = Number(serial);
+    if (isNaN(s) || s < 1) return null;
+    const days = s - (s < 60 ? 0 : 1);
+    const ms = Math.round((days - 25568) * 86400 * 1000);
+    const date = new Date(ms);
+    const yyyy = date.getUTCFullYear();
+    const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(date.getUTCDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+
+const excelSerialToTime = (serial) => {
+    const s = Number(serial);
+    if (isNaN(s) || s < 0 || s >= 1) return null;
+    const totalMinutes = Math.round(s * 1440);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const hh = String(hours).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    return `${hh}:${mm}`;
+};
+
+const parseStandardDate = (dateStr) => {
+    if (!dateStr) return '';
+    const cleanDate = String(dateStr).replace(/\//g, '.').replace(/-/g, '.');
+    const parts = cleanDate.split('.');
+    if (parts.length === 3) {
+        if (parts[2].length === 4) {
+            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+        if (parts[0].length === 4) {
+            return `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+        }
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+    }
+    return String(dateStr);
+};
+
+const parseExcelDateValue = (val) => {
+    if (!val) return { date: '', departureTime: '', arrivalTime: '' };
+    const str = String(val).trim();
+    const parts = str.split(/\s*(?:-|\s)\s*/).filter(Boolean);
+    
+    let date = '';
+    let departureTime = '';
+    let arrivalTime = '';
+    
+    if (parts.length > 0) {
+        const part1 = parts[0];
+        if (/^\d+$/.test(part1)) {
+            date = excelSerialToDate(part1) || '';
+        } else {
+            date = parseStandardDate(part1);
+        }
+    }
+    
+    if (parts.length > 1) {
+        const part2 = parts[1];
+        if (/^0\.\d+$/.test(part2) || /^\d+$/.test(part2)) {
+            departureTime = excelSerialToTime(part2) || '';
+        } else {
+            departureTime = part2;
+        }
+    }
+    
+    if (parts.length > 2) {
+        const part3 = parts[2];
+        if (/^0\.\d+$/.test(part3) || /^\d+$/.test(part3)) {
+            arrivalTime = excelSerialToTime(part3) || '';
+        } else {
+            arrivalTime = part3;
+        }
+    }
+    
+    return { date, departureTime, arrivalTime };
+};
+
+const parseTimeValue = (val) => {
+    if (!val) return '';
+    const str = String(val).trim();
+    if (/^0\.\d+$/.test(str) || /^\d+$/.test(str)) {
+        return excelSerialToTime(str) || str;
+    }
+    return str;
+};
+
+const sanitizeFlightData = (flight) => {
+    if (!flight || !flight.date) return flight;
+    const dateStr = String(flight.date).trim();
+    
+    if (/^\d{5}/.test(dateStr)) {
+        const parsed = parseExcelDateValue(dateStr);
+        if (parsed.date) {
+            return {
+                ...flight,
+                date: parsed.date,
+                departureTime: flight.departureTime && !/^0\.\d+$/.test(String(flight.departureTime).trim())
+                    ? flight.departureTime 
+                    : parsed.departureTime || flight.departureTime || '',
+                arrivalTime: flight.arrivalTime && !/^0\.\d+$/.test(String(flight.arrivalTime).trim())
+                    ? flight.arrivalTime 
+                    : parsed.arrivalTime || flight.arrivalTime || ''
+            };
+        }
+    }
+    
+    let updated = false;
+    const cleanFlight = { ...flight };
+    if (flight.departureTime && (/^0\.\d+$/.test(String(flight.departureTime).trim()) || /^\d+$/.test(String(flight.departureTime).trim()))) {
+        cleanFlight.departureTime = excelSerialToTime(flight.departureTime) || flight.departureTime;
+        updated = true;
+    }
+    if (flight.arrivalTime && (/^0\.\d+$/.test(String(flight.arrivalTime).trim()) || /^\d+$/.test(String(flight.arrivalTime).trim()))) {
+        cleanFlight.arrivalTime = excelSerialToTime(flight.arrivalTime) || flight.arrivalTime;
+        updated = true;
+    }
+    
+    return updated ? cleanFlight : flight;
+};
+
 export const useTourStore = create((set, get) => ({
   tours: [],
   isFirebaseInitialized: false,
@@ -13,13 +136,41 @@ export const useTourStore = create((set, get) => ({
       try {
           const toursRef = collection(db, 'tours');
           
-          onSnapshot(toursRef, (snapshot) => {
+          onSnapshot(toursRef, async (snapshot) => {
               const fetchedTours = [];
-              snapshot.forEach(docSnap => {
-                  fetchedTours.push({ id: docSnap.id, ...docSnap.data() });
-              });
-              
-              // Sort so newest dates appear first or keep natural order
+              for (const docSnap of snapshot.docs) {
+                  const tourData = docSnap.data();
+                  let tourModified = false;
+                  
+                  if (tourData.participants) {
+                      const updatedParticipants = tourData.participants.map(p => {
+                          if (p.flights && p.flights.length > 0) {
+                              let flightsModified = false;
+                              const updatedFlights = p.flights.map(f => {
+                                  const sf = sanitizeFlightData(f);
+                                  if (sf !== f) {
+                                      flightsModified = true;
+                                      tourModified = true;
+                                  }
+                                  return sf;
+                              });
+                              if (flightsModified) {
+                                  return { ...p, flights: updatedFlights };
+                              }
+                          }
+                          return p;
+                      });
+                      if (tourModified) {
+                          tourData.participants = updatedParticipants;
+                          try {
+                              await updateDoc(doc(db, 'tours', docSnap.id), { participants: updatedParticipants });
+                          } catch (e) {
+                              console.error("Firestore repair failed:", e);
+                          }
+                      }
+                  }
+                  fetchedTours.push({ id: docSnap.id, ...tourData });
+              }
               set({ tours: fetchedTours.reverse() });
           });
       } catch (e) {
