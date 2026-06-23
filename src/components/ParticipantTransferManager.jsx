@@ -128,7 +128,9 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
             </div>
             <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', background: 'var(--surface)', flexWrap: 'wrap', gap: '12px' }}>
                 <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UÇUŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.flightNo || '-'}</div></div>
-                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TARİH</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.date || '-'} {flight.departureTime || '-'} - {flight.arrivalTime || '-'}</div></div>
+                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TARİH</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.date || '-'}</div></div>
+                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>KALKIŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.departureTime || '-'}</div></div>
+                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>VARIŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.arrivalTime || '-'}</div></div>
                 <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>PNR</div><div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)' }}>{flight.pnr || '-'}</div></div>
                 <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>BİLET NO</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.ticketNo || '-'}</div></div>
                 <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>SINIF</div><div style={{ fontSize: '13px', fontWeight: 'bold', color: flight.cabinClass === 'Business' ? 'var(--primary)' : 'var(--text-main)' }}>{flight.cabinClass || 'Ekonomi'}</div></div>
