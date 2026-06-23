@@ -126,14 +126,20 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
                     <span style={{ fontSize: '24px', fontWeight: 'bold', lineHeight: 1 }}>{flight.to || '???'}</span>
                 </div>
             </div>
-            <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', background: 'var(--surface)', flexWrap: 'wrap', gap: '12px' }}>
-                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UÇUŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.flightNo || '-'}</div></div>
-                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TARİH</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.date || '-'}</div></div>
-                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>KALKIŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.departureTime || '-'}</div></div>
-                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>VARIŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.arrivalTime || '-'}</div></div>
-                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>PNR</div><div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)' }}>{flight.pnr || '-'}</div></div>
-                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>BİLET NO</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.ticketNo || '-'}</div></div>
-                <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>SINIF</div><div style={{ fontSize: '13px', fontWeight: 'bold', color: flight.cabinClass === 'Business' ? 'var(--primary)' : 'var(--text-main)' }}>{flight.cabinClass || 'Ekonomi'}</div></div>
+            <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', background: 'var(--surface)', borderTop: '1px solid var(--border-color)' }}>
+                {/* Birinci Satır */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>UÇUŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.flightNo || '-'}</div></div>
+                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TARİH</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.date || '-'}</div></div>
+                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>KALKIŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.departureTime || '-'}</div></div>
+                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>VARIŞ</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.arrivalTime || '-'}</div></div>
+                </div>
+                {/* İkinci Satır */}
+                <div style={{ display: 'flex', gap: '24px', borderTop: '1px solid #f1f5f9', paddingTop: '8px', flexWrap: 'wrap' }}>
+                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>PNR</div><div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)' }}>{flight.pnr || '-'}</div></div>
+                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>BİLET NO</div><div style={{ fontSize: '13px', fontWeight: 'bold' }}>{flight.ticketNo || '-'}</div></div>
+                    <div><div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>SINIF</div><div style={{ fontSize: '13px', fontWeight: 'bold', color: flight.cabinClass === 'Business' ? 'var(--primary)' : 'var(--text-main)' }}>{flight.cabinClass || 'Ekonomi'}</div></div>
+                </div>
             </div>
         </div>
       );
@@ -160,14 +166,14 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
             </h3>
 
             {flightsInput.map((flight, index) => (
-               <div key={flight.id} style={{ position: 'relative' }}>
-                   {flightsInput.length > 1 && (
-                        <div onClick={() => removeFlight(flight.id)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: '#ef4444', padding: '4px', zIndex: 5 }}>
-                           <Trash2 size={16} />
-                        </div>
-                    )}
+               <div key={flight.id}>
                    {renderLiveTicketPreview(flight)}
-                   <div style={{ background: 'white', padding: '16px', paddingTop: flightsInput.length > 1 ? '36px' : '16px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                   <div style={{ position: 'relative', background: 'white', padding: '16px', paddingTop: flightsInput.length > 1 ? '36px' : '16px', borderRadius: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.04)', marginBottom: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                        {flightsInput.length > 1 && (
+                            <div onClick={() => removeFlight(flight.id)} style={{ position: 'absolute', top: '12px', right: '12px', cursor: 'pointer', color: '#ef4444', padding: '4px', zIndex: 5 }}>
+                               <Trash2 size={16} />
+                            </div>
+                        )}
                         <div style={{ gridColumn: '1 / -1' }}>
                             <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Uçuş Yönü</label>
                             <div style={{ display: 'flex', gap: '6px', background: '#f1f5f9', padding: '4px', borderRadius: '10px' }}>
