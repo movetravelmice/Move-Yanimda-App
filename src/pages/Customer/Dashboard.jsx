@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Calendar, PlaneTakeoff, Info, Star, MessageCircle, Phone, X, UserCheck, Eye, CloudSun, Map, Utensils, Landmark, Compass, ThermometerSun } from 'lucide-react';
+import { MapPin, Calendar, PlaneTakeoff, Info, Star, MessageCircle, Phone, X, UserCheck, Eye, CloudSun, Map, Utensils, Landmark, Compass, ThermometerSun, ChevronRight } from 'lucide-react';
 import Header from '../../components/Header';
-import { useTourStore, calculateDaysAndNights } from '../../store/tourStore';
+import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive, isTourPast } from '../../store/tourStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
@@ -43,79 +43,27 @@ export default function CustomerDashboard() {
   const user = useAuthStore(state => state.user);
   const allUsers = useUserStore(state => state.users);
   const { expertName } = useSettingsStore();
-  const dynExpertUser = useUserStore(state => state.users.find(u => u.name === expertName));
-  const myTours = tours.filter(t => t.participants?.some(p => p.id === user?.id || p.email === user?.email)); const activeTours = myTours.filter(t => t.status === 'active');
-  const pastTours = myTours.filter(t => t.status === 'past');
-  const [ratingTourId, setRatingTourId] = useState(null);
-  const [generalRating, setGeneralRating] = useState(0);
-  const [showDetailedModal, setShowDetailedModal] = useState(false);
-
+  const myTours = tours.filter(t => t.participants?.some(p => 
+    p.id === user?.id || 
+    (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+  ));
+  const activeTours = myTours.filter(isTourActive);
+  const pastTours = myTours.filter(isTourPast);
   const [reviewedTours, setReviewedTours] = useState(() => {
-    const saved = localStorage.getItem('base44_reviews');
+    const saved = localStorage.getItem("base44_reviews");
     return saved ? JSON.parse(saved) : {};
   });
-  const [alreadyReviewedTourId, setAlreadyReviewedTourId] = useState(null);
-  
   const [expertModalData, setExpertModalData] = useState(null);
-
-  const [contactPref, setContactPref] = useState('');
-  const [nextYearPlaces, setNextYearPlaces] = useState('');
-
-  const [detailedRatings, setDetailedRatings] = useState({
-    program: 0,
-    acentaHizmeti: 0,
-    ucakHizmeti: 0,
-    turlar: 0,
-    konaklamaTemizlik: 0,
-    konaklamaKonum: 0,
-    restoranYemek: 0
-  });
-  const [reviewMsg, setReviewMsg] = useState('');
-
-  const handleGeneralRating = (val) => {
-    setGeneralRating(val);
-    setDetailedRatings({
-      program: 0,
-      acentaHizmeti: 0,
-      ucakHizmeti: 0,
-      turlar: 0,
-      konaklamaTemizlik: 0,
-      konaklamaKonum: 0,
-      restoranYemek: 0
-    });
-    setContactPref('');
-    setNextYearPlaces('');
-    setReviewMsg('');
-    setShowDetailedModal(true);
-  };
-
-  const submitReview = () => {
-    setShowDetailedModal(false);
-    let vals = Object.values(detailedRatings);
-    let avgScore = vals.reduce((a, b) => a + b, 0) / (vals.length || 1);
-    let finalScore = avgScore > 0 ? avgScore : generalRating;
-    const newReviews = { ...reviewedTours, [ratingTourId]: finalScore };
-    setReviewedTours(newReviews);
-    localStorage.setItem("base44_reviews", JSON.stringify(newReviews));
-    useTourStore.getState().addParticipantFeedback(ratingTourId, user?.id || "cust_1", { 
-        rating: finalScore, 
-        comment: reviewMsg || `${finalScore.toFixed(1)} Yıldızlı değerlendirme`,
-        detailedRatings,
-        contactPref,
-        nextYearPlaces
-    });
-    setRatingTourId(null);
-  };
 
   return (
     <div style={{ paddingBottom: '90px' }}>
       <Header title="Katilacagim Turlar" />
 
-      <div style={{ padding: '0 16px' }}>
-        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginTop: '16px', marginBottom: '12px' }}>Güncel Turlarım</h2>
-        
+      <div style={{ padding: '0 16px', marginTop: '14px' }}>
         {activeTours.length === 0 && (
-           <p className="text-muted" style={{ fontSize: '13px', marginBottom: '24px' }}>Şu an kayıtlı olduğunuz aktif bir tur bulunmuyor.</p>
+           <div style={{ textAlign: 'center', padding: '24px 16px', background: 'white', borderRadius: '16px', border: '1px dashed #cbd5e1', marginBottom: '16px' }}>
+             <p className="text-muted" style={{ fontSize: '12.5px', margin: 0 }}>Şu an kayıtlı olduğunuz aktif bir tur bulunmuyor.</p>
+           </div>
         )}
 
         {activeTours.map(tour => {
@@ -172,6 +120,7 @@ export default function CustomerDashboard() {
                 }
             }
 
+            const { expert1, expert2 } = getTourExperts(tour, allUsers, user);
             return (
             <div key={tour.id} style={{ position: 'relative' }}>
               {checkInWarning && (
@@ -181,217 +130,379 @@ export default function CustomerDashboard() {
                       </div>
                       <div style={{ flex: 1 }}>
                           <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 'bold' }}>Check-in Hatırlatması</h4>
-                          <p style={{ margin: '4px 0 0 0', fontSize: '13px', lineHeight: '1.4', opacity: 0.9 }}>
-                              Seyahatinize <strong>{checkInWarning.hoursLeft} saat</strong> kaldı. Lütfen <strong>{checkInWarning.airline.toUpperCase()}</strong> web sayfasını ziyaret ederek check-in işleminizi tamamlayınız.
-                          </p>
+                           <p style={{ margin: '4px 0 0 0', fontSize: '13px', lineHeight: '1.4', opacity: 0.9 }}>
+                               Seyahatinize <strong>{checkInWarning.hoursLeft} saat</strong> kaldı. Uçuşunuza 24 saat kala ( <strong>{checkInWarning.airline.toUpperCase()}</strong> ) web sitesi veya mobil uygulaması üzerinden online check-in işleminizi gerçekleştirmenizi rica ederiz.
+                           </p>
                       </div>
                   </div>
               )}
-              <div className="card" style={{ marginBottom: '24px' }}>
-              <div style={{ height: '140px', background: 'var(--primary-light)', borderRadius: '8px', marginBottom: '12px', overflow: 'hidden' }}>
-                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-              <h2 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px' }}>{tour.name}</h2>
-
-              <div className="flex-row text-muted" style={{ marginBottom: '6px', fontSize: '14px' }}>
-                <MapPin size={16} /> {tour.destinations}
-              </div>
-              <div className="flex-row text-muted" style={{ marginBottom: '16px', fontSize: '14px', justifyContent: 'space-between', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Calendar size={16} /> {tour.dates}
+              <div style={{ 
+                background: '#ffffff', 
+                borderRadius: '16px', 
+                border: '1px solid #edf2f7', 
+                boxShadow: '0 4px 18px rgba(0,0,0,0.04)', 
+                overflow: 'hidden', 
+                marginBottom: '20px',
+                transition: 'transform 0.2s, box-shadow 0.2s'
+              }}>
+                {/* Card Header inside active tour card */}
+                <div style={{ padding: '9px 14px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: 'var(--text-main)' }}>
+                    <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}></span>
+                    Güncel Turlarım
+                  </div>
+                  <span style={{ fontSize: '10.5px', fontWeight: '700', color: 'var(--primary)', background: '#FDF2F8', padding: '2px 8px', borderRadius: '6px', border: '1px solid #F9BED8' }}>
+                    Aktif Seyahat
+                  </span>
                 </div>
-                {calculateDaysAndNights(tour.dates) && (
-                    <div style={{ background: '#f8fafc', color: '#64748b', fontSize: '12px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                        {calculateDaysAndNights(tour.dates)}
+
+                {/* Top Full-Bleed Cover Image */}
+                <div style={{ height: '160px', position: 'relative', width: '100%', overflow: 'hidden', background: 'var(--primary-light)' }}>
+                  <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  
+                  {/* Top Left Badge: Pure Overlapping Circular Profile Photos */}
+                  <div 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpertModalData({ expert1, expert2 });
+                    }}
+                    title="Seyahat Uzmanlarını Görüntüle"
+                    style={{ 
+                        position: 'absolute', 
+                        top: '10px', 
+                        left: '10px', 
+                        background: 'rgba(255, 255, 255, 0.95)', 
+                        backdropFilter: 'blur(8px)', 
+                        padding: '3px', 
+                        borderRadius: '30px', 
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        cursor: 'pointer', 
+                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 
+                        zIndex: 2 
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.2)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.15)'; }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 2, background: 'var(--primary-light)' }}>
+                        <img 
+                          src={expert1.avatar} 
+                          alt={expert1.name || "Uzman 1"} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      </div>
+                      {expert2 && (
+                        <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', marginLeft: '-10px', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 1, background: '#eff6ff' }}>
+                          <img 
+                            src={expert2.avatar} 
+                            alt={expert2.name || "Uzman 2"} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                          />
+                        </div>
+                      )}
                     </div>
-                )}
-              </div>
+                  </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                <div 
-                  onClick={() => navigate('/dashboard/transfers/' + tour.id)}
-                  style={{ background: '#f5f5f5', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }}
-                >
-                  <PlaneTakeoff size={16} className="text-primary" />
-                  <span style={{fontWeight: '600'}}>Uçuş & Transfer</span>
+                  {/* Destination Overlay */}
+                  {tour.destinations && tour.destinations !== 'Belirtilmedi' && (
+                    <div style={{ position: 'absolute', bottom: '10px', left: '12px', display: 'flex', alignItems: 'center', gap: '4px', color: '#ffffff', fontSize: '11.5px', fontWeight: '600', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                       <MapPin size={13} color="#ffffff" />
+                       <span>{tour.destinations}</span>
+                    </div>
+                  )}
                 </div>
-                <div 
-                  onClick={() => navigate('/dashboard/program/' + tour.id)}
-                  style={{ background: '#f5f5f5', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }}
-                >
-                  <Info size={16} className="text-primary" />
-                  <span style={{fontWeight: '600'}}>Tur Programı</span>
-                </div>
-              </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <div 
-                  onClick={() => {
-                    const pExpertUser = allUsers.find(u => u.email === tour.expert?.email || u.name === tour.expert?.name || u.name === tour.guideName || u.name === expertName);
-                    const pPhone = (pExpertUser && pExpertUser.phone && pExpertUser.phone !== '-') ? pExpertUser.phone : '+905321234567';
-                    const expert1 = {
-                      name: tour.expert?.name || tour.guideName || expertName || 'Bölge Uzmanı',
-                      avatar: tour.expert?.avatar || pExpertUser?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(tour.expert?.name || tour.guideName || expertName || 'U')}&background=D7147A&color=fff`,
-                      email: tour.expert?.email || pExpertUser?.email || '',
-                      phone: pPhone
-                    };
-                    const expert2 = tour.expert2 ? {
-                      name: tour.expert2.name,
-                      avatar: tour.expert2.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(tour.expert2.name)}&background=25D366&color=fff`,
-                      email: tour.expert2.email,
-                      phone: tour.expert2.phone || '+905321234568'
-                    } : null;
-                    setExpertModalData({ expert1, expert2 });
-                  }}
-                  style={{ background: '#f5f5f5', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }}
-                >
-                  <UserCheck size={16} className="text-primary" />
-                  <span style={{fontWeight: '600'}}>Tur Yetkilisi</span>
-                </div>
-                
-                <div 
-                  onClick={() => navigate('/dashboard/guide/' + tour.id)}
-                  style={{ background: '#e0e7ff', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                  <Compass size={16} className="text-primary" />
-                  <span style={{fontWeight: '600', color: 'var(--primary)'}}>Şehir Rehberi</span>
+                {/* Card Body */}
+                <div style={{ padding: '14px 16px 16px 16px' }}>
+                  <h2 style={{ fontSize: '13.5px', fontWeight: '700', margin: '0 0 8px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.4', letterSpacing: '-0.2px' }}>{tour.name}</h2>
+
+                  {/* Date & Duration Strip */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 10px', borderRadius: '10px', border: '1px solid #f1f5f9', marginBottom: '12px', gap: '8px', overflow: 'hidden', flexWrap: 'nowrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: 'clamp(10px, 2.9vw, 12px)', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+                        <Calendar size={13} color="var(--primary)" style={{ flexShrink: 0 }} />
+                        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.dates}</span>
+                    </div>
+                    {calculateDaysAndNights(tour.dates) && (
+                        <span style={{ background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 'clamp(9.5px, 2.7vw, 11px)', fontWeight: '700', padding: '3px 7px', borderRadius: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                            {calculateDaysAndNights(tour.dates)}
+                        </span>
+                    )}
+                  </div>
+
+                  {/* Side-by-Side Harmonic Color-Coded Square Action Boxes */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                    <button 
+                      onClick={() => navigate('/dashboard/transfers/' + tour.id)}
+                      title="Uçuş ve Bilet Bilgileri"
+                      style={{ aspectRatio: '1', width: '100%', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#93c5fd'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(37,99,235,0.18)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#dbeafe'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                    >
+                      <PlaneTakeoff size={21} color="#2563eb" strokeWidth={2.2} />
+                    </button>
+
+                    <button 
+                      onClick={() => navigate('/dashboard/program/' + tour.id)}
+                      title="Tur Programı"
+                      style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(71,85,105,0.15)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                    >
+                      <Info size={21} color="#475569" strokeWidth={2.2} />
+                    </button>
+
+                    <button 
+                      onClick={() => {
+                        setExpertModalData({ expert1, expert2 });
+                      }}
+                      title="Tur Yetkilisi"
+                      style={{ aspectRatio: '1', width: '100%', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#dcfce7'; e.currentTarget.style.borderColor = '#86efac'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(22,163,74,0.18)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.borderColor = '#dcfce7'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                    >
+                      <UserCheck size={21} color="#16a34a" strokeWidth={2.2} />
+                    </button>
+
+                    <button 
+                      onClick={() => navigate('/dashboard/guide/' + tour.id)}
+                      title="Şehir Rehberi"
+                      style={{ aspectRatio: '1', width: '100%', background: '#FDF2F8', border: '1px solid #FCE7F3', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = '#FCE7F3'; e.currentTarget.style.borderColor = '#E54B98'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(215, 20, 122,0.2)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = '#FDF2F8'; e.currentTarget.style.borderColor = '#FCE7F3'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                    >
+                      <Compass size={21} color="#D7147A" strokeWidth={2.2} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
             </div>
         );
         })}
 
-        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginTop: '24px', marginBottom: '12px' }}>Geçmiş Turlarım</h2>
-
-        {pastTours.map(tour => (
-            <div key={tour.id} className="card" style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
-              <div style={{ width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
-                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        {/* Display Only Latest 3 Past Tours with Active Tour Card Design */}
+        {pastTours.slice(0, 3).map(tour => {
+            const pastDaysNights = calculateDaysAndNights(tour.dates);
+            const { expert1: pastExp1, expert2: pastExp2 } = getTourExperts(tour, allUsers, user);
+            return (
+            <div 
+              key={tour.id} 
+              style={{ 
+                background: '#ffffff', 
+                borderRadius: '16px', 
+                border: '1px solid #edf2f7', 
+                boxShadow: '0 4px 18px rgba(0,0,0,0.04)', 
+                overflow: 'hidden', 
+                marginBottom: '20px',
+                transition: 'transform 0.2s, box-shadow 0.2s'
+              }}
+            >
+              {/* Card Header inside past tour card */}
+              <div style={{ padding: '9px 14px', background: '#ffffff', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: '#64748b' }}>
+                  <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#94a3b8', display: 'inline-block' }}></span>
+                  Geçmiş Turlarım
+                </div>
+                <span style={{ fontSize: '10.5px', fontWeight: '700', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                  Tamamlandı
+                </span>
               </div>
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>{tour.name}</h3>
-                <p className="text-muted" style={{ fontSize: '12px', marginBottom: '10px' }}>{tour.dates}</p>
+
+              {/* Top Full-Bleed Cover Image */}
+              <div style={{ height: '160px', position: 'relative', width: '100%', overflow: 'hidden', background: '#f1f5f9' }}>
+                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(100%)', opacity: 0.92 }} />
                 
-                <div style={{ display: 'flex', gap: '8px', transition: 'all 0.3s' }}>
-                  {!reviewedTours[tour.id] ? (
-                    ratingTourId !== tour.id ? (
-                      <button onClick={() => { setRatingTourId(tour.id); setGeneralRating(0); }} style={{ padding: '6px 0', fontSize: '12px', flex: 1, border: '1px solid var(--border-color)', background: 'var(--surface)', color: 'var(--text-main)', borderRadius: '8px', cursor: 'pointer', fontWeight: '600' }}>Seyahati Puanla</button>
-                    ) : (
-                      <div style={{ flex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff0f6', borderRadius: '8px', padding: '6px 0' }}>
-                        <StarRating value={generalRating} onChange={handleGeneralRating} size={22} />
+                {/* Subtle Gradient Shadow */}
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 45%, rgba(0,0,0,0.4) 100%)', pointerEvents: 'none' }} />
+
+                {/* Top Left Badge: Pure Overlapping Circular Profile Photos */}
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpertModalData({ expert1: pastExp1, expert2: pastExp2 });
+                  }}
+                  title="Seyahat Uzmanlarını Görüntüle"
+                  style={{ 
+                      position: 'absolute', 
+                      top: '10px', 
+                      left: '10px', 
+                      background: 'rgba(255, 255, 255, 0.95)', 
+                      backdropFilter: 'blur(8px)', 
+                      padding: '3px', 
+                      borderRadius: '30px', 
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      cursor: 'pointer', 
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 
+                      zIndex: 2 
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.15)'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 2, background: 'var(--primary-light)' }}>
+                      <img 
+                        src={pastExp1.avatar} 
+                        alt={pastExp1.name || "Uzman 1"} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                    </div>
+                    {pastExp2 && (
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', marginLeft: '-10px', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 1, background: '#eff6ff' }}>
+                        <img 
+                          src={pastExp2.avatar} 
+                          alt={pastExp2.name || "Uzman 2"} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
                       </div>
-                    )
+                    )}
+                  </div>
+                </div>
+
+                {/* Top Right Quick Status Badge */}
+                <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', color: '#ffffff', fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 2 }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#94a3b8' }}></span>
+                  Geçmiş Tur
+                </div>
+
+                {/* Destination Overlay */}
+                {tour.destinations && tour.destinations !== 'Belirtilmedi' && (
+                    <div style={{ position: 'absolute', bottom: '10px', left: '12px', display: 'flex', alignItems: 'center', gap: '4px', color: '#ffffff', fontSize: '11.5px', fontWeight: '600', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                       <MapPin size={13} color="#ffffff" />
+                       <span>{tour.destinations}</span>
+                    </div>
+                )}
+              </div>
+
+              {/* Card Body */}
+              <div style={{ padding: '14px 16px 16px 16px' }}>
+                <h2 style={{ fontSize: '13.5px', fontWeight: '700', margin: '0 0 8px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.4', letterSpacing: '-0.2px' }}>
+                    {tour.name}
+                </h2>
+
+                {/* Date & Duration Strip (Single line responsive) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 10px', borderRadius: '10px', border: '1px solid #f1f5f9', marginBottom: '12px', gap: '8px', overflow: 'hidden', flexWrap: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: 'clamp(10px, 2.9vw, 12px)', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+                      <Calendar size={13} color="#94a3b8" style={{ flexShrink: 0 }} />
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.dates}</span>
+                  </div>
+                  {pastDaysNights && (
+                      <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: 'clamp(9.5px, 2.7vw, 11px)', fontWeight: '700', padding: '3px 7px', borderRadius: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {pastDaysNights}
+                      </span>
+                  )}
+                </div>
+
+                {/* Side-by-Side 4 Truly Passive/Disabled Square Action Boxes */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '12px' }}>
+                  <button 
+                    disabled
+                    title="Pasif"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', opacity: 0.55, pointerEvents: 'none', outline: 'none' }}
+                  >
+                    <PlaneTakeoff size={21} color="#94a3b8" strokeWidth={2} />
+                  </button>
+
+                  <button 
+                    disabled
+                    title="Pasif"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', opacity: 0.55, pointerEvents: 'none', outline: 'none' }}
+                  >
+                    <Info size={21} color="#94a3b8" strokeWidth={2} />
+                  </button>
+
+                  <button 
+                    disabled
+                    title="Pasif"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', opacity: 0.55, pointerEvents: 'none', outline: 'none' }}
+                  >
+                    <UserCheck size={21} color="#94a3b8" strokeWidth={2} />
+                  </button>
+
+                  <button 
+                    disabled
+                    title="Pasif"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', opacity: 0.55, pointerEvents: 'none', outline: 'none' }}
+                  >
+                    <Compass size={21} color="#94a3b8" strokeWidth={2} />
+                  </button>
+                </div>
+
+                {/* Rating Banner Strip */}
+                <div>
+                  {!reviewedTours[tour.id] ? (
+                    <div 
+                      onClick={() => navigate('/dashboard/review/' + tour.id)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FDF2F8', border: '1px solid #FCE7F3', borderRadius: '12px', padding: '9px 14px', cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: '#D7147A' }}>
+                        <Star size={15} color="#D7147A" fill="#D7147A" />
+                        <span>Seyahati Puanlayın</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <StarRating 
+                          value={0} 
+                          onChange={(val) => navigate('/dashboard/review/' + tour.id + '?rating=' + val)} 
+                          size={19} 
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <div 
-                      onClick={() => setAlreadyReviewedTourId(tour.id)} 
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff0f6', borderRadius: '8px', padding: '6px 0', cursor: 'pointer' }}>
-                      <StarRating value={reviewedTours[tour.id]} size={15} />
+                      onClick={() => navigate('/dashboard/review/' + tour.id)} 
+                      title="Değerlendirmenizi Görüntüleyin / Güncelleyin"
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fdf2f8', border: '1px solid #fce7f3', borderRadius: '12px', padding: '9px 14px', cursor: 'pointer', transition: 'background 0.2s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#fce7f3'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#fdf2f8'}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: '#db2777' }}>
+                        <Star size={15} color="#db2777" fill="#db2777" />
+                        <span>Puanınız: {Number(reviewedTours[tour.id]).toFixed(1)} / 5</span>
+                      </div>
+                      <StarRating value={reviewedTours[tour.id]} size={16} />
                     </div>
                   )}
                 </div>
+
               </div>
             </div>
-        ))}
+            );
+        })}
+
+        {/* View All Past Tours Button if more than 3 */}
+        {pastTours.length > 3 && (
+          <button 
+            onClick={() => navigate('/dashboard/past-tours')}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              background: '#ffffff', 
+              border: '1px dashed #cbd5e1', 
+              borderRadius: '14px', 
+              color: 'var(--primary)', 
+              fontSize: '12.5px', 
+              fontWeight: '700', 
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '6px',
+              marginTop: '4px',
+              marginBottom: '16px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-light)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#ffffff'; }}
+          >
+            Tüm Geçmiş Turları Görüntüle ({pastTours.length} Tur) <ChevronRight size={15} />
+          </button>
+        )}
 
       </div>
-
-      {showDetailedModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '420px', padding: '24px', animation: 'scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)', maxHeight: '90vh', overflowY: 'auto', borderRadius: '24px', background: 'white' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', textAlign: 'center' }}>Detaylı Değerlendirme</h2>
-            <p className="text-muted" style={{ fontSize: '13px', marginBottom: '24px', textAlign: 'center', lineHeight: '1.4' }}>
-              Seyahati genel olarak <strong>{generalRating} yıldız</strong> ile değerlendirdiniz. Daha iyi bir deneyim sunabilmemiz için detayları puanlayın.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
-              {Object.keys(detailedRatings).map(key => (
-                <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-main)', textAlign: 'left' }}>{ratingLabels[key] || key}</span>
-                  <div style={{ flexShrink: 0 }}>
-                    <StarRating
-                      value={detailedRatings[key]}
-                      onChange={(v) => setDetailedRatings(prev => ({ ...prev, [key]: v }))}
-                      size={20}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Selection Question */}
-            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
-              <label style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '8px', display: 'block' }}>
-                Yeni Seyahat Haberlerimizi Size Nasıl Ulaştırabiliriz?
-              </label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {[
-                  { value: 'telefon', label: 'Telefon İle Bilgi Almak İstiyorum' },
-                  { value: 'brosur', label: 'Broşür Gönderimi İle Bilgi Almak İstiyorum' },
-                  { value: 'istemiyorum', label: 'Bilgi Almak İstemiyorum' }
-                ].map(opt => (
-                  <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-main)', cursor: 'pointer', padding: '8px 12px', borderRadius: '8px', background: '#f8fafc', border: contactPref === opt.value ? '1px solid var(--primary)' : '1px solid #e2e8f0', transition: 'all 0.15s' }}>
-                    <input 
-                      type="radio" 
-                      name="contactPref" 
-                      value={opt.value} 
-                      checked={contactPref === opt.value} 
-                      onChange={() => setContactPref(opt.value)} 
-                      style={{ accentColor: 'var(--primary)' }}
-                    />
-                    <span>{opt.label}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            {/* Text Question */}
-            <div style={{ marginBottom: '20px', textAlign: 'left' }}>
-              <label style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '8px', display: 'block' }}>
-                Önümüzdeki Yıl Seyahat Etmek İstediğiniz 3 Yer:
-              </label>
-              <input 
-                type="text" 
-                placeholder="Örn: Roma, Tokyo, Paris" 
-                className="input-field" 
-                style={{ width: '100%', padding: '12px', fontSize: '13px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none' }}
-                value={nextYearPlaces}
-                onChange={e => setNextYearPlaces(e.target.value)}
-              />
-            </div>
-
-            {/* General Feedback Textarea */}
-            <div style={{ marginBottom: '24px', textAlign: 'left' }}>
-              <label style={{ fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '8px', display: 'block' }}>
-                Eklemek İstediğiniz Diğer Görüşleriniz:
-              </label>
-              <textarea
-                placeholder="Seyahatiniz hakkında diğer düşüncelerinizi paylaşın..."
-                className="input-field"
-                style={{ width: '100%', minHeight: '80px', padding: '12px', fontSize: '13px', resize: 'none', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none' }}
-                value={reviewMsg}
-                onChange={e => setReviewMsg(e.target.value)}
-              />
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button className="btn-secondary" style={{ flex: 1, border: 'none', background: '#f5f5f5', color: 'var(--text-muted)', fontSize: '14px' }} onClick={() => setShowDetailedModal(false)}>İptal</button>
-              <button className="btn-primary" style={{ flex: 1, fontSize: '14px' }} onClick={submitReview}>Gönder</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {alreadyReviewedTourId && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '320px', padding: '24px', animation: 'shake 0.4s ease-in-out', textAlign: 'center' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-main)' }}>Zaten Puanladınız</h2>
-            <p className="text-muted" style={{ fontSize: '14px', marginBottom: '24px', lineHeight: '1.4' }}>
-              Bu değerlendirmeyi gönderdiğiniz için teşekkür ederiz.
-            </p>
-            <button className="btn-primary" onClick={() => setAlreadyReviewedTourId(null)} style={{ padding: '10px 0', fontSize: '14px' }}>Tamam</button>
-          </div>
-        </div>
-      )}
 
       {expertModalData && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>

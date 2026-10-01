@@ -28,7 +28,7 @@ export const useChatStore = create((set, get) => ({
   },
   
   addMessage: async (msg) => {
-      const msgId = Date.now();
+      const msgId = msg.id || Date.now();
       const newMsg = { ...msg, id: msgId };
       try { await setDoc(doc(db, 'messages', String(msgId)), newMsg); } catch (e) {}
   },
@@ -41,7 +41,7 @@ export const useChatStore = create((set, get) => ({
   },
 
   markRoomAsRead: (chatId, myRole) => {
-      const mySenderKey = myRole === 'expert' ? 'expert' : (myRole === 'admin' ? 'admin' : 'customer');
+      const mySenderKey = myRole === 'expert' ? 'expert' : (myRole === 'admin' ? 'admin' : (myRole === 'ticketing' ? 'ticketing' : 'customer'));
       
       get().messages.forEach(async (m) => {
           if (m.chatId === chatId && m.status !== 'read' && m.sender !== mySenderKey) {

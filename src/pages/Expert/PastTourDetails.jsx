@@ -116,7 +116,7 @@ export default function PastTourDetails() {
                 <img loading="lazy" src={tour.avatar} alt="Tour Cover" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.5), rgba(0,0,0,0.8))' }}></div>
                 
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, padding: '20px 16px', display: 'flex', alignItems: 'center', gap: '16px', color: 'white' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, padding: 'calc(20px + env(safe-area-inset-top, 0px)) 16px 20px 16px', display: 'flex', alignItems: 'center', gap: '16px', color: 'white' }}>
                     <div 
                         style={{ width: '40px', height: '40px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', cursor: 'pointer', transition: 'background 0.2s', backdropFilter: 'blur(4px)' }} 
                         onClick={() => navigate(-1)}

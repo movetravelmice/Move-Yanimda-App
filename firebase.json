@@ -1,4 +1,10 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
   "functions": {
     "source": "functions",
     "ignore": [
@@ -9,6 +15,7 @@
     ]
   },
   "hosting": {
+    "site": "move-yanimda",
     "public": "dist",
     "ignore": [
       "firebase.json",

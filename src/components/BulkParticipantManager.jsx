@@ -3,7 +3,8 @@ import { X, Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Refres
 import * as XLSX from 'xlsx';
 import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { useUserStore } from '../store/userStore';
+import { useUserStore, formatTitleCase } from '../store/userStore';
+import { isUserChild, canUserReceiveEmail, isChildEmail } from '../utils/userUtils';
 
 export default function BulkParticipantManager({ tourId, onClose }) {
     const { tours, addParticipantToTour } = useTourStore();
@@ -80,18 +81,35 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         return key ? String(row[key]).trim() : '';
     };
 
-    const sendTourAssignmentEmail = async (participantName, participantEmail, password = null) => {
-        const targetUser = users.find(u => u.email === participantEmail);
-        const phone = targetUser?.phone || '';
+    const sendTourAssignmentEmail = async (participantName, participantEmail, password = null, participantPhone = '') => {
+        const targetUser = users.find(u => u.email === participantEmail || u.name === participantName);
+        if (isUserChild(targetUser, users) || isChildEmail(participantEmail)) {
+            console.log(`Çocuk kullanıcı (${participantName}) için e-posta gönderimi atlandı.`);
+            return;
+        }
 
-        if (phone && phone !== '-') {
+        let phone = participantPhone;
+        if (!phone) {
+            phone = targetUser?.phone || '';
+        }
+        const isInternalPlaceholder = participantEmail && (participantEmail.endsWith('@move.local') || participantEmail.endsWith('.local'));
+
+        if (phone && phone !== '-' && phone.trim().length > 6) {
             if (password) {
+                // 1) welcome_customer (1 param: Name)
                 useSettingsStore.getState().sendWhatsAppNotification(
                     phone,
                     'newUserTemplate',
-                    [participantName, participantEmail, password]
+                    [participantName]
+                );
+                // 2) tour_registration (2 params: Name, Tour Name)
+                useSettingsStore.getState().sendWhatsAppNotification(
+                    phone,
+                    'newTourTemplate',
+                    [participantName, tour.name]
                 );
             } else {
+                // 1) tour_registration (2 params: Name, Tour Name)
                 useSettingsStore.getState().sendWhatsAppNotification(
                     phone,
                     'newTourTemplate',
@@ -100,7 +118,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
             }
         }
 
-        if (smtpConfig?.host && smtpConfig?.user) {
+        if (smtpConfig?.host && smtpConfig?.user && canUserReceiveEmail(participantEmail, users) && !isInternalPlaceholder) {
             try {
                 const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
                 await fetch(`${baseUrl}/api/send-tour-email`, {
@@ -145,13 +163,14 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         let errorRowsCount = 0;
 
         for (const row of fileData) {
-            const name = findVal(row, ['adsoyad', 'isim', 'name', 'musteri', 'katilimci', 'ad']);
-            const email = findVal(row, ['mail', 'eposta', 'email']);
-            const phone = findVal(row, ['tel', 'phone', 'gsm', 'telefon']);
+            const rawName = (findVal(row, ['adsoyad', 'isim', 'name', 'musteri', 'katilimci', 'ad']) || '').trim();
+            const name = formatTitleCase(rawName);
+            const email = (findVal(row, ['mail', 'eposta', 'email']) || '').trim().toLowerCase();
+            const phone = (findVal(row, ['tel', 'phone', 'gsm', 'telefon']) || '').trim();
             const tcNoRaw = findVal(row, ['tc', 'kimlik', 'tcno']);
-            const company = findVal(row, ['firma', 'sirket', 'company']);
+            const company = (findVal(row, ['firma', 'sirket', 'company']) || '').trim();
 
-            if (!name || (!email && !tcNoRaw)) {
+            if (!name || (!email && !phone && !tcNoRaw)) {
                 errorRowsCount++;
                 continue;
             }
@@ -163,13 +182,22 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 existingUser = users.find(u => u.tcNo === tcNo);
             }
             if (!existingUser && email) {
-                existingUser = users.find(u => u.email && u.email.toLowerCase() === email.toLowerCase());
+                existingUser = users.find(u => u.email && u.email.trim().toLowerCase() === email.toLowerCase());
+            }
+            if (!existingUser && phone) {
+                const cleanP = phone.replace(/\D/g, '');
+                if (cleanP.length >= 7) {
+                    existingUser = users.find(u => {
+                        const uPhone = (u.phone || '').replace(/\D/g, '');
+                        return uPhone.length >= 7 && (uPhone.endsWith(cleanP.slice(-10)) || cleanP.endsWith(uPhone.slice(-10)));
+                    });
+                }
             }
 
             if (existingUser) {
                 const isAlreadyInTour = tour.participants?.some(p => 
                     p.id === existingUser.id || 
-                    (p.email && p.email.toLowerCase() === existingUser.email.toLowerCase()) || 
+                    (p.email && p.email.trim().toLowerCase() === existingUser.email?.trim().toLowerCase()) || 
                     (p.tcNo && p.tcNo === existingUser.tcNo)
                 );
 
@@ -177,7 +205,9 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                     alreadyInTourCount++;
                 } else {
                     addParticipantToTour(tourId, existingUser);
-                    await sendTourAssignmentEmail(existingUser.name, existingUser.email);
+                    if (!isUserChild(existingUser, users) && !isChildEmail(existingUser.email)) {
+                        await sendTourAssignmentEmail(existingUser.name, existingUser.email, null, existingUser.phone || phone);
+                    }
                     existingUsersAdded++;
                 }
             } else {
@@ -186,7 +216,9 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                     addCompany(compValue);
                 }
 
-                const finalEmail = email || `user_${Date.now()}@move.local`;
+                const cleanP = (phone || '').replace(/\D/g, '');
+                const phoneSlug = cleanP.startsWith('90') ? cleanP.slice(2) : cleanP;
+                const finalEmail = (email ? email.toLowerCase() : `user_${phoneSlug || Date.now()}@move.local`);
                 const newUserPassword = generateSecurePassword(name);
 
                 const newUser = await addUser({
@@ -200,7 +232,9 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 });
 
                 addParticipantToTour(tourId, newUser);
-                await sendTourAssignmentEmail(newUser.name, newUser.email, newUserPassword);
+                if (!isChildEmail(finalEmail)) {
+                    await sendTourAssignmentEmail(newUser.name, newUser.email, newUserPassword, newUser.phone || phone);
+                }
                 newUsersCreated++;
             }
         }

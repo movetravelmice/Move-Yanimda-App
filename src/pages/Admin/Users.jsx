@@ -1,28 +1,54 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import Header from '../../components/Header';
-import { Users as UsersIcon, UserPlus, ShieldAlert, MoreVertical, Briefcase, Mail, X, Camera, CheckCircle2, Search, Edit3, Trash2, AlertTriangle, ChevronDown, PlaneTakeoff } from 'lucide-react';
-import { useUserStore } from '../../store/userStore';
+import { 
+  Users as UsersIcon, 
+  UserPlus, 
+  ShieldAlert, 
+  MoreVertical, 
+  Briefcase, 
+  Mail, 
+  X, 
+  Camera, 
+  CheckCircle2, 
+  Search, 
+  Edit3, 
+  Trash2, 
+  AlertTriangle, 
+  ChevronDown, 
+  PlaneTakeoff,
+  Phone,
+  Filter,
+  Check,
+  Building2,
+  Lock,
+  UserCheck,
+  Sparkles,
+  Eye,
+  Luggage,
+  CheckSquare,
+  Wallet,
+  Calendar,
+  ShieldCheck
+} from 'lucide-react';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
+import { useUserStore, formatTitleCase } from '../../store/userStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState('expert');
-  const allUsers = useUserStore(state => state.users);
+  const [searchQuery, setSearchQuery] = useState('');
+  const allUsers = useUserStore(state => state.users) || [];
   const addUser = useUserStore(state => state.addUser);
   const updateUser = useUserStore(state => state.updateUser);
   const deleteUser = useUserStore(state => state.deleteUser);
-  const cleanLargeAvatars = useUserStore(state => state.cleanLargeAvatars);
   const currentUser = useAuthStore(state => state.user);
-
-  useEffect(() => {
-      // Çöken tarayıcı kotalarını kurtarmak için devasa base64 resim stringlerini temizle
-      cleanLargeAvatars();
-  }, [cleanLargeAvatars]);
 
   const isUserChild = (u) => {
       const fullUser = allUsers.find(usr => usr.id === u.id) || u;
       if (!fullUser) return false;
 
-      // An adult is someone who is a parent to ANYONE
       const isParent = allUsers.some(other => {
           if (!other.linkedTo) return false;
           if (Array.isArray(other.linkedTo)) return other.linkedTo.includes(fullUser.id) || other.linkedTo.includes(String(fullUser.id));
@@ -31,13 +57,9 @@ export default function AdminUsers() {
       });
       if (isParent) return false;
 
-      // If they are explicitly marked as a child
       if (fullUser.isChildProfile === true) return true;
-      
-      // If they have a child email
       if (fullUser.email && fullUser.email.startsWith('child_')) return true;
 
-      // If they have a linkedTo field (and are not a parent)
       const lt = fullUser.linkedTo;
       if (Array.isArray(lt)) return lt.length > 0;
       if (typeof lt === 'string') {
@@ -48,12 +70,29 @@ export default function AdminUsers() {
       return false;
   };
 
+  // Segment Filter State (Tümü / Kurumsal / Bireysel)
+  const [segmentFilter, setSegmentFilter] = useState('all'); // 'all' | 'corporate' | 'individual'
+  const [selectedIndividualSummary, setSelectedIndividualSummary] = useState(null);
+  const [individualSummaryData, setIndividualSummaryData] = useState({ loading: false, travels: [], checklists: [], budgets: [] });
+
   // Form State
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
   const [userToDelete, setUserToDelete] = useState(null);
-  const [formData, setFormData] = useState({ firstName: '', lastName: '', email: '', role: 'expert', avatar: null, password: '', phone: '', company: '', parentIds: [], childrenIds: [], tcNo: '' });
-  const avatarFileRef = useRef(null);
+  const [formData, setFormData] = useState({ 
+    firstName: '', 
+    lastName: '', 
+    email: '', 
+    role: 'expert', 
+    userType: 'corporate', 
+    avatar: null, 
+    password: '', 
+    phone: '', 
+    company: '', 
+    parentIds: [], 
+    childrenIds: [], 
+    tcNo: '' 
+  });
 
   const [customerType, setCustomerType] = useState('parent');
   const [childSearchQuery, setChildSearchQuery] = useState('');
@@ -67,29 +106,90 @@ export default function AdminUsers() {
 
   // Filters
   const [companyFilter, setCompanyFilter] = useState('');
-  const allCompanies = useUserStore(state => state.companies);
+  const allCompanies = useUserStore(state => state.companies) || [];
 
   const [showRoleDropdown, setShowRoleDropdown] = useState(false);
   const [showCompanyAutocomplete, setShowCompanyAutocomplete] = useState(false);
-  const allCompaniesSafe = Array.isArray(allCompanies) ? allCompanies.map(c => String(c || '')) : ['Move Travel & Mice'];
+  const allCompaniesSafe = Array.isArray(allCompanies) ? allCompanies.map(c => String(c || '')).filter(c => c && !c.toLowerCase().includes('tgundogan')) : ['Move Travel & Mice'];
   const filteredFormCompanies = allCompaniesSafe.filter(c => c && c.toLowerCase().includes((formData.company || '').toLowerCase()));
 
   const [showChildrenInList, setShowChildrenInList] = useState(true);
-  const filteredUsers = allUsers.filter(u => {
-      if (u.role !== activeTab) return false;
-      if (activeTab === 'customer') {
-          if (!showChildrenInList && isUserChild(u)) return false;
-          if (companyFilter && (!u.company || !u.company.toLowerCase().includes(companyFilter.toLowerCase()))) return false;
-      }
-      return true;
+
+  // Fetch read-only individual user summary data
+  const handleOpenIndividualSummary = async (u) => {
+    setSelectedIndividualSummary(u);
+    setIndividualSummaryData({ loading: true, travels: [], checklists: [], budgets: [] });
+    try {
+      const travelsSnap = await getDocs(query(collection(db, 'individual_travels'), where('userId', '==', u.id)));
+      const travels = travelsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const checklistsSnap = await getDocs(query(collection(db, 'user_checklists'), where('userId', '==', u.id)));
+      const checklists = checklistsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      const budgetsSnap = await getDocs(query(collection(db, 'travel_budgets'), where('userId', '==', u.id)));
+      const budgets = budgetsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      setIndividualSummaryData({ loading: false, travels, checklists, budgets });
+    } catch (err) {
+      console.error('Bireysel özet yüklenemedi:', err);
+      setIndividualSummaryData({ loading: false, travels: [], checklists: [], budgets: [] });
+    }
+  };
+  
+  // Customer counting (Corporate vs Individual customers)
+  const customerUsers = allUsers.filter(u => {
+    const isIndiv = u.userType === 'individual';
+    const isStaff = u.role === 'expert' || u.role === 'admin' || u.role === 'ticketing';
+    return !isStaff && (u.role === 'customer' || isIndiv);
   });
+  const customerTotalCount = customerUsers.length;
+  const customerCorporateCount = customerUsers.filter(u => u.userType !== 'individual').length;
+  const customerIndividualCount = customerUsers.filter(u => u.userType === 'individual').length;
 
   const stats = {
-      admin: allUsers.filter(u => u.role === 'admin').length,
-      expert: allUsers.filter(u => u.role === 'expert').length,
-      ticketing: allUsers.filter(u => u.role === 'ticketing').length,
-      customer: allUsers.filter(u => u.role === 'customer').length,
+      admin: allUsers.filter(u => u.role === 'admin' && u.userType !== 'individual').length,
+      expert: allUsers.filter(u => u.role === 'expert' && u.userType !== 'individual').length,
+      ticketing: allUsers.filter(u => u.role === 'ticketing' && u.userType !== 'individual').length,
+      customer: customerTotalCount,
   };
+
+  const filteredUsers = allUsers.filter(u => {
+      const isIndiv = u.userType === 'individual';
+
+      if (activeTab === 'customer') {
+          // Must be a customer (not staff)
+          const isStaff = u.role === 'expert' || u.role === 'admin' || u.role === 'ticketing';
+          if (isStaff) return false;
+          if (u.role !== 'customer' && !isIndiv) return false;
+
+          // Segment Filter within customer tab
+          if (segmentFilter === 'corporate' && isIndiv) return false;
+          if (segmentFilter === 'individual' && !isIndiv) return false;
+
+          // For corporate customers, check children and company filters
+          if (!isIndiv) {
+              if (!showChildrenInList && isUserChild(u)) return false;
+              if (companyFilter && (!u.company || !u.company.toLowerCase().includes(companyFilter.toLowerCase()))) return false;
+          }
+      } else {
+          // Staff tabs: expert, admin, ticketing
+          if (u.role !== activeTab) return false;
+          if (isIndiv) return false;
+      }
+
+      const qs = searchQuery.toLowerCase().trim();
+      if (qs) {
+        const name = (u.name || '').toLowerCase();
+        const email = (u.email || '').toLowerCase();
+        const phone = (u.phone || '').toLowerCase();
+        const comp = (u.company || '').toLowerCase();
+        if (!name.includes(qs) && !email.includes(qs) && !phone.includes(qs) && !comp.includes(qs)) {
+          return false;
+        }
+      }
+
+      return true;
+  });
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -132,21 +232,35 @@ export default function AdminUsers() {
   };
 
   const handleOpenModal = () => {
-      setFormData({ firstName: '', lastName: '', email: '', role: activeTab, avatar: null, password: '', phone: '', company: '', parentIds: [], childrenIds: [], tcNo: '' });
+      setFormData({ 
+        firstName: '', 
+        lastName: '', 
+        email: '', 
+        role: activeTab === 'customer' ? 'customer' : (activeTab || 'expert'), 
+        userType: 'corporate',
+        avatar: null, 
+        password: '', 
+        phone: '', 
+        company: '', 
+        parentIds: [], 
+        childrenIds: [], 
+        tcNo: '' 
+      });
       setCustomerType('parent');
       setChildSearchQuery('');
+      setParentSearchQuery('');
       setEditingUserId(null);
       setShowAddModal(true);
   };
 
   const handleEdit = (user) => {
-      // Split name safely
       const nameParts = user.name ? user.name.split(' ') : [''];
       const first = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : nameParts[0];
       const last = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
       
       const existingLinkedTo = Array.isArray(user.linkedTo) ? user.linkedTo : (user.linkedTo ? [user.linkedTo] : []);
       const isChildUser = existingLinkedTo.length > 0;
+      const isIndividual = user.userType === 'individual';
       
       const childrenIds = allUsers.filter(u => {
           const uLinkedTo = Array.isArray(u.linkedTo) ? u.linkedTo : (u.linkedTo ? [u.linkedTo] : []);
@@ -157,10 +271,11 @@ export default function AdminUsers() {
           firstName: first || '',
           lastName: last || '',
           email: user.email || '',
-          role: user.role || 'customer',
+          role: isIndividual ? 'customer' : (user.role || 'customer'),
+          userType: isIndividual ? 'individual' : 'corporate',
           avatar: user.avatar || null,
           phone: user.phone || '',
-          company: user.company || '',
+          company: isIndividual ? 'Bireysel' : (user.company || ''),
           password: '',
           parentIds: isChildUser ? existingLinkedTo : [],
           childrenIds: childrenIds,
@@ -192,6 +307,7 @@ export default function AdminUsers() {
       if (userToDelete) {
           deleteUser(userToDelete);
           setUserToDelete(null);
+          setPopupMsg({ show: true, type: 'success', title: 'Silindi', text: 'Kullanıcı hesabı başarıyla silindi.' });
       }
   };
 
@@ -206,8 +322,6 @@ export default function AdminUsers() {
 
   const pStrength = getPasswordStrength(formData.password);
   const isPasswordValid = pStrength.upper && pStrength.lower && pStrength.number && pStrength.special;
-  
-  // If editing, password is optional. If creating, it's mandatory.
   const canSubmit = editingUserId ? (formData.password === '' || isPasswordValid) : isPasswordValid;
 
   const handleSubmit = async (e) => {
@@ -217,35 +331,63 @@ export default function AdminUsers() {
               setPopupMsg({ show: true, type: 'error', title: 'Eksik Bilgi', text: 'İsim alanı zorunludur.' });
               return;
           }
-          
-          if (formData.role !== 'customer' || customerType === 'parent') {
-              if (!formData.email) {
-                  setPopupMsg({ show: true, type: 'error', title: 'Eksik Bilgi', text: 'E-posta alanı zorunludur.' });
-                  return;
-              }
-              if (!canSubmit) {
-                  setPopupMsg({ show: true, type: 'error', title: 'Geçersiz Şifre', text: 'Lütfen geçerli bir parola belirleyin.' });
-                  return;
-              }
+
+          if (!editingUserId && formData.userType === 'individual') {
+              setPopupMsg({ show: true, type: 'error', title: 'İşlem İzin Verilmiyor', text: 'Bireysel kullanıcılar yalnızca kayıt ekranından kendi hesaplarını oluşturabilir.' });
+              return;
           }
           
-          const fullName = `${formData.firstName} ${formData.lastName || ''}`.trim();
+          const isIndividual = formData.userType === 'individual';
+          const isChild = !isIndividual && formData.role === 'customer' && customerType === 'child';
+          const isCustomer = isIndividual || formData.role === 'customer';
+          const hasEmail = Boolean(formData.email && formData.email.trim());
+          const cleanPhone = (formData.phone || '').replace(/\D/g, '');
+          const hasPhone = cleanPhone.length >= 10;
+
+          if (!isCustomer && !hasEmail) {
+              setPopupMsg({ show: true, type: 'error', title: 'Eksik Bilgi', text: 'Yetkili kullanıcılar için e-posta alanı zorunludur.' });
+              return;
+          }
+
+          if (isCustomer && !isChild && !hasEmail && !hasPhone) {
+              setPopupMsg({ show: true, type: 'error', title: 'Eksik Bilgi', text: 'Lütfen en az bir iletişim bilgisi (E-posta veya Telefon) girin.' });
+              return;
+          }
+
+          if (!isChild && !canSubmit) {
+              setPopupMsg({ show: true, type: 'error', title: 'Geçersiz Şifre', text: 'Lütfen parola kurallarına uyun (Büyük harf, küçük harf, rakam, özel karakter).' });
+              return;
+          }
           
-          const isChild = formData.role === 'customer' && customerType === 'child';
-          const finalEmail = isChild && !formData.email ? `child_${Date.now()}@move.local` : formData.email;
-          const finalPassword = isChild && (!formData.password || formData.password.trim() === '') ? '123456' : formData.password;
+          const fullName = formatTitleCase(`${formData.firstName} ${formData.lastName || ''}`.trim());
+          
+          let finalEmail;
+          if (isChild) {
+              finalEmail = formData.email ? formData.email.trim().toLowerCase() : `child_${Date.now()}@move.local`;
+          } else if (hasEmail) {
+              finalEmail = formData.email.trim().toLowerCase();
+          } else {
+              const phoneSlug = cleanPhone.startsWith('90') ? cleanPhone.slice(2) : cleanPhone;
+              finalEmail = `user_${phoneSlug || Date.now()}@move.local`;
+          }
+
+          const finalPassword = isChild && (!formData.password || formData.password.trim() === '') ? '123456' : formData.password.trim();
           
           const userPayload = {
               name: fullName,
               email: finalEmail,
-              role: formData.role,
+              role: isIndividual ? 'customer' : formData.role,
+              userType: isIndividual ? 'individual' : 'corporate',
               avatar: formData.avatar,
               phone: isChild ? '-' : (formData.phone || '-'),
-              company: formData.role === 'customer' ? (isChild ? 'Move Travel & Mice' : (formData.company || 'Move Travel & Mice')) : 'Move Travel & Mice',
+              company: isIndividual ? 'Bireysel' : (formData.role === 'customer' ? (isChild ? 'Move Travel & Mice' : (formData.company || 'Move Travel & Mice')) : 'Move Travel & Mice'),
               isChildProfile: isChild,
               tcNo: formData.role === 'customer' ? (formData.tcNo || '') : ''
           };
-          if (formData.role === 'customer') {
+          if (!editingUserId && isIndividual) {
+              userPayload.createdAt = new Date().toISOString();
+          }
+          if (formData.role === 'customer' && !isIndividual) {
               if (isChild) {
                   userPayload.linkedTo = formData.parentIds.length > 0 ? formData.parentIds : null;
               } else {
@@ -259,23 +401,18 @@ export default function AdminUsers() {
               userPayload.password = finalPassword;
           }
           
-          // Optional: If they switched from child to parent, maybe we should clear their linkedTo? 
-          // For now, let's just make sure we don't accidentally overwrite existing linkedTo unless we need to.
-          
           if (editingUserId) {
               updateUser(editingUserId, userPayload);
               if (currentUser && currentUser.id === editingUserId) {
                   useAuthStore.getState().updateProfile(userPayload);
               }
               
-                  // Update children if needed
               if (formData.role === 'customer' && customerType === 'parent') {
                   const currentChildren = allUsers.filter(u => {
                       const uLinkedTo = Array.isArray(u.linkedTo) ? u.linkedTo : (u.linkedTo ? [u.linkedTo] : []);
                       return uLinkedTo.includes(editingUserId);
                   });
                   
-                  // Remove from removed children
                   for (const child of currentChildren) {
                       if (!formData.childrenIds.includes(child.id)) {
                           const existingLinkedTo = Array.isArray(child.linkedTo) ? child.linkedTo : (typeof child.linkedTo === 'string' ? [child.linkedTo] : []);
@@ -284,7 +421,6 @@ export default function AdminUsers() {
                       }
                   }
                   
-                  // Add to new children
                   for (const childId of formData.childrenIds) {
                       if (!currentChildren.some(c => c.id === childId)) {
                           const childObj = allUsers.find(p => p.id === childId);
@@ -300,8 +436,15 @@ export default function AdminUsers() {
               }
           } else {
               const newUser = await addUser(userPayload);
+
+              if (newUser && formData.role === 'customer' && !isChild && newUser.phone && newUser.phone !== '-' && newUser.phone.trim().length > 6) {
+                  useSettingsStore.getState().sendWhatsAppNotification(
+                      newUser.phone,
+                      'newUserTemplate',
+                      [newUser.name]
+                  );
+              }
               
-              // Wait for user to be created and link children if it returns an object or if we can handle it
               if (newUser && newUser.id && formData.role === 'customer' && customerType === 'parent' && formData.childrenIds.length > 0) {
                   for (const childId of formData.childrenIds) {
                       const childObj = allUsers.find(p => p.id === childId);
@@ -314,704 +457,1001 @@ export default function AdminUsers() {
                       }
                   }
               }
-
-              if (isChild && formData.parentIds.length > 0) {
-                  const parentNames = formData.parentIds.map(pid => allUsers.find(p => p.id === pid)?.name).filter(Boolean).join(', ');
-                  setPopupMsg({ 
-                      show: true, 
-                      type: 'success', 
-                      title: 'Çocuk Profili Oluşturuldu!', 
-                      text: (
-                          <div style={{ textAlign: 'left', width: '100%' }}>
-                              <p style={{marginBottom: '12px', color: 'var(--text-main)', fontWeight: 'bold'}}>Aşağıdaki e-posta ebeveynlere gönderildi:</p>
-                              <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', fontFamily: 'sans-serif', boxShadow: '0 4px 6px rgba(0,0,0,0.02)' }}>
-                                  <div style={{ textAlign: 'center', marginBottom: '16px' }}>
-                                      <div style={{ width: '48px', height: '48px', background: '#D7147A', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', fontSize: '24px', fontWeight: '900', letterSpacing: '-1px' }}>
-                                          M
-                                      </div>
-                                  </div>
-                                  <div style={{ color: '#334155', fontSize: '14px', lineHeight: '1.6' }}>
-                                      <b>Sayın {parentNames || 'Müşterimiz'},</b><br/><br/>
-                                      Move sistemine <b>{newUser.name}</b> adlı çocuğunuzun profili başarıyla eklenmiş ve sizin hesabınıza bağlanmıştır.<br/><br/>
-                                      <div style={{ background: '#fdf2f8', padding: '12px', borderRadius: '8px', border: '1px solid #fbcfe8', color: '#D7147A', textAlign: 'center', margin: '16px 0', fontSize: '13px', fontWeight: '600' }}>
-                                          Sisteme giriş yaparak "Profil" sayfanız üzerinden çocuğunuzun sağlık ve acil durum bilgilerini hemen yönetmeye başlayabilirsiniz.
-                                      </div>
-                                      Bizi tercih ettiğiniz için teşekkür ederiz.<br/><br/>
-                                      <span style={{fontSize: '12px', color: '#94a3b8'}}>Move Travel & Mice</span>
-                                  </div>
-                              </div>
-                          </div>
-                      ) 
-                  });
-              } else {
-                  setPopupMsg({ show: true, type: 'success', title: 'Başarılı!', text: `Kullanıcı profili başarıyla oluşturuldu.` });
-              }
           }
           
           setShowAddModal(false);
-          setActiveTab(formData.role);
-          
-          if (editingUserId) {
-              setPopupMsg({ show: true, type: 'success', title: 'Başarılı!', text: `Kullanıcı profili başarıyla güncellendi.` });
+          if (isIndividual) {
+              setActiveTab('customer');
+              setSegmentFilter('individual');
+          } else {
+              setActiveTab(formData.role);
           }
+          setPopupMsg({ show: true, type: 'success', title: 'Başarılı!', text: editingUserId ? `Kullanıcı profili güncellendi.` : `Yeni kullanıcı başarıyla eklendi.` });
           setEditingUserId(null);
       } catch (err) {
-          alert("HATA OLUŞTU: " + err.message);
+          alert("HATA: " + err.message);
       }
   };
+
+  const roleTabs = [
+    { key: 'expert', label: 'Uzmanlar', count: stats.expert, icon: Briefcase, color: '#D7147A' },
+    { key: 'admin', label: 'Yöneticiler', count: stats.admin, icon: ShieldAlert, color: '#2563eb' },
+    { key: 'ticketing', label: 'Biletleme', count: stats.ticketing, icon: PlaneTakeoff, color: '#d97706' },
+    { key: 'customer', label: 'Müşteriler', count: stats.customer, icon: UsersIcon, color: '#059669' }
+  ];
 
   return (
     <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh', position: 'relative' }} onClick={() => setOpenDropdownId(null)}>
       
-      {/* Custom Popup */}
+      {/* Custom Popup Alert Modal */}
       {popupMsg.show && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', backdropFilter: 'blur(4px)' }}>
-              <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '340px', padding: '32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
-                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: popupMsg.type === 'success' ? '#ecfdf5' : '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                      {popupMsg.type === 'success' ? <CheckCircle2 size={32} color="#10b981" /> : <AlertTriangle size={32} color="#ef4444" />}
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(4px)' }}>
+              <div className="card" onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: '320px', padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'scaleUp 0.25s ease-out', borderRadius: '18px' }}>
+                  <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: popupMsg.type === 'success' ? '#ecfdf5' : '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+                      {popupMsg.type === 'success' ? <CheckCircle2 size={24} color="#10b981" /> : <AlertTriangle size={24} color="#ef4444" />}
                   </div>
-                  <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 8px 0', color: 'var(--text-main)', textAlign: 'center' }}>{popupMsg.title}</h2>
-                  <div style={{ fontSize: '14px', color: 'var(--text-muted)', textAlign: 'center', margin: 0, marginBottom: popupMsg.type === 'error' ? '24px' : '0', lineHeight: 1.5, width: '100%' }}>{popupMsg.text}</div>
+                  <h2 style={{ fontSize: '15px', fontWeight: '800', margin: '0 0 4px 0', color: 'var(--text-main)', textAlign: 'center' }}>{popupMsg.title}</h2>
+                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', textAlign: 'center', margin: '0 0 16px 0', lineHeight: 1.4, width: '100%' }}>{popupMsg.text}</div>
                   
-                  {popupMsg.type === 'error' && (
-                      <button className="btn-primary" onClick={() => setPopupMsg({ show: false, type: '', title: '', text: '' })} style={{ width: '100%', padding: '12px', borderRadius: '12px', marginTop: '16px' }}>
-                          Anladım
-                      </button>
-                  )}
-                  {popupMsg.type === 'success' && (
-                      <div style={{ marginTop: '16px', fontSize: '12px', color: 'var(--primary)', fontWeight: 'bold', width: '100%' }}>
-                          <button className="btn-primary" onClick={() => setPopupMsg({ show: false, type: '', title: '', text: '' })} style={{ width: '100%', padding: '12px', borderRadius: '12px' }}>Kapat</button>
-                      </div>
-                  )}
+                  <button className="btn-primary" onClick={() => setPopupMsg({ show: false, type: '', title: '', text: '' })} style={{ width: '100%', padding: '9px', borderRadius: '10px', fontSize: '12px', fontWeight: '700' }}>
+                      Tamam
+                  </button>
               </div>
           </div>
       )}
 
-      <Header title="Kullanıcı Erişimi" showBack />
-      
-      <div style={{ padding: '24px 16px' }}>
+      {/* Delete User Confirmation Modal */}
+      {userToDelete && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'white', borderRadius: '16px', padding: '20px', maxWidth: '320px', width: '100%', textAlign: 'center' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px auto' }}>
+              <Trash2 size={20} />
+            </div>
+            <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#1e293b', margin: '0 0 6px 0' }}>Kullanıcıyı Sil?</h3>
+            <p style={{ fontSize: '11px', color: '#64748b', margin: '0 0 16px 0' }}>Bu işlem geri alınamaz. Kullanıcı hesabı sistemden tamamen kaldırılacaktır.</p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button onClick={() => setUserToDelete(null)} style={{ flex: 1, padding: '8px', borderRadius: '9px', border: '1px solid #e2e8f0', background: 'white', fontSize: '11.5px', fontWeight: '700', color: '#64748b', cursor: 'pointer' }}>Vazgeç</button>
+              <button onClick={confirmDelete} style={{ flex: 1, padding: '8px', borderRadius: '9px', border: 'none', background: '#dc2626', color: 'white', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' }}>Sil</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-        <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <Header title="Kullanıcı Yönetimi" showBack />
+      
+      <div style={{ padding: '14px 16px' }}>
+
+        {/* 1. Header Card with Title & New User Button */}
+        <div style={{ 
+          background: 'white', 
+          borderRadius: '16px', 
+          padding: '12px 14px', 
+          border: '1px solid #e2e8f0', 
+          boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)',
+          marginBottom: '12px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
-                <h2 style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '8px' }}>Erişim ve Yetkiler</h2>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Sistem rollerini gruplar halinde yönetin.</p>
+              <h2 style={{ fontSize: '13px', fontWeight: '800', color: '#1e293b', margin: 0, letterSpacing: '-0.2px' }}>
+                Kullanıcı & Rol Yönetimi
+              </h2>
+              <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>
+                {allUsers.length} Kayıtlı Kullanıcı
+              </div>
             </div>
             <button 
-                onClick={handleOpenModal}
-                style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '10px 16px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(215, 20, 122, 0.2)' }}>
-                <UserPlus size={16} /> Yeni Ekle
+              onClick={handleOpenModal}
+              style={{ 
+                background: 'var(--primary)', 
+                color: 'white', 
+                border: 'none', 
+                padding: '6px 11px', 
+                borderRadius: '8px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '5px', 
+                fontSize: '11px', 
+                fontWeight: '700', 
+                cursor: 'pointer', 
+                boxShadow: '0 2px 6px rgba(215, 20, 122, 0.25)',
+                transition: 'transform 0.15s'
+              }}
+            >
+              <UserPlus size={13} /> Yeni Kullanıcı
             </button>
+          </div>
+
+          {/* Search Input inside Header Card */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            background: '#f8fafc', 
+            border: '1px solid #e2e8f0', 
+            borderRadius: '9px', 
+            padding: '6px 10px', 
+            marginTop: '10px' 
+          }}>
+            <Search size={13} color="#94a3b8" style={{ flexShrink: 0 }} />
+            <input 
+              type="text" 
+              placeholder="İsim, e-posta veya telefon ile ara..." 
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '11px', paddingLeft: '6px', width: '100%', color: '#1e293b' }}
+            />
+            {searchQuery && (
+              <div onClick={() => setSearchQuery('')} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#94a3b8' }}>
+                <X size={12} />
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Role Selectors */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
-            <div 
-                onClick={() => setActiveTab('admin')}
-                style={{ background: activeTab === 'admin' ? 'var(--primary)' : 'white', color: activeTab === 'admin' ? 'white' : 'var(--text-main)', borderRadius: '16px', padding: '16px 12px', textAlign: 'center', cursor: 'pointer', border: `1px solid ${activeTab === 'admin' ? 'var(--primary)' : '#e2e8f0'}`, transition: 'all 0.2s', boxShadow: activeTab === 'admin' ? '0 8px 16px rgba(215,20,122,0.2)' : 'none' }}>
-                <ShieldAlert size={24} style={{ margin: '0 auto 8px auto', opacity: activeTab === 'admin' ? 1 : 0.6 }} />
-                <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '4px' }}>Yöneticiler</div>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>{stats.admin} Kişi</div>
-            </div>
-
-            <div 
-                onClick={() => setActiveTab('expert')}
-                style={{ background: activeTab === 'expert' ? 'var(--primary)' : 'white', color: activeTab === 'expert' ? 'white' : 'var(--text-main)', borderRadius: '16px', padding: '16px 12px', textAlign: 'center', cursor: 'pointer', border: `1px solid ${activeTab === 'expert' ? 'var(--primary)' : '#e2e8f0'}`, transition: 'all 0.2s', boxShadow: activeTab === 'expert' ? '0 8px 16px rgba(215,20,122,0.2)' : 'none' }}>
-                <Briefcase size={24} style={{ margin: '0 auto 8px auto', opacity: activeTab === 'expert' ? 1 : 0.6 }} />
-                <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '4px' }}>Uzmanlar</div>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>{stats.expert} Kişi</div>
-            </div>
-
-            <div 
-                onClick={() => setActiveTab('ticketing')}
-                style={{ background: activeTab === 'ticketing' ? 'var(--primary)' : 'white', color: activeTab === 'ticketing' ? 'white' : 'var(--text-main)', borderRadius: '16px', padding: '16px 12px', textAlign: 'center', cursor: 'pointer', border: `1px solid ${activeTab === 'ticketing' ? 'var(--primary)' : '#e2e8f0'}`, transition: 'all 0.2s', boxShadow: activeTab === 'ticketing' ? '0 8px 16px rgba(215,20,122,0.2)' : 'none' }}>
-                <PlaneTakeoff size={24} style={{ margin: '0 auto 8px auto', opacity: activeTab === 'ticketing' ? 1 : 0.6 }} />
-                <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '4px' }}>Biletleme</div>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>{stats.ticketing} Kişi</div>
-            </div>
-
-            <div 
-                onClick={() => setActiveTab('customer')}
-                style={{ background: activeTab === 'customer' ? 'var(--primary)' : 'white', color: activeTab === 'customer' ? 'white' : 'var(--text-main)', borderRadius: '16px', padding: '16px 12px', textAlign: 'center', cursor: 'pointer', border: `1px solid ${activeTab === 'customer' ? 'var(--primary)' : '#e2e8f0'}`, transition: 'all 0.2s', boxShadow: activeTab === 'customer' ? '0 8px 16px rgba(215,20,122,0.2)' : 'none' }}>
-                <UsersIcon size={24} style={{ margin: '0 auto 8px auto', opacity: activeTab === 'customer' ? 1 : 0.6 }} />
-                <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '4px' }}>Müşteriler</div>
-                <div style={{ fontSize: '11px', opacity: 0.8 }}>{stats.customer} Kişi</div>
-            </div>
+        {/* 2. Kare İkonlu Rol Seçici Butonlar (Yazısız ve Sayısız) - Her zaman üstte */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(4, 1fr)', 
+          gap: '10px', 
+          marginBottom: '14px' 
+        }}>
+          {roleTabs.map(tab => {
+            const IconComponent = tab.icon;
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => { setActiveTab(tab.key); setSearchQuery(''); }}
+                title={tab.label}
+                style={{
+                  aspectRatio: '1',
+                  background: isActive ? 'var(--primary)' : 'white',
+                  color: isActive ? 'white' : '#64748b',
+                  borderRadius: '16px',
+                  border: isActive ? 'none' : '1px solid #e2e8f0',
+                  boxShadow: isActive ? '0 4px 14px rgba(215, 20, 122, 0.3)' : '0 2px 6px rgba(15, 23, 42, 0.03)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                  outline: 'none',
+                  padding: 0,
+                  transform: isActive ? 'translateY(-2px)' : 'translateY(0)'
+                }}
+                onMouseEnter={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.borderColor = '#cbd5e1';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.color = '#1e293b';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isActive) {
+                    e.currentTarget.style.borderColor = '#e2e8f0';
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.color = '#64748b';
+                  }
+                }}
+              >
+                <IconComponent size={22} strokeWidth={isActive ? 2.4 : 2} />
+              </button>
+            );
+          })}
         </div>
 
-        {/* User List Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: 'var(--text-main)' }}>
-                {activeTab === 'admin' ? 'Sistem Yöneticileri' : activeTab === 'expert' ? 'Aktif Seyahat Uzmanları' : activeTab === 'ticketing' ? 'Biletleme Uzmanları' : 'Müşteri Portföyü'}
+        {/* Selected Role Title & Counter */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: activeTab === 'customer' ? '10px' : '12px', padding: '0 2px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <h3 style={{ margin: 0, fontSize: '12.5px', fontWeight: '800', color: '#1e293b' }}>
+              {activeTab === 'expert' ? 'Seyahat Uzmanları' : activeTab === 'admin' ? 'Sistem Yöneticileri' : activeTab === 'ticketing' ? 'Biletleme Personeli' : 'Müşteri Portföyü'}
             </h3>
-            
-            {activeTab === 'customer' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <button 
-                        onClick={() => setShowChildrenInList(!showChildrenInList)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', background: showChildrenInList ? '#fdf4ff' : 'white', color: showChildrenInList ? '#c026d3' : '#64748b', border: `1px solid ${showChildrenInList ? '#fae8ff' : '#e2e8f0'}`, borderRadius: '12px', padding: '8px 12px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: showChildrenInList ? '#c026d3' : '#cbd5e1' }}></div>
-                        Çocuklar
-                    </button>
-                    <div style={{ position: 'relative', width: '200px' }}>
-                        <Search size={14} color="#94a3b8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-                        <input 
-                            type="text"
-                            placeholder="Firmalarda Ara..."
-                            value={companyFilter}
-                            onChange={(e) => setCompanyFilter(e.target.value)}
-                            style={{ width: '100%', padding: '8px 12px 8px 32px', borderRadius: '12px', border: '1px solid #e2e8f0', fontSize: '12px', outline: 'none', background: 'white', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}
-                        />
-                    </div>
-                </div>
-            )}
+            <span style={{ fontSize: '9.5px', fontWeight: '800', background: 'var(--primary-light)', color: 'var(--primary)', padding: '1px 6px', borderRadius: '6px', border: '1px solid rgba(215, 20, 122, 0.15)' }}>
+              {filteredUsers.length} Kişi
+            </span>
+          </div>
         </div>
-        
-        <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'visible' }}>
-            {filteredUsers.length === 0 ? (
-                <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
-                    Bu grupta henüz kullanıcı bulunmuyor.
+
+        {/* Kurumsal ve Bireysel Segment Filtresi: Sadece Müşteri Portföyü sekmesindeyken gösterilir */}
+        {activeTab === 'customer' && (
+          <div style={{ marginBottom: '14px' }}>
+            {/* Segmented Filter: [ Tümü ] [ Kurumsal ] [ Bireysel ] */}
+            <div style={{
+              display: 'flex',
+              background: '#f1f5f9',
+              padding: '4px',
+              borderRadius: '14px',
+              border: '1px solid #e2e8f0',
+              marginBottom: '10px',
+              gap: '4px'
+            }}>
+              <button
+                type="button"
+                onClick={() => { setSegmentFilter('all'); setSearchQuery(''); }}
+                style={{
+                  flex: 1,
+                  padding: '7px 10px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  background: segmentFilter === 'all' ? 'white' : 'transparent',
+                  color: segmentFilter === 'all' ? '#1e293b' : '#64748b',
+                  boxShadow: segmentFilter === 'all' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Tümü ({customerTotalCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSegmentFilter('corporate'); setSearchQuery(''); }}
+                style={{
+                  flex: 1,
+                  padding: '7px 10px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  background: segmentFilter === 'corporate' ? '#eff6ff' : 'transparent',
+                  color: segmentFilter === 'corporate' ? '#2563eb' : '#64748b',
+                  border: segmentFilter === 'corporate' ? '1px solid #bfdbfe' : '1px solid transparent',
+                  boxShadow: segmentFilter === 'corporate' ? '0 2px 6px rgba(37, 99, 235, 0.1)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Kurumsal ({customerCorporateCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => { setSegmentFilter('individual'); setSearchQuery(''); }}
+                style={{
+                  flex: 1,
+                  padding: '7px 10px',
+                  borderRadius: '10px',
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  cursor: 'pointer',
+                  background: segmentFilter === 'individual' ? '#fdf2f8' : 'transparent',
+                  color: segmentFilter === 'individual' ? '#D7147A' : '#64748b',
+                  border: segmentFilter === 'individual' ? '1px solid #fbcfe8' : '1px solid transparent',
+                  boxShadow: segmentFilter === 'individual' ? '0 2px 6px rgba(215, 20, 122, 0.12)' : 'none',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                Bireysel ({customerIndividualCount})
+              </button>
+            </div>
+
+            {/* Bireysel Segment Banner */}
+            {segmentFilter === 'individual' ? (
+              <div style={{
+                background: 'linear-gradient(135deg, #fdf2f8 0%, #fff1f2 100%)',
+                border: '1px solid #fbcfe8',
+                borderRadius: '14px',
+                padding: '10px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '7px', background: '#D7147A', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Sparkles size={14} />
                 </div>
+                <div>
+                  <div style={{ fontSize: '11.5px', fontWeight: '800', color: '#1e293b' }}>Bireysel Seyahat Kullanıcıları</div>
+                  <div style={{ fontSize: '10px', color: '#64748b' }}>Kişisel asistan kullanan kayıtlı bireysel kullanıcı portföyü</div>
+                </div>
+              </div>
             ) : (
-                filteredUsers.map((user, idx) => (
-                    <div key={user.id} style={{ padding: '16px', borderBottom: idx !== filteredUsers.length - 1 ? '1px solid #e2e8f0' : 'none', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <img src={user.avatar} style={{ width: '48px', height: '48px', borderRadius: '50%', objectFit: 'cover' }} alt="Avatar" />
-                        <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 'bold', fontSize: '15px', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                {user.name}
-                                {user.role === 'admin' && <ShieldAlert size={14} color="#ef4444" />}
-                            </div>
-                            <div style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-                                <Mail size={12} /> {user.email}
-                            </div>
-                            {user.role === 'customer' && user.company && (
-                                <div style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px', fontWeight: 'bold' }}>
-                                    <Briefcase size={12} /> {user.company}
-                                </div>
-                            )}
-                        </div>
-                        <div>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); handleToggleStatus(user); }}
-                                style={{ background: user.status === 'Aktif' ? '#dcfce7' : '#fee2e2', color: user.status === 'Aktif' ? '#166534' : '#991b1b', border: 'none', cursor: 'pointer', fontSize: '11px', fontWeight: 'bold', padding: '6px 12px', borderRadius: '6px', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: user.status === 'Aktif' ? '#166534' : '#991b1b' }}></div>
-                                {user.status === 'Aktif' ? 'Aktif' : 'Pasif'}
-                            </button>
-                        </div>
-                        
-                        <div style={{ position: 'relative' }}>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === user.id ? null : user.id); }}
-                                style={{ background: openDropdownId === user.id ? '#f1f5f9' : 'transparent', border: 'none', color: '#94a3b8', padding: '6px', borderRadius: '50%', cursor: 'pointer', transition: 'all 0.2s', display: 'flex' }}>
-                                <MoreVertical size={20} />
-                            </button>
-                            
-                            {openDropdownId === user.id && (
-                                <div style={{ position: 'absolute', right: 0, top: '40px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', zIndex: 10, overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', minWidth: '150px' }}>
-                                    <button 
-                                        onClick={(e) => { e.stopPropagation(); handleEdit(user); setOpenDropdownId(null); }}
-                                        style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left', borderBottom: '1px solid #f8fafc' }}
-                                        onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
-                                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                    >
-                                        <Edit3 size={14} color="var(--primary)" /> Profili Düzenle
-                                    </button>
-                                    
-                                    {currentUser?.role === 'admin' && (
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); handleDelete(user.id); setOpenDropdownId(null); }}
-                                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '8px', padding: '12px 16px', background: 'transparent', border: 'none', color: '#ef4444', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', textAlign: 'left' }}
-                                            onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
-                                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                                        >
-                                            <Trash2 size={14} /> Kullanıcıyı Sil
-                                        </button>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ))
+              /* Kurumsal & Tümü için Çocuklar ve Firma Filtresi */
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px', 
+                background: 'white',
+                padding: '8px 10px',
+                borderRadius: '12px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <button 
+                  type="button"
+                  onClick={() => setShowChildrenInList(!showChildrenInList)}
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '5px', 
+                    background: showChildrenInList ? 'var(--primary-light)' : '#f8fafc', 
+                    color: showChildrenInList ? 'var(--primary)' : '#64748b', 
+                    border: `1px solid ${showChildrenInList ? 'var(--primary)' : '#e2e8f0'}`, 
+                    borderRadius: '8px', 
+                    padding: '4px 8px', 
+                    fontSize: '10.5px', 
+                    fontWeight: '700', 
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                >
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: showChildrenInList ? 'var(--primary)' : '#cbd5e1' }} />
+                  Çocuklar ({allUsers.filter(u => u.role === 'customer' && u.userType !== 'individual' && isUserChild(u)).length})
+                </button>
+
+                <div style={{ flex: 1, position: 'relative' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Firma Filtrele..." 
+                    value={companyFilter}
+                    onChange={e => setCompanyFilter(e.target.value)}
+                    style={{ 
+                      width: '100%', 
+                      padding: '4px 8px', 
+                      borderRadius: '8px', 
+                      border: '1px solid #e2e8f0', 
+                      fontSize: '10.5px', 
+                      outline: 'none', 
+                      background: '#f8fafc',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              </div>
             )}
+          </div>
+        )}
+
+        {/* 3. Compact User Cards Feed */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {filteredUsers.length === 0 ? (
+            <div style={{ padding: '32px 16px', textAlign: 'center', color: '#64748b', background: 'white', borderRadius: '14px', border: '1px solid #e2e8f0', fontSize: '11.5px' }}>
+              Arama kriterlerine uygun kullanıcı bulunamadı.
+            </div>
+          ) : (
+            filteredUsers.map((user) => {
+              const isChild = isUserChild(user);
+              return (
+                <div 
+                  key={user.id} 
+                  style={{ 
+                    background: 'white', 
+                    borderRadius: '14px', 
+                    border: '1px solid #e2e8f0', 
+                    padding: '10px 12px',
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '10px',
+                    boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {/* Avatar */}
+                  <div style={{ 
+                    width: '36px', 
+                    height: '36px', 
+                    borderRadius: '50%', 
+                    overflow: 'hidden', 
+                    border: user.role === 'admin' ? '1.5px solid #2563eb' : user.role === 'expert' ? '1.5px solid var(--primary)' : '1px solid #e2e8f0', 
+                    flexShrink: 0,
+                    background: '#f1f5f9'
+                  }}>
+                    <img 
+                      src={user.avatar || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=60&w=100"} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      alt={user.name} 
+                    />
+                  </div>
+
+                  {/* User Details */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexWrap: 'wrap', minWidth: 0 }}>
+                      <span style={{ fontWeight: '700', fontSize: '12px', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {formatTitleCase(user.name)}
+                      </span>
+                      {/* Bireysel / Kurumsal / Çocuk etiketleri sadece Müşteri Portföyü sekmesinde gösterilir */}
+                      {activeTab === 'customer' && (
+                        user.userType === 'individual' ? (
+                          <span style={{ fontSize: '8.5px', background: '#fdf2f8', color: '#be185d', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', border: '1px solid #fbcfe8', display: 'inline-flex', alignItems: 'center', gap: '2px' }}>
+                            <Sparkles size={8} /> BİREYSEL
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: '8.5px', background: '#eff6ff', color: '#1d4ed8', fontWeight: '800', padding: '1px 5px', borderRadius: '4px', border: '1px solid #bfdbfe' }}>
+                            KURUMSAL
+                          </span>
+                        )
+                      )}
+                      {activeTab === 'customer' && isChild && (
+                        <span style={{ fontSize: '8.5px', background: '#fdf4ff', color: '#c026d3', fontWeight: '800', padding: '1px 4px', borderRadius: '4px', border: '1px solid #fae8ff' }}>
+                          Çocuk
+                        </span>
+                      )}
+                    </div>
+
+                    <div style={{ fontSize: '10.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px', minWidth: 0 }}>
+                      <Mail size={10} style={{ flexShrink: 0 }} /> 
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(user.email || '').toLowerCase()}</span>
+                    </div>
+
+                    {user.phone && user.phone !== '-' && (
+                      <div style={{ fontSize: '10px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px', minWidth: 0 }}>
+                        <Phone size={9} style={{ flexShrink: 0 }} /> 
+                        <span>{user.phone}</span>
+                      </div>
+                    )}
+
+                    {user.userType === 'individual' ? (
+                      <div style={{ fontSize: '9.5px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                        <Calendar size={9} style={{ flexShrink: 0 }} />
+                        <span>Kayıt: {user.createdAt ? (new Date(user.createdAt.seconds ? user.createdAt.seconds * 1000 : user.createdAt).toLocaleDateString('tr-TR')) : 'Mevcut'}</span>
+                      </div>
+                    ) : (
+                      user.company && (
+                        <div style={{ fontSize: '9.5px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '3px', marginTop: '1px', minWidth: 0 }}>
+                          <Building2 size={9} style={{ flexShrink: 0 }} /> 
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.company}</span>
+                        </div>
+                      )
+                    )}
+                  </div>
+
+                  {/* For Individual Users: Read-only Summary Button */}
+                  {user.userType === 'individual' && (
+                    <button 
+                      onClick={() => handleOpenIndividualSummary(user)}
+                      style={{ 
+                        background: '#fdf2f8', 
+                        color: '#D7147A', 
+                        border: '1px solid #fbcfe8', 
+                        cursor: 'pointer', 
+                        fontSize: '9.5px', 
+                        fontWeight: '800', 
+                        padding: '4px 8px', 
+                        borderRadius: '6px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '3px',
+                        flexShrink: 0
+                      }}
+                      title="Bireysel Veri Özetini İncele (Salt Okunur)"
+                    >
+                      <Eye size={11} /> Özet
+                    </button>
+                  )}
+
+                  {/* Status Toggle Button */}
+                  <button 
+                    onClick={() => handleToggleStatus(user)}
+                    style={{ 
+                      background: user.status === 'Aktif' ? '#ecfdf5' : '#fef2f2', 
+                      color: user.status === 'Aktif' ? '#059669' : '#dc2626', 
+                      border: `1px solid ${user.status === 'Aktif' ? '#a7f3d0' : '#fecaca'}`, 
+                      cursor: 'pointer', 
+                      fontSize: '9.5px', 
+                      fontWeight: '800', 
+                      padding: '3px 7px', 
+                      borderRadius: '6px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '4px',
+                      flexShrink: 0
+                    }}
+                    title="Durumu Değiştir"
+                  >
+                    <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: user.status === 'Aktif' ? '#10b981' : '#ef4444' }} />
+                    {user.status === 'Aktif' ? 'Aktif' : 'Pasif'}
+                  </button>
+
+                  {/* Actions Dropdown */}
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setOpenDropdownId(openDropdownId === user.id ? null : user.id); }}
+                      style={{ 
+                        background: openDropdownId === user.id ? '#f1f5f9' : 'transparent', 
+                        border: 'none', 
+                        color: '#64748b', 
+                        padding: '5px', 
+                        borderRadius: '6px', 
+                        cursor: 'pointer', 
+                        display: 'flex' 
+                      }}
+                    >
+                      <MoreVertical size={16} />
+                    </button>
+                    
+                    {openDropdownId === user.id && (
+                      <div style={{ 
+                        position: 'absolute', 
+                        right: 0, 
+                        top: '32px', 
+                        background: 'white', 
+                        border: '1px solid #e2e8f0', 
+                        borderRadius: '10px', 
+                        zIndex: 100, 
+                        overflow: 'hidden', 
+                        boxShadow: '0 8px 20px rgba(0,0,0,0.1)', 
+                        minWidth: '140px' 
+                      }}>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleEdit(user); setOpenDropdownId(null); }}
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 12px', background: 'transparent', border: 'none', color: '#1e293b', fontSize: '11px', fontWeight: '700', cursor: 'pointer', textAlign: 'left', borderBottom: '1px solid #f8fafc' }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = '#f8fafc'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <Edit3 size={12} color="var(--primary)" /> Düzenle
+                        </button>
+                        
+                        {currentUser?.role === 'admin' && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); handleDelete(user.id); setOpenDropdownId(null); }}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '6px', padding: '9px 12px', background: 'transparent', border: 'none', color: '#ef4444', fontSize: '11px', fontWeight: '700', cursor: 'pointer', textAlign: 'left' }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#fef2f2'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                          >
+                            <Trash2 size={12} /> Sil
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
 
       </div>
 
-      {/* Add/Edit User Modal */}
+      {/* Add / Edit User Modal */}
       {showAddModal && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
-              <div style={{ background: 'white', borderRadius: '24px', width: '100%', maxWidth: '400px', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,0.2)' }}>
-                  
-                  {/* Modal Header */}
-                  <div style={{ padding: '20px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-                      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 'bold', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {editingUserId ? <Edit3 size={20} color="var(--primary)" /> : <UserPlus size={20} color="var(--primary)" />}
-                          {editingUserId ? 'Profili Güncelle' : 'Yeni Kullanıcı'}
-                      </h3>
-                      <button onClick={() => setShowAddModal(false)} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                          <X size={16} />
-                      </button>
-                  </div>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '16px' }}>
+          <div style={{ background: 'white', borderRadius: '20px', width: '100%', maxWidth: '380px', overflow: 'hidden', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            
+            {/* Modal Header */}
+            <div style={{ padding: '14px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+              <h3 style={{ margin: 0, fontSize: '13.5px', fontWeight: '800', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {editingUserId ? <Edit3 size={15} color="var(--primary)" /> : <UserPlus size={15} color="var(--primary)" />}
+                {editingUserId ? 'Profili Düzenle' : 'Yeni Kullanıcı Oluştur'}
+              </h3>
+              <button onClick={() => setShowAddModal(false)} style={{ background: 'white', border: '1px solid #e2e8f0', borderRadius: '50%', width: '26px', height: '26px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748b' }}>
+                <X size={14} />
+              </button>
+            </div>
 
-                  {/* Modal Body */}
-                  <div style={{ padding: '20px', maxHeight: '70vh', overflowY: 'auto' }}>
-                      
-                      {/* Customer Type Toggle */}
-                      {formData.role === 'customer' && (
-                          <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', background: '#f8fafc', padding: '6px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                              <button 
-                                  onClick={() => setCustomerType('parent')}
-                                  style={{ flex: 1, padding: '10px 4px', fontSize: '13px', whiteSpace: 'nowrap', borderRadius: '8px', border: 'none', background: customerType === 'parent' ? 'white' : 'transparent', color: customerType === 'parent' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: customerType === 'parent' ? 'bold' : '500', boxShadow: customerType === 'parent' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                  Ana Müşteri
-                              </button>
-                              <button 
-                                  onClick={() => setCustomerType('child')}
-                                  style={{ flex: 1, padding: '10px 4px', fontSize: '13px', whiteSpace: 'nowrap', borderRadius: '8px', border: 'none', background: customerType === 'child' ? 'white' : 'transparent', color: customerType === 'child' ? 'var(--primary)' : 'var(--text-muted)', fontWeight: customerType === 'child' ? 'bold' : '500', boxShadow: customerType === 'child' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', cursor: 'pointer', transition: 'all 0.2s' }}>
-                                  Çocuk Kullanıcı
-                              </button>
-                          </div>
-                      )}
+            {/* Modal Form Body */}
+            <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
 
-                      {/* Avatar Upload */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '24px' }}>
-                          <label style={{ 
-                                width: '80px', height: '80px', borderRadius: '50%', 
-                                background: formData.avatar ? 'transparent' : '#f1f5f9', 
-                                border: formData.avatar ? 'none' : '2px dashed #cbd5e1', 
-                                display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                                cursor: 'pointer', overflow: 'hidden', position: 'relative', 
-                                transition: 'all 0.2s' 
-                          }}>
-                              <input 
-                                  type="file" 
-                                  accept="image/*" 
-                                  style={{ display: 'none' }}
-                                  onChange={handleImageUpload}
-                              />
-                              
-                              {formData.avatar ? (
-                                  <img src={formData.avatar} alt="Seçilen Yüz" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                              ) : (
-                                  <Camera size={28} color="#94a3b8" />
-                              )}
-                              
-                              {!formData.avatar && (
-                                <div style={{ position: 'absolute', bottom: '8px', fontSize: '10px', color: '#64748b', fontWeight: 'bold' }}>YÜKLE</div>
-                              )}
-                          </label>
-                          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>Gerçek bir portre veya yetki amblemi yükleyin</div>
-                      </div>
+              {/* Customer Type Selector (Corporate Customer Only) */}
+              {formData.userType !== 'individual' && formData.role === 'customer' && (
+                <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', background: '#f8fafc', padding: '4px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                  <button 
+                    onClick={() => setCustomerType('parent')}
+                    style={{ flex: 1, padding: '6px', fontSize: '11px', borderRadius: '7px', border: 'none', background: customerType === 'parent' ? 'white' : 'transparent', color: customerType === 'parent' ? 'var(--primary)' : '#64748b', fontWeight: '700', boxShadow: customerType === 'parent' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none', cursor: 'pointer' }}
+                  >
+                    Ana Müşteri
+                  </button>
+                  <button 
+                    onClick={() => setCustomerType('child')}
+                    style={{ flex: 1, padding: '6px', fontSize: '11px', borderRadius: '7px', border: 'none', background: customerType === 'child' ? 'white' : 'transparent', color: customerType === 'child' ? 'var(--primary)' : '#64748b', fontWeight: '700', boxShadow: customerType === 'child' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none', cursor: 'pointer' }}
+                  >
+                    Çocuk Kullanıcı
+                  </button>
+                </div>
+              )}
 
-                      {/* Inputs */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                              <div>
-                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>İsim</label>
-                                  <input 
-                                      type="text" 
-                                      required
-                                      placeholder="Örn: Emir" 
-                                      value={formData.firstName}
-                                      onChange={e => setFormData({...formData, firstName: e.target.value})}
-                                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px' }}
-                                  />
-                              </div>
-                              <div>
-                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>Soyisim</label>
-                                  <input 
-                                      type="text" 
-                                      required
-                                      placeholder="Örn: Yılmaz" 
-                                      value={formData.lastName}
-                                      onChange={e => setFormData({...formData, lastName: e.target.value})}
-                                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px' }}
-                                  />
-                              </div>
-                          </div>
-
-                          {formData.role === 'customer' && (
-                              <div>
-                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>T.C. Kimlik Numarası</label>
-                                  <input 
-                                      type="text" 
-                                      maxLength={11}
-                                      placeholder="Örn: 12345678901" 
-                                      value={formData.tcNo || ''}
-                                      onChange={e => setFormData({...formData, tcNo: e.target.value.replace(/\D/g, '')})}
-                                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px' }}
-                                  />
-                              </div>
-                          )}
-                          
-                              {!(formData.role === 'customer' && customerType === 'child') && (
-                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                                      <div>
-                                          <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>E-Posta Adresi</label>
-                                          <input 
-                                              type="email" 
-                                              required
-                                              placeholder="emir@mail.com" 
-                                              value={formData.email}
-                                              onChange={e => setFormData({...formData, email: e.target.value})}
-                                              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px' }}
-                                          />
-                                      </div>
-
-                                      <div>
-                                          <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>Telefon No</label>
-                                          <input 
-                                              type="tel" 
-                                              required
-                                              placeholder="555..." 
-                                              value={formData.phone}
-                                              onChange={e => setFormData({...formData, phone: e.target.value})}
-                                              style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px' }}
-                                          />
-                                      </div>
-                                  </div>
-                              )}
-
-                              {!(formData.role === 'customer' && customerType === 'child') && (
-                                  <div style={{ position: 'relative' }}>
-                                      <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>Atanacak Rol</label>
-                                      <div 
-                                          tabIndex={0}
-                                          onBlur={() => setTimeout(() => setShowRoleDropdown(false), 200)}
-                                          onClick={() => setShowRoleDropdown(!showRoleDropdown)}
-                                          style={{ 
-                                              position: 'relative',
-                                              width: '100%', 
-                                              padding: '10px 36px 10px 12px', 
-                                              borderRadius: showRoleDropdown ? '8px 8px 0 0' : '8px', 
-                                              border: '1px solid var(--border-color)', 
-                                              background: 'white',
-                                              cursor: 'pointer',
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              fontSize: '13px',
-                                              transition: 'border-radius 0.2s ease',
-                                              outline: 'none'
-                                          }}>
-                                          <span style={{ flex: 1, color: formData.role ? 'var(--text-main)' : 'var(--text-muted)' }}>
-                                              {formData.role === 'admin' ? 'Sistem Yöneticisi' : formData.role === 'expert' ? 'Bölge Uzmanı' : formData.role === 'ticketing' ? 'Biletleme Uzmanı' : formData.role === 'customer' ? 'Müşteri' : 'Rol Seçin...'}
-                                          </span>
-                                          <div style={{ position: 'absolute', right: '12px', top: '50%', transform: `translateY(-50%) ${showRoleDropdown ? 'rotate(180deg)' : 'rotate(0)'}`, pointerEvents: 'none', color: 'var(--text-muted)', transition: 'transform 0.2s ease' }}>
-                                              <ChevronDown size={16} />
-                                          </div>
-                                      </div>
-
-                                      {showRoleDropdown && (
-                                          <div style={{ 
-                                              position: 'absolute', top: '100%', left: 0, right: 0, 
-                                              background: 'white', 
-                                              border: '1px solid var(--border-color)', 
-                                              borderTop: 'none',
-                                              borderRadius: '0 0 8px 8px', 
-                                              boxShadow: '0 8px 16px rgba(0,0,0,0.08)', 
-                                              zIndex: 1000, 
-                                              overflow: 'hidden' 
-                                          }}>
-                                              {[
-                                                  { val: 'admin', label: 'Sistem Yöneticisi' },
-                                                  { val: 'expert', label: 'Bölge Uzmanı' },
-                                                  { val: 'ticketing', label: 'Biletleme Uzmanı' },
-                                                  { val: 'customer', label: 'Müşteri' }
-                                              ].map((r, i) => (
-                                                  <div 
-                                                      key={r.val}
-                                                      onClick={() => {
-                                                          setFormData({...formData, role: r.val});
-                                                          setShowRoleDropdown(false);
-                                                      }}
-                                                      style={{ padding: '10px 12px', cursor: 'pointer', borderTop: '1px solid #f8fafc', display: 'flex', alignItems: 'center', fontSize: '13px' }}
-                                                      onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                                      onMouseLeave={e => e.currentTarget.style.background = 'white'}
-                                                  >
-                                                      <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{r.label}</span>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                      )}
-                                  </div>
-                              )}
-                       
-                              {!(formData.role === 'customer' && customerType === 'child') && (
-                               <div style={{ position: 'relative' }}>
-                                   <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>Firma/Şirket Adı</label>
-                                   <div style={{ position: 'relative' }}>
-                                       <input 
-                                           type="text" 
-                                           name={`random_comp_adm_${Math.random()}`}
-                                           autoComplete="off"
-                                           data-lpignore="true"
-                                           data-form-type="other"
-                                           autoCorrect="off"
-                                           spellCheck="false"
-                                           required
-                                           placeholder="Örn: Move Travel & Mice Global" 
-                                           value={formData.company}
-                                           onChange={e => {
-                                               setFormData({...formData, company: e.target.value});
-                                               setShowCompanyAutocomplete(true);
-                                           }}
-                                           onFocus={() => setShowCompanyAutocomplete(true)}
-                                           onBlur={() => setTimeout(() => setShowCompanyAutocomplete(false), 200)}
-                                           style={{ 
-                                               width: '100%', 
-                                               padding: '10px 36px 10px 12px', 
-                                               borderRadius: showCompanyAutocomplete && filteredFormCompanies.length > 0 ? '8px 8px 0 0' : '8px', 
-                                               border: '1px solid var(--border-color)', 
-                                               outline: 'none', 
-                                               fontSize: '13px',
-                                               background: 'white',
-                                               transition: 'border-radius 0.2s ease'
-                                           }}
-                                       />
-                                       <div style={{ position: 'absolute', right: '12px', top: '50%', transform: `translateY(-50%) ${showCompanyAutocomplete ? 'rotate(180deg)' : 'rotate(0)'}`, pointerEvents: 'none', color: 'var(--text-muted)', transition: 'transform 0.2s ease' }}>
-                                           <ChevronDown size={16} />
-                                       </div>
-                                   </div>
-                                   {showCompanyAutocomplete && filteredFormCompanies.length > 0 && (
-                                       <div style={{ 
-                                           position: 'absolute', top: '100%', left: 0, right: 0, 
-                                           background: 'white', 
-                                           border: '1px solid var(--border-color)', 
-                                           borderTop: 'none',
-                                           borderRadius: '0 0 8px 8px', 
-                                           boxShadow: '0 8px 16px rgba(0,0,0,0.08)', 
-                                           zIndex: 1000, 
-                                           overflow: 'hidden' 
-                                       }}>
-                                           {filteredFormCompanies.map((c, i) => (
-                                               <div 
-                                                 key={i}
-                                                 onClick={() => {
-                                                     setFormData({...formData, company: c});
-                                                     setShowCompanyAutocomplete(false);
-                                                 }}
-                                                 style={{ padding: '10px 12px', cursor: 'pointer', borderTop: '1px solid #f8fafc', display: 'flex', alignItems: 'center', fontSize: '13px' }}
-                                                 onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                                 onMouseLeave={e => e.currentTarget.style.background = 'white'}
-                                               >
-                                                   <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{c}</span>
-                                               </div>
-                                           ))}
-                                       </div>
-                                   )}
-                               </div>
-                              )}
-                              
-                              {formData.role === 'customer' && customerType === 'parent' && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                      <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                          👨‍👩‍👧 Bağlı Çocuklar
-                                      </div>
-
-                                      <div style={{ position: 'relative' }}>
-                                          <input 
-                                              type="text" 
-                                              placeholder="Çocuk ismi yazarak arayın..." 
-                                              value={childSearchQuery}
-                                              onChange={e => {
-                                                  setChildSearchQuery(e.target.value);
-                                                  setShowChildSearchDropdown(true);
-                                              }}
-                                              onFocus={() => setShowChildSearchDropdown(true)}
-                                              onBlur={() => setTimeout(() => setShowChildSearchDropdown(false), 200)}
-                                              style={{ width: '100%', padding: '10px 12px', borderRadius: showChildSearchDropdown && childSearchQuery.length > 0 ? '8px 8px 0 0' : '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px', background: 'white', transition: 'border-radius 0.2s' }}
-                                          />
-                                          {showChildSearchDropdown && childSearchQuery.length > 0 && (
-                                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border-color)', borderTop: 'none', borderRadius: '0 0 8px 8px', boxShadow: '0 8px 16px rgba(0,0,0,0.08)', zIndex: 1000, overflow: 'hidden', maxHeight: '150px', overflowY: 'auto' }}>
-                                                  {allUsers.filter(u => u.role === 'customer' && u.id !== editingUserId && !formData.childrenIds.includes(u.id) && isUserChild(u) && u.name.toLowerCase().includes(childSearchQuery.toLowerCase())).map(u => (
-                                                      <div 
-                                                          key={u.id}
-                                                          onMouseDown={(e) => {
-                                                              // use onMouseDown so it fires before onBlur
-                                                              e.preventDefault();
-                                                              setFormData({...formData, childrenIds: [...formData.childrenIds, u.id]});
-                                                              setChildSearchQuery('');
-                                                              setShowChildSearchDropdown(false);
-                                                          }}
-                                                          style={{ padding: '10px 12px', cursor: 'pointer', borderTop: '1px solid #f8fafc', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                          onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                                          onMouseLeave={e => e.currentTarget.style.background = 'white'}
-                                                      >
-                                                          <img src={u.avatar} style={{width: '24px', height: '24px', borderRadius: '50%'}} />
-                                                          <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{u.name}</span>
-                                                      </div>
-                                                  ))}
-                                              </div>
-                                          )}
-                                      </div>
-
-                                      {formData.childrenIds.length > 0 && (
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                              {formData.childrenIds.map(childId => {
-                                                  const cObj = allUsers.find(u => u.id === childId);
-                                                  if(!cObj) return null;
-                                                  return (
-                                                      <div key={childId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                              <img src={cObj.avatar} style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
-                                                              <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-main)' }}>{cObj.name}</span>
-                                                          </div>
-                                                          <button 
-                                                              type="button"
-                                                              onClick={() => setFormData({...formData, childrenIds: formData.childrenIds.filter(id => id !== childId)})}
-                                                              style={{ width: '28px', height: '28px', borderRadius: '6px', background: '#fee2e2', color: '#ef4444', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                                                          >
-                                                              <Trash2 size={14} />
-                                                          </button>
-                                                      </div>
-                                                  )
-                                              })}
-                                          </div>
-                                      )}
-                                  </div>
-                              )}
-                              
-                              {formData.role === 'customer' && customerType === 'child' && (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: '#fdf2f8', padding: '16px', borderRadius: '12px', border: '1px solid #fbcfe8' }}>
-                                      <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                          👨‍👩‍👧 Bağlı Ebeveynler (Birden fazla seçilebilir)
-                                      </div>
-
-                                      <div style={{ position: 'relative' }}>
-                                          <div style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
-                                              <Search size={16} />
-                                          </div>
-                                          <input 
-                                              type="text" 
-                                              placeholder="Ebeveyn isim veya soyisim yazın..." 
-                                              value={parentSearchQuery}
-                                              onChange={e => {
-                                                  setParentSearchQuery(e.target.value);
-                                                  setShowParentSearchDropdown(true);
-                                              }}
-                                              onFocus={() => setShowParentSearchDropdown(true)}
-                                              style={{ width: '100%', padding: '10px 12px 10px 36px', borderRadius: showParentSearchDropdown && parentSearchQuery.length > 0 ? '8px 8px 0 0' : '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px', background: 'white', transition: 'border-radius 0.2s' }}
-                                          />
-                                          {showParentSearchDropdown && parentSearchQuery.length > 0 && (
-                                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid var(--border-color)', borderTop: 'none', borderRadius: '0 0 8px 8px', boxShadow: '0 8px 16px rgba(0,0,0,0.08)', zIndex: 1000, overflow: 'hidden', maxHeight: '150px', overflowY: 'auto' }}>
-                                                  {allUsers.filter(u => u.role === 'customer' && u.id !== editingUserId && !formData.parentIds.includes(u.id) && !isUserChild(u) && u.name.toLowerCase().includes(parentSearchQuery.toLowerCase())).map(u => (
-                                                      <div 
-                                                          key={u.id}
-                                                          onMouseDown={(e) => {
-                                                              e.preventDefault();
-                                                              setFormData({...formData, parentIds: [...formData.parentIds, u.id]});
-                                                              setParentSearchQuery('');
-                                                              setShowParentSearchDropdown(false);
-                                                          }}
-                                                          style={{ padding: '10px 12px', cursor: 'pointer', borderTop: '1px solid #f8fafc', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
-                                                          onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                                                          onMouseLeave={e => e.currentTarget.style.background = 'white'}
-                                                      >
-                                                          <img src={u.avatar} style={{width: '24px', height: '24px', borderRadius: '50%'}} />
-                                                          <span style={{ color: 'var(--text-main)', fontWeight: '500' }}>{u.name}</span>
-                                                      </div>
-                                                  ))}
-                                              </div>
-                                          )}
-                                      </div>
-
-                                      {formData.parentIds.length > 0 && (
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                              {formData.parentIds.map(parentId => {
-                                                  const pObj = allUsers.find(u => u.id === parentId);
-                                                  if(!pObj) return null;
-                                                  return (
-                                                      <div key={parentId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white', padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                              <img src={pObj.avatar} style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }} />
-                                                              <span style={{ fontSize: '13px', fontWeight: '500', color: 'var(--text-main)' }}>{pObj.name}</span>
-                                                          </div>
-                                                          <button 
-                                                              type="button"
-                                                              onClick={() => setFormData({...formData, parentIds: formData.parentIds.filter(id => id !== parentId)})}
-                                                              style={{ width: '28px', height: '28px', borderRadius: '6px', background: '#fee2e2', color: '#ef4444', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                                                          >
-                                                              <Trash2 size={14} />
-                                                          </button>
-                                                      </div>
-                                                  )
-                                              })}
-                                          </div>
-                                      )}
-                                  </div>
-                              )}
-                          {!(formData.role === 'customer' && customerType === 'child') && (
-                              <div>
-                                  <label style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'block' }}>Atanacak Şifre</label>
-                                  <input 
-                                      type="text" 
-                                      required={!editingUserId}
-                                      placeholder={editingUserId ? "Değiştirmek istemiyorsanız boş bırakın" : "Güvenli bir şifre girin"} 
-                                      value={formData.password}
-                                      onChange={e => setFormData({...formData, password: e.target.value})}
-                                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', fontSize: '13px', marginBottom: '8px' }}
-                                  />
-                                  
-                                  {/* Password Strength Radars */}
-                                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                                     <div style={{ fontSize: '11px', fontWeight: 'bold', marginBottom: '6px', color: 'var(--text-main)' }}>Parola Gücü Kriterleri</div>
-                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: pStrength.upper ? '#10B981' : 'var(--text-muted)' }}>
-                                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: pStrength.upper ? '#10B981' : '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>{pStrength.upper && <CheckCircle2 size={10} />}</div>
-                                            1 Büyük Harf
-                                         </div>
-                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: pStrength.lower ? '#10B981' : 'var(--text-muted)' }}>
-                                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: pStrength.lower ? '#10B981' : '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>{pStrength.lower && <CheckCircle2 size={10} />}</div>
-                                            1 Küçük Harf
-                                         </div>
-                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: pStrength.number ? '#10B981' : 'var(--text-muted)' }}>
-                                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: pStrength.number ? '#10B981' : '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>{pStrength.number && <CheckCircle2 size={10} />}</div>
-                                            1 Rakam (0-9)
-                                         </div>
-                                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: pStrength.special ? '#10B981' : 'var(--text-muted)' }}>
-                                            <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: pStrength.special ? '#10B981' : '#cbd5e1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>{pStrength.special && <CheckCircle2 size={10} />}</div>
-                                            Özel Karakter (!@#$)
-                                         </div>
-                                     </div>
-                                  </div>
-                              </div>
-                          )}
-                      </div>
-
-                      {/* Submit */}
-                      <button 
-                         type="button" 
-                         onClick={handleSubmit}
-                         style={{ width: '100%', background: 'var(--primary)', color: 'white', border: 'none', padding: '12px', borderRadius: '12px', marginTop: '24px', fontSize: '14px', fontWeight: 'bold', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(215, 20, 122, 0.2)', transition: 'all 0.2s' }}>
-                          <CheckCircle2 size={18} /> {editingUserId ? 'Değişiklikleri Kaydet' : 'Kaydı Tamamla'}
-                      </button>
-
-                  </div>
+              {/* Avatar Upload */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '16px' }}>
+                <label style={{ 
+                  width: '64px', height: '64px', borderRadius: '50%', 
+                  background: formData.avatar ? 'transparent' : '#f8fafc', 
+                  border: formData.avatar ? '2px solid var(--primary)' : '2px dashed #cbd5e1', 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                  cursor: 'pointer', overflow: 'hidden', position: 'relative'
+                }}>
+                  <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
+                  {formData.avatar ? (
+                    <img src={formData.avatar} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <Camera size={22} color="#94a3b8" />
+                  )}
+                </label>
+                <div style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Profil Fotoğrafı Yükle</div>
               </div>
-          </div>
-      )}
-      {/* Delete Confirmation Modal */}
-      {userToDelete && (
-          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '20px' }}>
-              <div style={{ background: 'white', borderRadius: '24px', width: '100%', maxWidth: '380px', overflow: 'hidden', boxShadow: '0 24px 48px rgba(0,0,0,0.2)' }}>
-                  
-                  <div style={{ background: '#fef2f2', padding: '32px 20px', textAlign: 'center', borderBottom: '1px solid #fee2e2' }}>
-                      <div style={{ background: '#f87171', width: '64px', height: '64px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', boxShadow: '0 8px 16px rgba(248,113,113,0.3)' }}>
-                          <AlertTriangle size={32} color="white" />
+
+              {/* Form Fields */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                
+                {/* First & Last Name */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '4px', display: 'block' }}>İsim *</label>
+                    <input 
+                      type="text" 
+                      required
+                      placeholder="Örn: Ahmet" 
+                      value={formData.firstName}
+                      onChange={e => setFormData({...formData, firstName: e.target.value})}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '11.5px', background: '#f8fafc', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '4px', display: 'block' }}>Soyisim</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: Yılmaz" 
+                      value={formData.lastName}
+                      onChange={e => setFormData({...formData, lastName: e.target.value})}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '11.5px', background: '#f8fafc', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Email & Phone */}
+                {!(formData.role === 'customer' && customerType === 'child') && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '4px', display: 'block' }}>
+                        E-Posta {formData.role === 'customer' ? (formData.phone ? '(Opsiyonel)' : '(veya Tel)') : '*'}
+                      </label>
+                      <input 
+                        type="email" 
+                        placeholder="ahmet@mail.com" 
+                        value={formData.email}
+                        onChange={e => setFormData({...formData, email: e.target.value.toLowerCase().trim()})}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '11.5px', background: '#f8fafc', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '4px', display: 'block' }}>
+                        Telefon {formData.role === 'customer' && !formData.email ? '*' : ''}
+                      </label>
+                      <input 
+                        type="tel" 
+                        placeholder="555..." 
+                        value={formData.phone}
+                        onChange={e => setFormData({...formData, phone: e.target.value})}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '11.5px', background: '#f8fafc', boxSizing: 'border-box' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Role Selector & Corporate Role Protection */}
+                {formData.userType === 'individual' ? (
+                  <div style={{ background: '#fdf2f8', border: '1px solid #fbcfe8', borderRadius: '10px', padding: '10px 12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#be185d', fontWeight: '800', fontSize: '11.5px' }}>
+                      <ShieldCheck size={14} /> Bireysel Kullanıcı (Rol Korumalı)
+                    </div>
+                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', lineHeight: 1.4 }}>
+                      Bireysel kullanıcılara kurumsal yetkiler (Uzman, Yönetici, Biletleme) atanamaz. Rol 'Müşteri (Bireysel)' olarak kilitlidir.
+                    </div>
+                  </div>
+                ) : (
+                  !(formData.role === 'customer' && customerType === 'child') && (
+                    <div>
+                      <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '4px', display: 'block' }}>Sistem Rolü</label>
+                      <select
+                        value={formData.role}
+                        onChange={e => setFormData({...formData, role: e.target.value})}
+                        style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '11.5px', background: '#f8fafc', boxSizing: 'border-box', fontWeight: '600' }}
+                      >
+                        <option value="expert">Bölge Uzmanı / Rehber</option>
+                        <option value="admin">Sistem Yöneticisi</option>
+                        <option value="ticketing">Biletleme Uzmanı</option>
+                        <option value="customer">Müşteri</option>
+                      </select>
+                    </div>
+                  )
+                )}
+
+                {/* Password Field with Validation Hint */}
+                {!(formData.role === 'customer' && customerType === 'child') && (
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '4px', display: 'block' }}>
+                      {editingUserId ? 'Yeni Şifre (Değişmeyecekse Boş Bırakın)' : 'Giriş Şifresi *'}
+                    </label>
+                    <input 
+                      type="password" 
+                      placeholder="••••••••" 
+                      value={formData.password}
+                      onChange={e => setFormData({...formData, password: e.target.value})}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '11.5px', background: '#f8fafc', boxSizing: 'border-box' }}
+                    />
+                    {formData.password && (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginTop: '4px', fontSize: '9px' }}>
+                        <span style={{ color: pStrength.upper ? '#10b981' : '#94a3b8' }}>{pStrength.upper ? '✓' : '○'} Büyük Harf</span>
+                        <span style={{ color: pStrength.lower ? '#10b981' : '#94a3b8' }}>{pStrength.lower ? '✓' : '○'} Küçük Harf</span>
+                        <span style={{ color: pStrength.number ? '#10b981' : '#94a3b8' }}>{pStrength.number ? '✓' : '○'} Rakam</span>
+                        <span style={{ color: pStrength.special ? '#10b981' : '#94a3b8' }}>{pStrength.special ? '✓' : '○'} Özel Karakter</span>
                       </div>
-                      <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 'bold', color: '#991b1b', marginBottom: '8px' }}>Emin Misiniz?</h3>
-                      <p style={{ margin: 0, fontSize: '13px', color: '#b91c1c', opacity: 0.8 }}>Bu kullanıcı sistemden kalıcı olarak silinecek ve tüm erişimi anında kesilecektir. Bu işlem geri alınamaz!</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Company Name (Corporate Only) */}
+                {formData.userType !== 'individual' && !(formData.role === 'customer' && customerType === 'child') && (
+                  <div>
+                    <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', marginBottom: '4px', display: 'block' }}>Firma / Kurum</label>
+                    <input 
+                      type="text" 
+                      placeholder="Örn: Move Travel & Mice" 
+                      value={formData.company}
+                      onChange={e => setFormData({...formData, company: e.target.value})}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '11.5px', background: '#f8fafc', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                )}
+
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => setShowAddModal(false)}
+                style={{ flex: 1, padding: '9px', borderRadius: '9px', border: '1px solid #cbd5e1', background: 'white', color: '#64748b', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' }}
+              >
+                Vazgeç
+              </button>
+              <button 
+                onClick={handleSubmit}
+                style={{ flex: 1.2, padding: '9px', borderRadius: '9px', border: 'none', background: 'var(--primary)', color: 'white', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 2px 6px rgba(215, 20, 122, 0.25)' }}
+              >
+                {editingUserId ? 'Güncelle' : 'Kaydet'}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Individual User Summary Modal (Read-Only) */}
+      {selectedIndividualSummary && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          padding: '16px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '20px',
+            width: '100%',
+            maxWidth: '460px',
+            maxHeight: '85vh',
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            overflow: 'hidden'
+          }}>
+            {/* Header */}
+            <div style={{
+              padding: '14px 18px',
+              borderBottom: '1px solid #e2e8f0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#fdf2f8'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #D7147A 0%, #b80f68 100%)',
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: '800',
+                  fontSize: '15px'
+                }}>
+                  {selectedIndividualSummary.name?.charAt(0) || 'B'}
+                </div>
+                <div>
+                  <div style={{ fontSize: '13.5px', fontWeight: '800', color: '#1e293b' }}>
+                    {formatTitleCase(selectedIndividualSummary.name)}
+                  </div>
+                  <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                    Bireysel Kullanıcı Veri Özeti (Salt Okunur)
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedIndividualSummary(null)}
+                style={{
+                  background: 'white',
+                  border: '1px solid #fbcfe8',
+                  borderRadius: '50%',
+                  width: '28px',
+                  height: '28px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  color: '#64748b'
+                }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '16px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* User Quick Info */}
+              <div style={{
+                background: '#f8fafc',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                border: '1px solid #e2e8f0',
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '8px',
+                fontSize: '11px'
+              }}>
+                <div>
+                  <span style={{ color: '#64748b' }}>E-Posta:</span>
+                  <div style={{ fontWeight: '700', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {selectedIndividualSummary.email || '-'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Telefon:</span>
+                  <div style={{ fontWeight: '700', color: '#1e293b' }}>
+                    {selectedIndividualSummary.phone || '-'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Kayıt Tarihi:</span>
+                  <div style={{ fontWeight: '700', color: '#1e293b' }}>
+                    {selectedIndividualSummary.createdAt ? new Date(selectedIndividualSummary.createdAt.seconds ? selectedIndividualSummary.createdAt.seconds * 1000 : selectedIndividualSummary.createdAt).toLocaleDateString('tr-TR') : 'Belirtilmedi'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: '#64748b' }}>Hesap Durumu:</span>
+                  <div style={{ fontWeight: '700', color: selectedIndividualSummary.status === 'Aktif' ? '#10b981' : '#ef4444' }}>
+                    {selectedIndividualSummary.status || 'Aktif'}
+                  </div>
+                </div>
+              </div>
+
+              {individualSummaryData.loading ? (
+                <div style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>
+                  <div style={{ width: '24px', height: '24px', border: '3px solid #D7147A', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 8px auto' }} />
+                  Kullanıcı verileri yükleniyor...
+                </div>
+              ) : (
+                <>
+                  {/* Section 1: Seyahatler */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '800', color: '#1e293b' }}>
+                        <Luggage size={14} color="#D7147A" />
+                        Kayıtlı Seyahatler
+                      </div>
+                      <span style={{ fontSize: '10px', fontWeight: '800', background: '#fdf2f8', color: '#D7147A', padding: '1px 6px', borderRadius: '6px' }}>
+                        {individualSummaryData.travels.length} Seyahat
+                      </span>
+                    </div>
+
+                    {individualSummaryData.travels.length === 0 ? (
+                      <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
+                        Kayıtlı seyahat bulunmuyor.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {individualSummaryData.travels.map(t => (
+                          <div key={t.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                              <div style={{ fontWeight: '700', fontSize: '11.5px', color: '#1e293b' }}>{t.title || t.destination}</div>
+                              <div style={{ fontSize: '10px', color: '#64748b' }}>{t.destination} • {t.startDate || '-'} {t.endDate ? ` / ${t.endDate}` : ''}</div>
+                            </div>
+                            <span style={{ fontSize: '9px', fontWeight: '700', background: t.status === 'completed' ? '#f1f5f9' : '#eff6ff', color: t.status === 'completed' ? '#64748b' : '#2563eb', padding: '2px 6px', borderRadius: '4px' }}>
+                              {t.status === 'completed' ? 'Tamamlandı' : t.status === 'active' ? 'Devam Ediyor' : 'Planlandı'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
-                  <div style={{ padding: '24px', display: 'flex', gap: '12px', background: 'white' }}>
-                      <button onClick={() => setUserToDelete(null)} style={{ flex: 1, background: 'white', color: 'var(--text-main)', border: '1px solid #e2e8f0', padding: '12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', transition: 'all 0.2s' }}>
-                          Geri Dön
-                      </button>
-                      <button onClick={confirmDelete} style={{ flex: 1, background: '#ef4444', color: 'white', border: 'none', padding: '12px', borderRadius: '12px', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239,68,68,0.2)', transition: 'all 0.2s' }}>
-                          Kalıcı Olarak Sil
-                      </button>
+                  {/* Section 2: Kontrol Listeleri */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '800', color: '#1e293b' }}>
+                        <CheckSquare size={14} color="#059669" />
+                        Kontrol Listeleri (Checklists)
+                      </div>
+                      <span style={{ fontSize: '10px', fontWeight: '800', background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: '6px' }}>
+                        {individualSummaryData.checklists.length} Liste
+                      </span>
+                    </div>
+
+                    {individualSummaryData.checklists.length === 0 ? (
+                      <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
+                        Kayıtlı kontrol listesi bulunmuyor.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {individualSummaryData.checklists.map(c => {
+                          const items = c.items || [];
+                          const doneCount = items.filter(it => it.done).length;
+                          return (
+                            <div key={c.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div>
+                                <div style={{ fontWeight: '700', fontSize: '11.5px', color: '#1e293b' }}>{c.title}</div>
+                                <div style={{ fontSize: '10px', color: '#64748b' }}>{c.category || 'Genel'}</div>
+                              </div>
+                              <span style={{ fontSize: '9.5px', fontWeight: '700', background: '#ecfdf5', color: '#059669', padding: '2px 6px', borderRadius: '4px' }}>
+                                {doneCount}/{items.length} Tamamlandı
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-              </div>
+
+                  {/* Section 3: Bütçe Planları */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '800', color: '#1e293b' }}>
+                        <Wallet size={14} color="#d97706" />
+                        Bütçe & Harcama Planları
+                      </div>
+                      <span style={{ fontSize: '10px', fontWeight: '800', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '6px' }}>
+                        {individualSummaryData.budgets.length} Bütçe
+                      </span>
+                    </div>
+
+                    {individualSummaryData.budgets.length === 0 ? (
+                      <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
+                        Kayıtlı bütçe bulunmuyor.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {individualSummaryData.budgets.map(b => (
+                          <div key={b.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                              <div style={{ fontWeight: '700', fontSize: '11.5px', color: '#1e293b' }}>{b.title}</div>
+                              <div style={{ fontSize: '10px', color: '#64748b' }}>Hedef: {Number(b.targetBudget || 0).toLocaleString('tr-TR')} {b.currency || 'EUR'}</div>
+                            </div>
+                            <span style={{ fontSize: '9.5px', fontWeight: '700', background: '#fef3c7', color: '#b45309', padding: '2px 6px', borderRadius: '4px' }}>
+                              {b.isShared ? 'Ortak Bütçe' : 'Bireysel Bütçe'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setSelectedIndividualSummary(null)}
+                style={{
+                  padding: '7px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  background: 'white',
+                  color: '#475569',
+                  fontSize: '11.5px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                Kapat
+              </button>
+            </div>
           </div>
+        </div>
       )}
+
     </div>
   );
 }

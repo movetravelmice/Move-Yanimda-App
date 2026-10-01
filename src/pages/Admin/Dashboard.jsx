@@ -1,215 +1,463 @@
 import React, { useState } from 'react';
-import { Settings, Users, Database, ArrowRight, Play, CheckCircle2, UserCircle2, ArchiveRestore, Edit3, Search } from 'lucide-react';
+import { 
+  Settings, 
+  Users, 
+  ArchiveRestore, 
+  Mail, 
+  MessageSquare,
+  Compass,
+  PlusCircle,
+  Banknote,
+  Bell,
+  UserCheck,
+  CheckCircle2,
+  Calendar,
+  Play,
+  Megaphone,
+  ChevronRight
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
-import { useTourStore, calculateDaysAndNights } from '../../store/tourStore';
-import { useSettingsStore } from '../../store/settingsStore';
+import { useTourStore, isTourActive, isTourPast } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { tours, setTourStatus } = useTourStore();
-  const { expertName } = useSettingsStore();
-  const allUsers = useUserStore(state => state.users);
+  const { tours } = useTourStore();
+  const allUsers = useUserStore(state => state.users) || [];
 
-  const activeTours = tours.filter(t => t.status === 'active');
-  const pastTours = tours.filter(t => t.status === 'past');
-
-  const [searchQuery, setSearchQuery] = useState('');
+  const activeTours = tours.filter(isTourActive);
+  const pastTours = tours.filter(isTourPast);
   
-  const filteredActiveTours = activeTours.filter(tour => {
-      const qs = searchQuery.toLowerCase();
-      const tourName = tour.name?.toLowerCase() || '';
-      const expertNameRef = (tour.guideName || tour.expert?.name || '').toLowerCase();
-      return tourName.includes(qs) || expertNameRef.includes(qs);
-  });
+  // 1. Aktif Müşteri Sayısı (Turlardaki aktif katılımcılar veya kayıtlı müşteri kullanıcıları)
+  const totalActiveParticipants = activeTours.reduce((sum, t) => sum + (t.participants?.length || 0), 0);
+  const registeredCustomers = allUsers.filter(u => u.role === 'customer').length;
+  const activeCustomersCount = totalActiveParticipants > 0 ? totalActiveParticipants : registeredCustomers;
 
-  const calculateDaysLeft = (datesString) => {
-      try {
-          if (!datesString) return 'Aktif';
-          const match = datesString.toLowerCase().match(/(\d{1,2})\s+(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)\s+(\d{4})/);
-          if (match) {
-              const trMonths = {
-                  'ocak': 0, 'şubat': 1, 'mart': 2, 'nisan': 3, 'mayıs': 4, 'haziran': 5,
-                  'temmuz': 6, 'ağustos': 7, 'eylül': 8, 'ekim': 9, 'kasım': 10, 'aralık': 11
-              };
-              const targetDate = new Date(parseInt(match[3]), trMonths[match[2]], parseInt(match[1]));
-              const diffTime = targetDate - new Date();
-              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-              
-              if (diffDays > 0) return `${diffDays} gün kaldı`;
-              else if (diffDays === 0) return `Bugün başlıyor`;
-              else return `Devam ediyor`;
-          }
-          return 'Aktif';
-      } catch (e) {
-          return 'Aktif';
-      }
-  };
+  // 2. Aktif Personel Sayısı (Yönetici, Seyahat Uzmanı, Biletçi)
+  const activePersonnelCount = allUsers.filter(u => 
+    ['admin', 'expert', 'ticketing'].includes(u.role) && u.status !== 'Pasif'
+  ).length || 1;
+
+  // Kare İkon Butonları Konfigürasyonu
+  const actionTiles = [
+    {
+      id: 'active-ops',
+      title: 'Aktif Seyahatler',
+      icon: Compass,
+      color: '#2563eb',
+      bg: '#eff6ff',
+      border: '#dbeafe',
+      badge: `${activeTours.length}`,
+      badgeColor: '#2563eb',
+      badgeBg: '#eff6ff',
+      path: '/dashboard/admin-active-operations'
+    },
+    {
+      id: 'past-ops',
+      title: 'Geçmiş Seyahatler',
+      icon: ArchiveRestore,
+      color: '#d97706',
+      bg: '#fef3c7',
+      border: '#fde68a',
+      badge: `${pastTours.length}`,
+      badgeColor: '#d97706',
+      badgeBg: '#fef3c7',
+      path: '/dashboard/admin-past-operations'
+    },
+    {
+      id: 'create-tour',
+      title: 'Yeni Seyahat',
+      icon: PlusCircle,
+      color: '#D7147A',
+      bg: '#fdf2f8',
+      border: '#fbcfe8',
+      path: '/dashboard/create-tour'
+    },
+    {
+      id: 'users',
+      title: 'Kullanıcı Yönetimi',
+      icon: Users,
+      color: '#0284c7',
+      bg: '#f0f9ff',
+      border: '#bae6fd',
+      badge: `${allUsers.length}`,
+      badgeColor: '#0284c7',
+      badgeBg: '#f0f9ff',
+      path: '/dashboard/admin-users'
+    },
+    {
+      id: 'settings',
+      title: 'Sistem Ayarları',
+      icon: Settings,
+      color: '#475569',
+      bg: '#f1f5f9',
+      border: '#e2e8f0',
+      path: '/dashboard/admin-settings'
+    },
+    {
+      id: 'popular-routes',
+      title: 'Popüler Rotalar',
+      icon: Compass,
+      color: '#D7147A',
+      bg: '#FDF2F8',
+      border: '#F9BED8',
+      badge: '6 Vitrin',
+      badgeColor: '#D7147A',
+      badgeBg: '#FDF2F8',
+      path: '/dashboard/admin-popular-routes'
+    },
+    {
+      id: 'email-templates',
+      title: 'E-Posta Şablonları',
+      icon: Mail,
+      color: '#7c3aed',
+      bg: '#ede9fe',
+      border: '#ddd6fe',
+      path: '/dashboard/admin-email-templates'
+    },
+    {
+      id: 'whatsapp-templates',
+      title: 'WhatsApp Şablonları',
+      icon: MessageSquare,
+      color: '#16a34a',
+      bg: '#dcfce7',
+      border: '#bbf7d0',
+      path: '/dashboard/admin-whatsapp-templates'
+    },
+    {
+      id: 'currency',
+      title: 'Döviz & Kurlar',
+      icon: Banknote,
+      color: '#D7147A',
+      bg: '#FDF2F8',
+      border: '#FCE7F3',
+      path: '/dashboard/currency'
+    },
+    {
+      id: 'notifications',
+      title: 'Bildirim Merkezi',
+      icon: Bell,
+      color: '#dc2626',
+      bg: '#fef2f2',
+      border: '#fee2e2',
+      path: '/dashboard/notifications'
+    }
+  ];
 
   return (
-    <div style={{ paddingBottom: '90px' }}>
+    <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
       <Header title="Sistem Komuta Merkezi" />
-      
-      <div style={{ padding: '24px 16px' }}>
 
-        {/* ANALYTICS CARDS */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '32px' }}>
-            <div style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgba(59, 130, 246, 0.4)', position: 'relative', overflow: 'hidden' }}>
-                <Play size={40} style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.2 }} />
-                <div style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.9, marginBottom: '8px' }}>Aktif Seyahatler</div>
-                <div style={{ fontSize: '32px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {activeTours.length} <span style={{ fontSize: '14px', fontWeight: 'normal', opacity: 0.9 }}>Tur Açık</span>
-                </div>
-            </div>
+      <div style={{ padding: '16px' }}>
 
-            <div style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: 'white', padding: '20px', borderRadius: '16px', boxShadow: '0 10px 15px -3px rgba(16, 185, 129, 0.4)', position: 'relative', overflow: 'hidden' }}>
-                <CheckCircle2 size={40} style={{ position: 'absolute', right: '-10px', bottom: '-10px', opacity: 0.2 }} />
-                <div style={{ fontSize: '12px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.9, marginBottom: '8px' }}>Tamamlananlar</div>
-                <div style={{ fontSize: '32px', fontWeight: '900', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {pastTours.length} <span style={{ fontSize: '14px', fontWeight: 'normal', opacity: 0.9 }}>Arşivlendi</span>
-                </div>
+        {/* 1. ÜST YÖNETİCİ METRİK KARTLARI (2x2 Grid) */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: 'repeat(2, 1fr)', 
+          gap: '10px', 
+          marginBottom: '20px' 
+        }}>
+          
+          {/* Aktif Müşteri */}
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            padding: '14px 12px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '10px'
+          }}>
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '11px',
+              background: '#fdf2f8',
+              color: '#db2777',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <Users size={18} />
             </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', lineHeight: 1.1 }}>
+                {activeCustomersCount}
+              </div>
+              <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Aktif Müşteri
+              </div>
+            </div>
+          </div>
+
+          {/* Aktif Personel */}
+          <div 
+            onClick={() => navigate('/dashboard/admin-users')}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '14px 12px',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '11px',
+              background: '#f0f9ff',
+              color: '#0284c7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <UserCheck size={18} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', lineHeight: 1.1 }}>
+                {activePersonnelCount}
+              </div>
+              <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Aktif Personel
+              </div>
+            </div>
+          </div>
+
+          {/* Aktif Seyahat */}
+          <div 
+            onClick={() => navigate('/dashboard/admin-active-operations')}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '14px 12px',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '11px',
+              background: '#eff6ff',
+              color: '#2563eb',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <Compass size={18} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', lineHeight: 1.1 }}>
+                {activeTours.length}
+              </div>
+              <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Aktif Seyahat
+              </div>
+            </div>
+          </div>
+
+          {/* Tamamlanan Seyahat */}
+          <div 
+            onClick={() => navigate('/dashboard/admin-past-operations')}
+            style={{
+              background: 'white',
+              borderRadius: '16px',
+              padding: '14px 12px',
+              border: '1px solid #e2e8f0',
+              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              cursor: 'pointer'
+            }}
+          >
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '11px',
+              background: '#f0fdf4',
+              color: '#16a34a',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0
+            }}>
+              <CheckCircle2 size={18} />
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '18px', fontWeight: '800', color: '#1e293b', lineHeight: 1.1 }}>
+                {pastTours.length}
+              </div>
+              <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '600', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Tamamlanan
+              </div>
+            </div>
+          </div>
+
         </div>
 
-        {/* ACTIVE EXPERTS TOURS REPORT */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', gap: '12px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, color: 'var(--text-main)', flex: 1 }}>Aktif Temsilci Operasyonları</h2>
-            <div style={{ display: 'flex', alignItems: 'center', background: 'white', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '6px 10px', width: '130px', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
-                <Search size={14} color="#94a3b8" />
-                <input 
-                    type="text" 
-                    placeholder="Tur ara..." 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '12px', paddingLeft: '6px', width: '100%', color: 'var(--text-main)' }}
-                />
+        {/* 2. ONESIGNAL TOPLU PUSH BİLDİRİMİ KISAYOLU */}
+        <div 
+          onClick={() => navigate('/dashboard/broadcast')}
+          style={{
+            background: 'linear-gradient(135deg, #FDF2F8 0%, #ffffff 100%)',
+            border: '1.5px solid #F9BED8',
+            borderRadius: '16px',
+            padding: '12px 14px',
+            marginBottom: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(215, 20, 122, 0.08)',
+            transition: 'transform 0.15s ease'
+          }}
+          onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+          onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+              color: 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: '0 2px 8px rgba(215, 20, 122, 0.25)'
+            }}>
+              <Megaphone size={18} />
             </div>
+            <div>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
+                Toplu Push & Web Bildirimi Gönder
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                Tüm kullanıcılara masaüstü ve mobil ekran bildirimi yayınlayın
+              </div>
+            </div>
+          </div>
+          <ChevronRight size={16} color="#D7147A" />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {filteredActiveTours.length === 0 ? (
-                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', background: '#f8fafc', borderRadius: '12px' }}>Arama kriterlerine uygun aktif tur bulunamadı.</div>
-            ) : (
-                filteredActiveTours.map((tour, idx) => {
-                    const expertNameReference = tour.guideName || tour.expert?.name;
-                    const expertUser = allUsers.find(u => u.name === expertNameReference);
-                    const representativeAvatar = expertUser?.avatar;
+        {/* 3. KARE İKON BUTONLARI KONTROL PANELİ (3x3 Grid) */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '10px'
+        }}>
+          {actionTiles.map((tile) => {
+            const IconComponent = tile.icon;
+            return (
+              <div
+                key={tile.id}
+                onClick={() => navigate(tile.path)}
+                style={{
+                  aspectRatio: '1',
+                  background: 'white',
+                  borderRadius: '18px',
+                  border: '1px solid #e2e8f0',
+                  boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '8px 4px',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+                  userSelect: 'none',
+                  overflow: 'hidden'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.transform = 'translateY(-3px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(15, 23, 42, 0.08)';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(15, 23, 42, 0.03)';
+                  e.currentTarget.style.borderColor = '#e2e8f0';
+                }}
+                onMouseDown={e => {
+                  e.currentTarget.style.transform = 'scale(0.95)';
+                }}
+                onMouseUp={e => {
+                  e.currentTarget.style.transform = 'translateY(-3px)';
+                }}
+              >
+                {/* Rozet / Sayaç (Varsa) */}
+                {tile.badge && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '6px',
+                    right: '6px',
+                    background: tile.badgeBg,
+                    color: tile.badgeColor,
+                    fontSize: '9.5px',
+                    fontWeight: '800',
+                    padding: '1.5px 5px',
+                    borderRadius: '8px',
+                    border: `1px solid ${tile.border}`,
+                    lineHeight: 1
+                  }}>
+                    {tile.badge}
+                  </div>
+                )}
 
-                    return (
-                    <div key={tour.id || idx} style={{ background: 'white', borderRadius: '16px', overflow: 'hidden', border: '1px solid #e2e8f0', boxShadow: '0 2px 4px rgba(0,0,0,0.02)' }}>
-                        <div style={{ height: '110px', width: '100%', position: 'relative' }}>
-                            <img src={tour.avatar} alt="Tour" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }}></div>
-                            <div style={{ position: 'absolute', bottom: '12px', left: '16px', right: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                <div style={{ color: 'white', fontWeight: 'bold', fontSize: '15px', width: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.name}</div>
-                                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                                    {calculateDaysAndNights(tour.dates) && (
-                                        <div style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
-                                            {calculateDaysAndNights(tour.dates)}
-                                        </div>
-                                    )}
-                                    <div style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', color: 'white', fontSize: '11px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.3)', whiteSpace: 'nowrap' }}>
-                                        {calculateDaysLeft(tour.dates)}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div style={{ padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <div style={{ width: '40px', height: '40px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #e2e8f0', background: '#f8fafc', flexShrink: 0 }}>
-                                    {representativeAvatar || (tour.expert?.avatar) ? (
-                                        <img src={representativeAvatar || tour.expert?.avatar} alt="Uzman" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                    ) : (
-                                        <UserCircle2 size={36} color="#94a3b8" style={{ marginTop: '2px' }} />
-                                    )}
-                                </div>
-                                <div>
-                                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '2px' }}>Yetkili Temsilci</div>
-                                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-main)' }}>{expertNameReference || "Bilinmiyor"}</div>
-                                </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                                <button 
-                                    onClick={() => setTourStatus(tour.id, 'past')}
-                                    style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-                                >
-                                    <ArchiveRestore size={16} /> Bitir
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Admin Action Bar */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', padding: '0 16px 16px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
-                            <div onClick={() => navigate('/dashboard/program-edit/' + tour.id)} style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', transition: 'background 0.2s', border: '1px solid #e2e8f0' }}>
-                              <Edit3 size={16} className="text-primary" />
-                              <span style={{fontWeight: '600', color: 'var(--text-main)'}}>Program</span>
-                            </div>
-                            <div onClick={() => navigate('/dashboard/participants/' + tour.id)} style={{ background: '#f8fafc', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer', transition: 'background 0.2s', border: '1px solid #e2e8f0' }}>
-                              <Users size={16} className="text-primary" />
-                              <span style={{fontWeight: '600', color: 'var(--text-main)'}}>Katılımcılar ({tour.participants?.length || 0})</span>
-                            </div>
-                        </div>
-                    </div>
-                    );
-                })
-            )}
-        </div>
-
-        {/* SETTINGS CARD */}
-        <div style={{ marginTop: '48px', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 4px 0', color: 'var(--text-main)' }}>Sistem Yönetim Araçları</h2>
-            <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0 }}>Görünüm, API ve Raporlama modüllerini aşağıdan yapılandırın.</p>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <div 
-                onClick={() => navigate('admin-settings')}
-                style={{ padding: '20px', background: '#f8fafc', borderRadius: '16px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ background: 'white', padding: '12px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <Settings color="#3b82f6" size={24} />
-                    </div>
-                    <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '16px', color: 'var(--text-main)', marginBottom: '4px' }}>Sistem Ayarları</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Duyuru görseli, Harita API Key...</div>
-                    </div>
+                {/* İkon Rozeti */}
+                <div style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '12px',
+                  background: tile.bg,
+                  color: tile.color,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '10px',
+                  border: `1px solid ${tile.border}`,
+                  transition: 'transform 0.15s',
+                  flexShrink: 0
+                }}>
+                  <IconComponent size={20} strokeWidth={2.2} />
                 </div>
-                <ArrowRight size={20} color="#94a3b8" />
-            </div>
 
-            <div 
-                onClick={() => navigate('admin-users')}
-                style={{ padding: '20px', background: '#fff7ed', borderRadius: '16px', border: '1px solid #ffedd5', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ background: 'white', padding: '12px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <Users color="#f97316" size={24} />
-                    </div>
-                    <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '16px', color: 'var(--text-main)', marginBottom: '4px' }}>Yetkilendirme ve Kullanıcılar</div>
-                        <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Sistem erişimlerini ve uzmanları yönetin</div>
-                    </div>
-                </div>
-                <ArrowRight size={20} color="#f97316" />
-            </div>
-
-            <div 
-                onClick={() => navigate('admin-past-operations')}
-                style={{ padding: '20px', background: '#f0fdf6', borderRadius: '16px', border: '1px solid #bbf7d0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', marginBottom: '32px' }}
-            >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ background: 'white', padding: '12px', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
-                        <ArchiveRestore color="#10b981" size={24} />
-                    </div>
-                    <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#065f46', marginBottom: '4px' }}>Tamamlanan Operasyonlar Raporu</div>
-                        <div style={{ fontSize: '12px', color: '#166534', opacity: 0.8 }}>Müşteri yorumları, puanlar ve arşivlenmiş veriler...</div>
-                    </div>
-                </div>
-                <ArrowRight size={20} color="#10b981" />
-            </div>
+                {/* Buton Başlığı (Tek Satır & Ekrana Göre Uyumlu) */}
+                <span style={{
+                  fontSize: 'clamp(8.5px, 2.35vw, 10.5px)',
+                  fontWeight: '700',
+                  color: '#1e293b',
+                  textAlign: 'center',
+                  lineHeight: 1.15,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  width: '100%',
+                  padding: '0 4px',
+                  letterSpacing: '-0.3px',
+                  display: 'block'
+                }}>
+                  {tile.title}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
       </div>

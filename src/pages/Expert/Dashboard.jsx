@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Calendar, Edit3, Eye, MessageCircle, Users, Megaphone, X, Send, Plus, CheckCircle2, Trash2, Timer } from 'lucide-react';
+import { MapPin, Calendar, Edit3, Eye, MessageCircle, Users, Megaphone, X, Send, Plus, Trash2, Timer, RotateCcw, Phone, ChevronRight, Info, CheckCircle2 } from 'lucide-react';
 import Header from '../../components/Header';
-import { useTourStore, calculateDaysAndNights } from '../../store/tourStore';
+import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive, isTourPast } from '../../store/tourStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useAuthStore } from '../../store/authStore';
+import { useUserStore } from '../../store/userStore';
 import ExpertRollCallPanel from '../../components/ExpertRollCallPanel';
 
 export default function ExpertDashboard() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
+  const { users: allUsers } = useUserStore();
   const { tours, editTour, startRollCall, endRollCall, setTourStatus } = useTourStore();
   const { addNotification } = useNotificationStore();
   const myTours = tours.filter(t => 
@@ -19,8 +21,8 @@ export default function ExpertDashboard() {
       (t.expert2?.name === user?.name) || 
       (t.expert2?.email === user?.email)
   );
-  const activeTours = myTours.filter(t => t.status === 'active');
-  const pastTours = myTours.filter(t => t.status === 'past');
+  const activeTours = myTours.filter(isTourActive);
+  const pastTours = myTours.filter(isTourPast);
 
   const [dynamicTitle, setDynamicTitle] = useState("Konum alınıyor...");
   const clockRef = useRef(null);
@@ -28,34 +30,29 @@ export default function ExpertDashboard() {
   const [broadcastTourId, setBroadcastTourId] = useState(null);
   const [broadcastMsg, setBroadcastMsg] = useState("");
   const [popupMsg, setPopupMsg] = useState({ show: false, type: '', title: '', text: '' });
+  const [expertModalData, setExpertModalData] = useState(null);
 
   const [promptTourId, setPromptTourId] = useState(null);
   const [rollCallDuration, setRollCallDuration] = useState(3);
+  const [activeRollCallTourId, setActiveRollCallTourId] = useState(null);
   const [missingListModal, setMissingListModal] = useState({ show: false, tourId: null, missing: [] });
 
-  const [completeTourPromptId, setCompleteTourPromptId] = useState(null);
-
   const handleStartRollCallPrompt = (tourId) => {
+      const tour = tours.find(t => t.id === tourId);
+      if (tour?.rollCall?.active && tour.rollCall.endTime > Date.now()) {
+          setActiveRollCallTourId(tourId);
+          return;
+      }
       setPromptTourId(tourId);
       setRollCallDuration(3);
   };
 
-  const handleCompleteTourPrompt = (tourId) => {
-      setCompleteTourPromptId(tourId);
-  };
-
-  const confirmCompleteTour = async () => {
-      if (completeTourPromptId) {
-          await setTourStatus(completeTourPromptId, 'past');
-          setCompleteTourPromptId(null);
-          setPopupMsg({ show: true, type: 'success', title: 'Tamamlandı!', text: 'Seyahat başarıyla tamamlandı ve geçmiş turlara atıldı.' });
-      }
-  };
-
   const confirmStartRollCall = () => {
       if (promptTourId && rollCallDuration > 0) {
-          startRollCall(promptTourId, rollCallDuration);
+          const tId = promptTourId;
+          startRollCall(tId, rollCallDuration);
           setPromptTourId(null);
+          setActiveRollCallTourId(tId);
       }
   };
 
@@ -160,102 +157,456 @@ export default function ExpertDashboard() {
       
       <div style={{ padding: '0 16px', paddingBottom: '32px' }}>
         
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '16px', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0' }}>Atandığım Aktif Turlar</h2>
-            <button onClick={() => navigate('/dashboard/create-tour')} style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', transition: 'transform 0.2s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
-                <Plus size={16} strokeWidth={3} /> Yeni Tur Ekle
+        <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', marginTop: '8px', marginBottom: '16px', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: '700', margin: '0', color: 'var(--text-main)', letterSpacing: '-0.2px' }}>Atandığım Aktif Turlar</h2>
+            <button onClick={() => navigate('/dashboard/create-tour')} style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '16px', fontSize: '12px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer', boxShadow: '0 2px 6px rgba(215, 20, 122, 0.25)', transition: 'transform 0.2s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.03)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                <Plus size={14} strokeWidth={3} /> Yeni Tur Ekle
             </button>
         </div>
         
         {activeTours.length === 0 && (
-           <p className="text-muted" style={{ fontSize: '13px' }}>Şu an atandığınız aktif bir tur bulunmuyor.</p>
+           <p className="text-muted" style={{ fontSize: '13px', padding: '8px 4px' }}>Şu an atandığınız aktif bir tur bulunmuyor.</p>
         )}
 
-        {activeTours.map(tour => (
-            <div key={tour.id} className="card" style={{ marginBottom: '24px' }}>
-              <div style={{ height: '140px', background: 'var(--primary-light)', borderRadius: '8px', marginBottom: '12px', overflow: 'hidden', position: 'relative' }}>
+        {activeTours.map(tour => {
+            const daysNights = calculateDaysAndNights(tour.dates);
+            const { expert1, expert2 } = getTourExperts(tour, allUsers, user);
+            return (
+            <div key={tour.id} style={{ 
+                background: '#ffffff', 
+                borderRadius: '16px', 
+                border: '1px solid #edf2f7', 
+                boxShadow: '0 4px 18px rgba(0,0,0,0.04)', 
+                overflow: 'hidden', 
+                marginBottom: '20px',
+                transition: 'transform 0.2s, box-shadow 0.2s'
+            }}>
+              {/* Top Full-Bleed Cover Image with Frosted Action Bar */}
+              <div style={{ height: '160px', position: 'relative', width: '100%', overflow: 'hidden', background: 'var(--primary-light)' }}>
                 <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <div style={{ position: 'absolute', top: '8px', left: '8px', background: 'rgba(0,0,0,0.6)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
-                   UZMANI BENİM
-                </div>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>{tour.name}</h2>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <div onClick={() => handleStartRollCallPrompt(tour.id)} style={{ cursor: 'pointer', background: '#fdf2f8', padding: '6px', borderRadius: '6px' }} title="Sayım Başlat">
-                       <Timer size={16} className="text-primary" />
-                    </div>
-                    <div onClick={() => handleCompleteTourPrompt(tour.id)} style={{ cursor: 'pointer', background: '#ecfdf5', padding: '6px', borderRadius: '6px' }} title="Seyahati Tamamla">
-                       <CheckCircle2 size={16} style={{ color: '#10b981' }} />
-                    </div>
-                    <div onClick={() => navigate(`/dashboard/create-tour/${tour.id}`)} style={{ cursor: 'pointer', background: '#f1f5f9', padding: '6px', borderRadius: '6px' }} title="Turu Düzenle">
-                       <Edit3 size={16} className="text-primary" />
-                    </div>
-                </div>
-              </div>
+                
+                {/* Subtle Gradient Shadow for Readability */}
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 45%, rgba(0,0,0,0.4) 100%)', pointerEvents: 'none' }} />
 
-              {tour.rollCall?.active && tour.rollCall.endTime > Date.now() && (
-                  <ExpertRollCallPanel tour={tour} onAllPresent={handleAllPresent} onTimeUpMissing={handleTimeUpMissing} />
-              )}
-
-              <div className="flex-row text-muted" style={{ marginBottom: '6px', fontSize: '14px' }}>
-                <MapPin size={16} /> {tour.destinations}
-              </div>
-              <div className="flex-row text-muted" style={{ marginBottom: '16px', fontSize: '14px', justifyContent: 'space-between', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Calendar size={16} /> {tour.dates}
+                {/* Top Left Badge: Pure Overlapping Circular Profile Photos */}
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpertModalData({ expert1, expert2 });
+                  }}
+                  title="Seyahat Uzmanlarını Görüntüle"
+                  style={{ 
+                      position: 'absolute', 
+                      top: '10px', 
+                      left: '10px', 
+                      background: 'rgba(255, 255, 255, 0.95)', 
+                      backdropFilter: 'blur(8px)', 
+                      padding: '3px', 
+                      borderRadius: '30px', 
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      cursor: 'pointer', 
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 
+                      zIndex: 2 
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.15)'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 2, background: 'var(--primary-light)' }}>
+                      <img 
+                        src={expert1.avatar} 
+                        alt={expert1.name || "Uzman 1"} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                    </div>
+                    {expert2 && (
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', marginLeft: '-10px', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 1, background: '#eff6ff' }}>
+                        <img 
+                          src={expert2.avatar} 
+                          alt={expert2.name || "Uzman 2"} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
-                {calculateDaysAndNights(tour.dates) && (
-                    <div style={{ background: '#f8fafc', color: '#64748b', fontSize: '12px', fontWeight: 'bold', padding: '4px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                        {calculateDaysAndNights(tour.dates)}
+
+                {/* Top Right Quick Actions (Edit) */}
+                <div style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '6px', zIndex: 2 }}>
+                    <div 
+                      onClick={() => navigate(`/dashboard/create-tour/${tour.id}`)} 
+                      style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', transition: 'transform 0.15s' }} 
+                      title="Turu Düzenle"
+                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.08)'}
+                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                       <Edit3 size={15} color="#475569" />
+                    </div>
+                </div>
+
+                {/* Bottom Overlay Info inside cover (if destinations available) */}
+                {tour.destinations && tour.destinations !== 'Belirtilmedi' && (
+                    <div style={{ position: 'absolute', bottom: '10px', left: '12px', display: 'flex', alignItems: 'center', gap: '4px', color: '#ffffff', fontSize: '11.5px', fontWeight: '600', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                       <MapPin size={13} color="#ffffff" />
+                       <span>{tour.destinations}</span>
                     </div>
                 )}
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                <div onClick={() => navigate('/dashboard/program-edit/' + tour.id)} style={{ background: '#f1f5f9', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}>
-                  <Edit3 size={16} className="text-primary" />
-                  <span style={{fontWeight: '600', color: 'var(--text-main)'}}>Programı Düzenle</span>
+              {/* Card Body Content */}
+              <div style={{ padding: '14px 16px 16px 16px' }}>
+                
+                {/* Tour Title */}
+                <h2 style={{ fontSize: '13.5px', fontWeight: '700', margin: '0 0 8px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.4', letterSpacing: '-0.2px' }}>
+                    {tour.name}
+                </h2>
+
+                {/* Active Live Sayım Indicator Banner */}
+                {tour.rollCall?.active && tour.rollCall.endTime > Date.now() && (
+                    <div 
+                      onClick={() => setActiveRollCallTourId(tour.id)} 
+                      style={{ 
+                          background: 'linear-gradient(135deg, #FDF2F8, #fef2f2)', 
+                          border: '1px solid #F9BED8', 
+                          borderRadius: '12px', 
+                          padding: '9px 12px', 
+                          marginBottom: '10px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(215, 20, 122, 0.08)',
+                          transition: 'all 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.01)'}
+                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#D7147A', boxShadow: '0 0 0 3px rgba(215, 20, 122, 0.2)' }} />
+                            <div>
+                                <div style={{ fontSize: '12px', fontWeight: '700', color: '#8E0C51', lineHeight: 1.2 }}>Canlı Sayım Sürüyor</div>
+                                <div style={{ fontSize: '10.5px', color: '#B01064' }}>
+                                    {tour.rollCall.attendees?.length || 0} / {tour.participants?.length || 0} Kişi Onayladı
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#D7147A', color: 'white', padding: '5px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: '700' }}>
+                            <Timer size={13} /> Sayıma Git
+                        </div>
+                    </div>
+                )}
+
+                {/* Date & Duration Strip */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 10px', borderRadius: '10px', border: '1px solid #f1f5f9', marginBottom: '12px', gap: '8px', overflow: 'hidden', flexWrap: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: 'clamp(10px, 2.9vw, 12px)', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+                      <Calendar size={13} color="var(--primary)" style={{ flexShrink: 0 }} />
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.dates}</span>
+                  </div>
+                  {daysNights && (
+                      <span style={{ background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 'clamp(9.5px, 2.7vw, 11px)', fontWeight: '700', padding: '3px 7px', borderRadius: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {daysNights}
+                      </span>
+                  )}
                 </div>
-                <div onClick={() => navigate('/dashboard/participants/' + tour.id)} style={{ background: '#f1f5f9', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}>
-                  <Users size={16} className="text-primary" />
-                  <span style={{fontWeight: '600', color: 'var(--text-main)'}}>Katılımcılar ({tour.participants?.length || 0})</span>
+
+                {/* Side-by-Side 5 Harmonic Color-Coded Square Action Boxes */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                  <button 
+                    onClick={() => navigate('/dashboard/program-edit/' + tour.id)} 
+                    title="Programı Düzenle"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(71,85,105,0.15)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    <Edit3 size={19} color="#475569" strokeWidth={2.2} />
+                  </button>
+
+                  <button 
+                    onClick={() => navigate('/dashboard/participants/' + tour.id)} 
+                    title={`Katılımcılar (${tour.participants?.length || 0})`}
+                    style={{ aspectRatio: '1', width: '100%', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none', position: 'relative' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#93c5fd'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(37,99,235,0.18)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#dbeafe'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    <Users size={19} color="#2563eb" strokeWidth={2.2} />
+                    {tour.participants && tour.participants.length > 0 && (
+                      <span style={{ 
+                        position: 'absolute', 
+                        top: '-4px', 
+                        right: '-4px', 
+                        background: '#2563eb', 
+                        color: 'white', 
+                        fontSize: '10px', 
+                        fontWeight: '800', 
+                        padding: '1px 5px', 
+                        borderRadius: '10px',
+                        boxShadow: '0 2px 4px rgba(37,99,235,0.3)'
+                      }}>
+                        {tour.participants.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button 
+                    onClick={() => navigate(`/dashboard/chat/${tour.id}`)} 
+                    title="Gruba Sohbet"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f0fdf4', border: '1px solid #dcfce7', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#dcfce7'; e.currentTarget.style.borderColor = '#86efac'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(22,163,74,0.18)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#f0fdf4'; e.currentTarget.style.borderColor = '#dcfce7'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    <MessageCircle size={19} color="#16a34a" strokeWidth={2.2} />
+                  </button>
+
+                  <button 
+                    onClick={() => setBroadcastTourId(tour.id)} 
+                    title="Acil Anons & Bildirim"
+                    style={{ aspectRatio: '1', width: '100%', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(239,68,68,0.2)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fee2e2'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    <Megaphone size={19} color="#ef4444" strokeWidth={2.2} />
+                  </button>
+
+                  <button 
+                    onClick={() => handleStartRollCallPrompt(tour.id)} 
+                    title="Yoklama / Sayım Başlat"
+                    style={{ aspectRatio: '1', width: '100%', background: '#FDF2F8', border: '1px solid #FCE7F3', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#FCE7F3'; e.currentTarget.style.borderColor = '#E54B98'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(215, 20, 122,0.2)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#FDF2F8'; e.currentTarget.style.borderColor = '#FCE7F3'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    <Timer size={19} color="#D7147A" strokeWidth={2.2} />
+                  </button>
                 </div>
-                <div onClick={() => navigate(`/dashboard/chat/${tour.id}`)} style={{ background: '#f1f5f9', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}>
-                  <MessageCircle size={16} className="text-primary" />
-                  <span style={{fontWeight: '600', color: 'var(--text-main)'}}>Gruba Sohbet</span>
-                </div>
-                <div onClick={() => setBroadcastTourId(tour.id)} style={{ background: '#f1f5f9', padding: '10px', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', cursor: 'pointer', transition: 'background 0.2s' }} onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'} onMouseLeave={e => e.currentTarget.style.background = '#f1f5f9'}>
-                  <Megaphone size={16} style={{ color: '#d97706' }} />
-                  <span style={{fontWeight: '600', color: '#d97706'}}>Acil Anons</span>
-                </div>
+
               </div>
             </div>
-        ))}
+            );
+        })}
 
-        <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginTop: '24px', marginBottom: '12px' }}>Geçmiş Turlarım</h2>
+        {/* Past Tours Header Card */}
+        <div className="card" style={{ padding: '10px 14px', marginTop: '20px', marginBottom: '12px', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 2px 8px rgba(0,0,0,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <h2 style={{ fontSize: '14px', fontWeight: '700', margin: '0', color: 'var(--text-main)', letterSpacing: '-0.2px' }}>
+              Geçmiş Turlarım {pastTours.length > 0 && <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>({pastTours.length})</span>}
+            </h2>
+            {pastTours.length > 3 && (
+              <button 
+                onClick={() => navigate('/dashboard/past-tours')}
+                style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px', padding: 0 }}
+              >
+                Tümünü Gör ({pastTours.length}) <ChevronRight size={14} />
+              </button>
+            )}
+        </div>
         
         {pastTours.length === 0 && (
-           <p className="text-muted" style={{ fontSize: '13px' }}>Henüz geçmiş bir turunuz bulunmuyor.</p>
+           <p className="text-muted" style={{ fontSize: '13px', padding: '0 4px' }}>Henüz geçmiş bir turunuz bulunmuyor.</p>
         )}
 
-        {pastTours.map(tour => (
-            <div key={tour.id} className="card" style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '12px', opacity: 0.9 }}>
-              <div style={{ width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
-                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '4px' }}>{tour.name}</h3>
-                <p className="text-muted" style={{ fontSize: '12px', marginBottom: '10px' }}>{tour.dates}</p>
+        {/* Display Only Latest 3 Past Tours with Active Tour Card Design */}
+        {pastTours.slice(0, 3).map(tour => {
+            const pastDaysNights = calculateDaysAndNights(tour.dates);
+            const { expert1: pastExp1, expert2: pastExp2 } = getTourExperts(tour, allUsers, user);
+            return (
+            <div 
+              key={tour.id} 
+              style={{ 
+                background: '#ffffff', 
+                borderRadius: '16px', 
+                border: '1px solid #edf2f7', 
+                boxShadow: '0 4px 18px rgba(0,0,0,0.04)', 
+                overflow: 'hidden', 
+                marginBottom: '20px',
+                transition: 'transform 0.2s, box-shadow 0.2s'
+              }}
+            >
+              {/* Top Full-Bleed Cover Image */}
+              <div style={{ height: '160px', position: 'relative', width: '100%', overflow: 'hidden', background: '#f1f5f9' }}>
+                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(100%)', opacity: 0.92 }} />
                 
-                <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={() => navigate('/dashboard/past-tour/' + tour.id)} style={{ padding: '6px 0', fontSize: '12px', flex: 1, border: '1px solid var(--border-color)', background: 'var(--surface)', color: 'var(--text-main)', borderRadius: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer' }}>
-                        <Eye size={14} /> Analizleri Görüntüle
-                    </button>
+                {/* Subtle Gradient Shadow */}
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 45%, rgba(0,0,0,0.4) 100%)', pointerEvents: 'none' }} />
+
+                {/* Top Left Badge: Pure Overlapping Circular Profile Photos */}
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpertModalData({ expert1: pastExp1, expert2: pastExp2 });
+                  }}
+                  title="Seyahat Uzmanlarını Görüntüle"
+                  style={{ 
+                      position: 'absolute', 
+                      top: '10px', 
+                      left: '10px', 
+                      background: 'rgba(255, 255, 255, 0.95)', 
+                      backdropFilter: 'blur(8px)', 
+                      padding: '3px', 
+                      borderRadius: '30px', 
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.15)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      cursor: 'pointer', 
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', 
+                      zIndex: 2 
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.08)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = '0 2px 10px rgba(0,0,0,0.15)'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 2, background: 'var(--primary-light)' }}>
+                      <img 
+                        src={pastExp1.avatar} 
+                        alt={pastExp1.name || "Uzman 1"} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      />
+                    </div>
+                    {pastExp2 && (
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', marginLeft: '-10px', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 1, background: '#eff6ff' }}>
+                        <img 
+                          src={pastExp2.avatar} 
+                          alt={pastExp2.name || "Uzman 2"} 
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Top Right Quick Status Badge */}
+                <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(6px)', color: '#ffffff', fontSize: '11px', fontWeight: '700', padding: '4px 10px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '5px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 2 }}>
+                  <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#94a3b8' }}></span>
+                  Geçmiş Tur
+                </div>
+
+                {/* Destination Overlay */}
+                {tour.destinations && tour.destinations !== 'Belirtilmedi' && (
+                    <div style={{ position: 'absolute', bottom: '10px', left: '12px', display: 'flex', alignItems: 'center', gap: '4px', color: '#ffffff', fontSize: '11.5px', fontWeight: '600', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>
+                       <MapPin size={13} color="#ffffff" />
+                       <span>{tour.destinations}</span>
+                    </div>
+                )}
+              </div>
+
+              {/* Card Body */}
+              <div style={{ padding: '14px 16px 16px 16px' }}>
+                <h2 style={{ fontSize: '13.5px', fontWeight: '700', margin: '0 0 8px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.4', letterSpacing: '-0.2px' }}>
+                    {tour.name}
+                </h2>
+
+                {/* Date & Duration Strip (Single line responsive) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 10px', borderRadius: '10px', border: '1px solid #f1f5f9', marginBottom: '12px', gap: '8px', overflow: 'hidden', flexWrap: 'nowrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: 'clamp(10px, 2.9vw, 12px)', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+                      <Calendar size={13} color="#94a3b8" style={{ flexShrink: 0 }} />
+                      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.dates}</span>
+                  </div>
+                  {pastDaysNights && (
+                      <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: 'clamp(9.5px, 2.7vw, 11px)', fontWeight: '700', padding: '3px 7px', borderRadius: '6px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          {pastDaysNights}
+                      </span>
+                  )}
+                </div>
+
+                {/* Side-by-Side 5 Action Boxes (Only Eye Active, others Passive) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '8px' }}>
+                  {/* 1. Analizler (AKTİF) */}
+                  <button 
+                    onClick={() => navigate('/dashboard/past-tour/' + tour.id)}
+                    title="Analizler & Puanlar"
+                    style={{ aspectRatio: '1', width: '100%', background: '#eff6ff', border: '1px solid #dbeafe', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
+                    onMouseEnter={e => { e.currentTarget.style.background = '#dbeafe'; e.currentTarget.style.borderColor = '#93c5fd'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(37,99,235,0.18)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = '#eff6ff'; e.currentTarget.style.borderColor = '#dbeafe'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    <Eye size={19} color="#2563eb" strokeWidth={2.2} />
+                  </button>
+
+                  {/* 2. Katılımcılar (PASİF) */}
+                  <button 
+                    disabled
+                    title="Katılımcılar (Pasif)"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', opacity: 0.55, pointerEvents: 'none', outline: 'none', position: 'relative' }}
+                  >
+                    <Users size={19} color="#94a3b8" strokeWidth={2} />
+                    {tour.participants && tour.participants.length > 0 && (
+                      <span style={{ 
+                        position: 'absolute', 
+                        top: '-4px', 
+                        right: '-4px', 
+                        background: '#cbd5e1', 
+                        color: '#475569', 
+                        fontSize: '10px', 
+                        fontWeight: '800', 
+                        padding: '1px 5px', 
+                        borderRadius: '10px'
+                      }}>
+                        {tour.participants.length}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* 3. Tur Programı (PASİF) */}
+                  <button 
+                    disabled
+                    title="Tur Programı (Pasif)"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', opacity: 0.55, pointerEvents: 'none', outline: 'none' }}
+                  >
+                    <Info size={19} color="#94a3b8" strokeWidth={2} />
+                  </button>
+
+                  {/* 4. Sohbet Geçmişi (PASİF) */}
+                  <button 
+                    disabled
+                    title="Sohbet (Pasif)"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', opacity: 0.55, pointerEvents: 'none', outline: 'none' }}
+                  >
+                    <MessageCircle size={19} color="#94a3b8" strokeWidth={2} />
+                  </button>
+
+                  {/* 5. Sayım / Yoklama (PASİF - Tekrar Aktif Etme Yok) */}
+                  <button 
+                    disabled
+                    title="Sayım (Pasif)"
+                    style={{ aspectRatio: '1', width: '100%', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'default', opacity: 0.55, pointerEvents: 'none', outline: 'none' }}
+                  >
+                    <Timer size={19} color="#94a3b8" strokeWidth={2} />
+                  </button>
+                </div>
+
               </div>
             </div>
-        ))}
+            );
+        })}
+
+        {/* View All Past Tours Button if more than 3 */}
+        {pastTours.length > 3 && (
+          <button 
+            onClick={() => navigate('/dashboard/past-tours')}
+            style={{ 
+              width: '100%', 
+              padding: '12px', 
+              background: '#ffffff', 
+              border: '1px dashed #cbd5e1', 
+              borderRadius: '14px', 
+              color: 'var(--primary)', 
+              fontSize: '12.5px', 
+              fontWeight: '700', 
+              cursor: 'pointer', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '6px',
+              marginTop: '4px',
+              marginBottom: '16px',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = 'var(--primary-light)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#ffffff'; }}
+          >
+            Tüm Geçmiş Turları Görüntüle ({pastTours.length} Tur) <ChevronRight size={15} />
+          </button>
+        )}
 
       </div>
 
@@ -298,25 +649,61 @@ export default function ExpertDashboard() {
 
       {promptTourId && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-            <div className="card" style={{ width: '100%', maxWidth: '320px', padding: '24px', animation: 'scaleUp 0.2s ease-out', position: 'relative' }}>
+            <div className="card" style={{ width: '100%', maxWidth: '330px', padding: '20px 18px', animation: 'scaleUp 0.2s ease-out', position: 'relative', borderRadius: '20px' }}>
                 <div onClick={() => setPromptTourId(null)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                    <X size={20} />
+                    <X size={18} />
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', color: 'var(--primary)' }}>
-                    <Timer size={24} />
-                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>Sayım Süresi</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', color: 'var(--primary)' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                        <Timer size={18} />
+                    </div>
+                    <h2 style={{ fontSize: '15px', fontWeight: '800', margin: 0 }}>Sayım & Yoklama</h2>
                 </div>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px' }}>Yoklama için kaç dakika süre vermek istiyorsunuz?</p>
-                <input 
-                    type="number" 
-                    value={rollCallDuration} 
-                    onChange={e => setRollCallDuration(parseInt(e.target.value) || 0)}
-                    className="input-field"
-                    style={{ width: '100%', padding: '12px', boxSizing: 'border-box', marginBottom: '20px', borderRadius: '8px', border: '1px solid var(--border-color)', fontSize: '16px', textAlign: 'center' }}
-                    min="1" max="60"
-                />
-                <button onClick={confirmStartRollCall} className="btn-primary" style={{ width: '100%', padding: '12px', borderRadius: '8px' }}>
-                     Başlat
+                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.4 }}>
+                    Yoklama süresini belirleyin. Katılımcıların cihazlarına buradayım bildirimi gönderilecektir:
+                </p>
+
+                {/* Quick Presets */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginBottom: '12px' }}>
+                    {[1, 2, 3, 5].map(mins => (
+                        <button
+                            key={mins}
+                            type="button"
+                            onClick={() => setRollCallDuration(mins)}
+                            style={{
+                                padding: '8px 4px',
+                                borderRadius: '8px',
+                                border: rollCallDuration === mins ? '1.5px solid var(--primary)' : '1px solid #e2e8f0',
+                                background: rollCallDuration === mins ? 'var(--primary-light)' : '#f8fafc',
+                                color: rollCallDuration === mins ? 'var(--primary)' : 'var(--text-main)',
+                                fontSize: '12px',
+                                fontWeight: '700',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s'
+                            }}
+                        >
+                            {mins} Dk
+                        </button>
+                    ))}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>Özel Süre (Dk):</span>
+                    <input 
+                        type="number" 
+                        value={rollCallDuration} 
+                        onChange={e => setRollCallDuration(Math.max(1, parseInt(e.target.value) || 1))}
+                        style={{ flex: 1, padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: '700', textAlign: 'center', outline: 'none', background: '#f8fafc' }}
+                        min="1" max="60"
+                    />
+                </div>
+
+                <button 
+                    onClick={confirmStartRollCall} 
+                    className="btn-primary" 
+                    style={{ width: '100%', padding: '11px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                >
+                     <Timer size={15} /> Sayımı Başlat
                 </button>
             </div>
         </div>
@@ -350,29 +737,61 @@ export default function ExpertDashboard() {
           </div>
       )}
 
-      {completeTourPromptId && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-            <div className="card" style={{ width: '100%', maxWidth: '340px', padding: '28px 24px', animation: 'scaleUp 0.2s ease-out', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRadius: '24px', background: 'white' }}>
-                <div onClick={() => setCompleteTourPromptId(null)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                    <X size={20} />
-                </div>
-                <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', border: '4px solid #fecaca' }}>
-                    <CheckCircle2 size={32} color="#ef4444" />
-                </div>
-                <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 8px 0', color: 'var(--text-main)', textAlign: 'center' }}>Emin misiniz?</h2>
-                <p style={{ fontSize: '14px', color: 'var(--text-muted)', textAlign: 'center', margin: 0, marginBottom: '24px', lineHeight: 1.5 }}>
-                    Bu seyahati süresi dolmadan tamamlamak istediğinize emin misiniz? Seyahat geçmiş turlara taşınacaktır.
-                </p>
-                <div style={{ display: 'flex', gap: '12px', width: '100%' }}>
-                    <button onClick={() => setCompleteTourPromptId(null)} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'white', color: 'var(--text-main)', fontWeight: 'bold', cursor: 'pointer' }}>
-                        Vazgeç
-                    </button>
-                    <button onClick={confirmCompleteTour} style={{ flex: 1, padding: '12px', borderRadius: '12px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 'bold', cursor: 'pointer' }}>
-                        Evet, Tamamla
-                    </button>
-                </div>
+      {expertModalData && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '360px', padding: '24px', animation: 'fadeIn 0.2s ease-out', textAlign: 'center', position: 'relative' }}>
+            <div onClick={() => setExpertModalData(null)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                <X size={20} />
             </div>
+
+            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-main)' }}>
+                {expertModalData.expert2 ? 'Seyahat Uzmanlarımız' : 'Seyahat Uzmanı'}
+            </h2>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {[expertModalData.expert1, expertModalData.expert2].filter(Boolean).map((exp, idx) => (
+                    <div key={idx} style={{ background: '#f8fafc', borderRadius: '16px', padding: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', marginBottom: '12px' }}>
+                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--primary-light)', flexShrink: 0 }}>
+                               <img loading="lazy" src={exp.avatar} alt={exp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            </div>
+                            <div style={{ textAlign: 'left', flex: 1 }}>
+                                <h3 style={{ fontSize: '15px', fontWeight: 'bold', margin: '0 0 2px 0', color: 'var(--text-main)' }}>{exp.name}</h3>
+                                <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '600' }}>{idx === 0 ? '1. Seyahat Uzmanı' : '2. Seyahat Uzmanı'}</span>
+                            </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                            <a 
+                              href={`tel:${exp.phone}`}
+                              style={{ flex: 1, padding: '10px 0', borderRadius: '10px', background: '#ffffff', border: '1px solid #cbd5e1', color: 'var(--text-main)', fontSize: '13px', fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+                            >
+                                <Phone size={15} color="var(--primary)" /> Ara
+                            </a>
+                            <a 
+                              href={`https://wa.me/${exp.phone.replace(/[^0-9]/g, '')}`} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              style={{ flex: 1, padding: '10px 0', borderRadius: '10px', background: '#25D366', color: 'white', fontSize: '13px', fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 2px 6px rgba(37,211,102,0.3)' }}
+                            >
+                                <MessageCircle size={15} color="white" /> WhatsApp
+                            </a>
+                        </div>
+                    </div>
+                ))}
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* Dedicated Fullscreen Live Roll Call Overlay */}
+      {activeRollCallTourId && (
+        <ExpertRollCallPanel 
+          tour={tours.find(t => t.id === activeRollCallTourId)} 
+          onClose={() => setActiveRollCallTourId(null)} 
+          onAllPresent={(tId) => handleAllPresent(tId)} 
+          onTimeUpMissing={(tId, missing) => handleTimeUpMissing(tId, missing)} 
+        />
       )}
 
     </div>
