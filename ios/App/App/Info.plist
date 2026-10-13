@@ -13,7 +13,9 @@
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Çektiğiniz fotoğrafları galerinize kaydedebilmek için izin gereklidir.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Video çekimi ve sesli mesajlar için mikrofonunuza erişim izni gereklidir.</string>
+	<string>Sesli çeviri, video çekimi ve sesli mesajlar için mikrofonunuza erişim izni gereklidir.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Sesli çeviri özelliğinde konuşmalarınızı metne dönüştürmek için konuşma tanıma izni gereklidir.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Tur sırasında konumunuzu rehberinizle paylaşabilmeniz ve hava durumu özelliklerini kullanabilmeniz için konum izni gereklidir.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
@@ -21,7 +23,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>MoveTravel</string>
+	<string>Move Yanımda</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

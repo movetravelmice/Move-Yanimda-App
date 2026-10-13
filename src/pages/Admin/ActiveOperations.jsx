@@ -9,10 +9,12 @@ import {
   ArchiveRestore, 
   X, 
   Phone,
-  Plus
+  Plus,
+  CheckCircle2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
+import ConfirmModal from '../../components/ConfirmModal';
 import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 
@@ -24,6 +26,25 @@ export default function ActiveOperations() {
   const activeTours = tours.filter(isTourActive);
   const [searchQuery, setSearchQuery] = useState('');
   const [expertModalData, setExpertModalData] = useState(null);
+  const [archiveConfirmTour, setArchiveConfirmTour] = useState(null);
+  const [isArchiving, setIsArchiving] = useState(false);
+  const [successToast, setSuccessToast] = useState('');
+
+  const handleConfirmArchive = async () => {
+    if (!archiveConfirmTour) return;
+    setIsArchiving(true);
+    try {
+      await setTourStatus(archiveConfirmTour.id, 'past');
+      const tourName = archiveConfirmTour.name || 'Seyahat';
+      setArchiveConfirmTour(null);
+      setSuccessToast(`"${tourName}" başarıyla geçmiş seyahatlere taşındı.`);
+      setTimeout(() => setSuccessToast(''), 4000);
+    } catch (err) {
+      console.error('Tur geçmişe taşınamadı:', err);
+    } finally {
+      setIsArchiving(false);
+    }
+  };
   
   const filteredActiveTours = activeTours.filter(tour => {
       const qs = searchQuery.toLowerCase();
@@ -36,6 +57,44 @@ export default function ActiveOperations() {
   return (
     <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
       <Header title="Aktif Operasyonlar" showBack />
+      
+      {/* Toast Bildirimi */}
+      {successToast && (
+        <div style={{ 
+          position: 'fixed', 
+          top: '20px', 
+          left: '50%', 
+          transform: 'translateX(-50%)', 
+          background: '#059669', 
+          color: 'white', 
+          padding: '10px 16px', 
+          borderRadius: '10px', 
+          fontSize: '11.5px', 
+          fontWeight: '700', 
+          zIndex: 99999, 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '6px', 
+          boxShadow: '0 6px 20px rgba(5, 150, 105, 0.35)', 
+          animation: 'slideDown 0.25s ease-out' 
+        }}>
+          <CheckCircle2 size={15} /> {successToast}
+        </div>
+      )}
+
+      {/* Geçmiş Seyahatlere Taşıma Onay Pop-up'ı */}
+      <ConfirmModal
+        isOpen={Boolean(archiveConfirmTour)}
+        title="Geçmiş Seyahatlere Taşı"
+        message={`"${archiveConfirmTour?.name || 'Bu seyahati'}" geçmiş seyahatlere taşımak istediğinizden emin misiniz? Seyahat geçmiş operasyonlar listesine aktarılacaktır.`}
+        confirmText="Evet, Geçmişe Taşı"
+        cancelText="Vazgeç"
+        type="danger"
+        icon={ArchiveRestore}
+        isLoading={isArchiving}
+        onConfirm={handleConfirmArchive}
+        onClose={() => !isArchiving && setArchiveConfirmTour(null)}
+      />
       
       {/* Expert Details Modal */}
       {expertModalData && (
@@ -323,8 +382,8 @@ export default function ActiveOperations() {
                           </button>
 
                           <button 
-                            onClick={() => setTourStatus(tour.id, 'past')} 
-                            title="Turu Erken Tamamla / Arşivle"
+                            onClick={() => setArchiveConfirmTour(tour)} 
+                            title="Geçmiş Seyahatlere Taşı"
                             style={{ aspectRatio: '1', width: '100%', background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)', outline: 'none' }}
                             onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; e.currentTarget.style.boxShadow = '0 3px 10px rgba(239,68,68,0.2)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
                             onMouseLeave={e => { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.borderColor = '#fee2e2'; e.currentTarget.style.boxShadow = 'none'; e.currentTarget.style.transform = 'translateY(0)'; }}

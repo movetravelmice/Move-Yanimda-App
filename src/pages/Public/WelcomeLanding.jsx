@@ -29,12 +29,9 @@ export default function WelcomeLanding() {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
 
-  // Kurumsal personeli kurumsal panele, giriş yapmış bireysel kullanıcıyı kişiselleştirilmiş dashboard'a yönlendir
   useEffect(() => {
-    if (user && user.userType !== 'individual' && ['admin', 'expert', 'ticketing'].includes(user?.role)) {
+    if (user) {
       navigate('/dashboard');
-    } else if (user && (user.userType === 'individual' || user.role === 'customer')) {
-      navigate('/individual/dashboard');
     }
   }, [user, navigate]);
 

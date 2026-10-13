@@ -42,11 +42,14 @@ export default function CustomerDashboard() {
   const { tours } = useTourStore();
   const user = useAuthStore(state => state.user);
   const allUsers = useUserStore(state => state.users);
-  const { expertName } = useSettingsStore();
-  const myTours = tours.filter(t => t.participants?.some(p => 
-    p.id === user?.id || 
-    (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase())
-  ));
+  const myTours = tours.filter(t => t.participants?.some(p => {
+    if (p.id === user?.id) return true;
+    if (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()) return true;
+    const pPhone = (p.phone || '').replace(/\D/g, '');
+    const uPhone = (user?.phone || '').replace(/\D/g, '');
+    if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) return true;
+    return false;
+  }));
   const activeTours = myTours.filter(isTourActive);
   const pastTours = myTours.filter(isTourPast);
   const [reviewedTours, setReviewedTours] = useState(() => {

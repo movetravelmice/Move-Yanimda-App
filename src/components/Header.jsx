@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, isUserAdmin, getUserSecondaryRole, hasDualRole } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { 
   Camera, 
@@ -10,13 +10,24 @@ import {
   Sparkles, 
   LogIn, 
   UserPlus, 
-  Building2 
+  Building2,
+  ShieldCheck,
+  Compass,
+  PlaneTakeoff
 } from 'lucide-react';
 
 export default function Header({ title, subtitle, showBack = false, onBack, badge = null, marginBottom }) {
   const user = useAuthStore(state => state.user);
   const activeMode = useAuthStore(state => state.activeMode);
   const setActiveMode = useAuthStore(state => state.setActiveMode);
+  const activeStaffRole = useAuthStore(state => state.activeStaffRole);
+  const setActiveStaffRole = useAuthStore(state => state.setActiveStaffRole);
+
+  const isAdmin = isUserAdmin(user);
+  const secRole = getUserSecondaryRole(user);
+  const isDualRoleUser = hasDualRole(user);
+  const currentStaffRole = activeStaffRole || (user?.role === 'admin' ? 'admin' : (user?.role || 'customer'));
+
   const [greeting, setGreeting] = useState('İyi Günler');
   const getInitialGeoInfo = () => {
     try {
@@ -55,7 +66,7 @@ export default function Header({ title, subtitle, showBack = false, onBack, badg
   const navigate = useNavigate();
   const location = useLocation();
   const isIndividualPath = location.pathname.startsWith('/individual');
-  const isIndividualMode = activeMode === 'individual' || isIndividualPath || user?.userType === 'individual';
+  const isIndividualMode = activeMode === 'individual' || isIndividualPath;
 
   // 1. Silent IP Geolocation check
   useEffect(() => {
@@ -216,11 +227,7 @@ export default function Header({ title, subtitle, showBack = false, onBack, badg
      return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=ffffff&color=D7147A&bold=true`;
   };
 
-  const isCorporateUser = user && (
-    user.userType === 'corporate' || 
-    ['admin', 'expert', 'ticketing'].includes(user.role) || 
-    (user.company && user.company !== 'Bireysel')
-  );
+  const isCorporateUser = Boolean(user);
 
   return (
     <div className="top-header" style={{
@@ -374,7 +381,7 @@ export default function Header({ title, subtitle, showBack = false, onBack, badg
             background: '#ffffff',
             borderRadius: '16px',
             boxShadow: '0 12px 36px rgba(0,0,0,0.22)',
-            width: user ? '250px' : '200px',
+            width: user ? '260px' : '200px',
             overflow: 'hidden',
             zIndex: 1000,
             border: '1px solid #e2e8f0',
@@ -383,49 +390,111 @@ export default function Header({ title, subtitle, showBack = false, onBack, badg
             {user ? (
               // ---------------- LOGGED IN MENU ----------------
               <>
-                <div style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', color: 'var(--text-main)', background: '#f8fafc' }}>
-                  <div style={{ fontWeight: '800', fontSize: '14px', color: 'var(--text-main)' }}>{displayName}</div>
-                  <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px', wordBreak: 'break-all' }}>{user?.email || 'kullanici@move.com.tr'}</div>
-                  <div style={{ marginTop: '6px' }}>
+                <div style={{ padding: '13px 14px 11px', borderBottom: '1px solid #f1f5f9', color: 'var(--text-main)', background: '#f8fafc' }}>
+                  <div style={{ fontWeight: '800', fontSize: '13px', color: 'var(--text-main)' }}>{displayName}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px', wordBreak: 'break-all' }}>{user?.email || 'kullanici@move.com.tr'}</div>
+                  <div style={{ marginTop: '5px' }}>
                     <span style={{
                       display: 'inline-block',
-                      fontSize: '10px',
+                      fontSize: '9.5px',
                       fontWeight: '700',
                       padding: '2px 8px',
                       borderRadius: '10px',
-                      background: isIndividualMode ? '#FDF2F8' : '#eff6ff',
-                      color: isIndividualMode ? '#D7147A' : '#2563eb'
+                      background: isIndividualMode ? '#FDF2F8' : isDualRoleUser ? '#f0fdf4' : '#eff6ff',
+                      color: isIndividualMode ? '#D7147A' : isDualRoleUser ? '#166534' : '#2563eb'
                     }}>
                       {isIndividualMode 
                         ? 'Bireysel Asistan' 
-                        : (user?.role === 'admin' ? 'Yönetici' : user?.role === 'ticketing' ? 'Biletleme Operasyonları' : user?.role === 'expert' ? 'Rehber / Operasyon' : user?.userType === 'individual' ? 'Bireysel Hesap' : 'Kurumsal Hesap')}
+                        : isDualRoleUser
+                          ? `Yönetici + ${secRole === 'expert' ? 'Seyahat Uzmanı' : 'Biletleme'}`
+                          : (user?.role === 'admin' ? 'Yönetici' : user?.role === 'ticketing' ? 'Biletleme Operasyonları' : user?.role === 'expert' ? 'Rehber / Operasyon' : (user?.company || 'Kurumsal Hesap'))}
                     </span>
                   </div>
                 </div>
 
-                <div style={{ padding: '6px' }}>
+                <div style={{ padding: '5px' }}>
                   <input type="file" ref={fileInputRef} onChange={handleAvatarChange} style={{display: 'none'}} accept="image/*" />
                   
+                  {/* Satır 1: Profil Resmini Değiştir */}
                   <div 
                     onClick={() => fileInputRef.current?.click()}
-                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', borderRadius: '10px', fontSize: '13px', color: 'var(--text-main)', transition: 'background 0.15s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', fontWeight: '600', color: 'var(--text-main)', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <Camera size={16} color="var(--primary)" /> <span>Profil Resmini Değiştir</span>
+                    <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Camera size={14.5} color="var(--primary)" />
+                    </div>
+                    <div style={{ width: '1px', height: '13px', background: '#e2e8f0', flexShrink: 0 }} />
+                    <span style={{ whiteSpace: 'nowrap' }}>Profil Resmini Değiştir</span>
                   </div>
+
+                  {/* Ayırıcı Çizgi */}
+                  <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 4px' }} />
                   
+                  {/* Satır 2: Profil Ayarları */}
                   <div 
                     onClick={() => { 
                       setShowMenu(false); 
                       navigate(isIndividualMode ? '/individual/profile' : '/dashboard/profile'); 
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', borderRadius: '10px', fontSize: '13px', color: 'var(--text-main)', transition: 'background 0.15s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', fontWeight: '600', color: 'var(--text-main)', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <UserCog size={16} color="var(--primary)" /> <span>Profil Ayarları</span>
+                    <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <UserCog size={14.5} color="var(--primary)" />
+                    </div>
+                    <div style={{ width: '1px', height: '13px', background: '#e2e8f0', flexShrink: 0 }} />
+                    <span style={{ whiteSpace: 'nowrap' }}>Profil Ayarları</span>
                   </div>
+
+                  {/* Dual Role Panel Switcher for Admins */}
+                  {!isIndividualMode && isDualRoleUser && (
+                    <>
+                      {/* Ayırıcı Çizgi */}
+                      <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 4px' }} />
+
+                      {currentStaffRole === 'admin' ? (
+                        <div 
+                          onClick={() => { 
+                            setShowMenu(false); 
+                            setActiveStaffRole(secRole);
+                            navigate('/dashboard'); 
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', fontWeight: '600', color: secRole === 'expert' ? '#0369a1' : '#047857', transition: 'background 0.15s', background: secRole === 'expert' ? '#f0f9ff' : '#ecfdf5' }}
+                          onMouseEnter={e => e.currentTarget.style.background = secRole === 'expert' ? '#e0f2fe' : '#d1fae5'}
+                          onMouseLeave={e => e.currentTarget.style.background = secRole === 'expert' ? '#f0f9ff' : '#ecfdf5'}
+                        >
+                          <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            {secRole === 'expert' ? <Compass size={14.5} color="#0284c7" /> : <PlaneTakeoff size={14.5} color="#059669" />}
+                          </div>
+                          <div style={{ width: '1px', height: '13px', background: secRole === 'expert' ? '#bae6fd' : '#a7f3d0', flexShrink: 0 }} />
+                          <span style={{ whiteSpace: 'nowrap' }}>{secRole === 'expert' ? 'Seyahat Uzmanı Paneline Geç' : 'Biletleme Paneline Geç'}</span>
+                        </div>
+                      ) : (
+                        <div 
+                          onClick={() => { 
+                            setShowMenu(false); 
+                            setActiveStaffRole('admin');
+                            navigate('/dashboard'); 
+                          }}
+                          style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', fontWeight: '600', color: '#1d4ed8', transition: 'background 0.15s', background: '#eff6ff' }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
+                        >
+                          <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <ShieldCheck size={14.5} color="#2563eb" />
+                          </div>
+                          <div style={{ width: '1px', height: '13px', background: '#bfdbfe', flexShrink: 0 }} />
+                          <span style={{ whiteSpace: 'nowrap' }}>Yönetim Paneline Geç</span>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Ayırıcı Çizgi */}
+                  <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 4px' }} />
 
                   {/* Mode Switching (Bridge between Corporate and Individual Assistant) */}
                   {isIndividualMode ? (
@@ -435,11 +504,15 @@ export default function Header({ title, subtitle, showBack = false, onBack, badg
                         setActiveMode('corporate');
                         navigate('/dashboard'); 
                       }}
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', borderRadius: '10px', fontSize: '13px', color: '#2563eb', fontWeight: '700', transition: 'background 0.15s', background: '#eff6ff' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', fontWeight: '600', color: '#2563eb', transition: 'background 0.15s', background: '#eff6ff' }}
                       onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
                       onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
                     >
-                      <Building2 size={16} color="#2563eb" /> <span>Kurumsal Profilime Geç</span>
+                      <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Building2 size={14.5} color="#2563eb" />
+                      </div>
+                      <div style={{ width: '1px', height: '13px', background: '#bfdbfe', flexShrink: 0 }} />
+                      <span style={{ whiteSpace: 'nowrap' }}>Kurumsal Profilime Geç</span>
                     </div>
                   ) : (
                     <div 
@@ -448,27 +521,37 @@ export default function Header({ title, subtitle, showBack = false, onBack, badg
                         setActiveMode('individual');
                         navigate('/individual/dashboard'); 
                       }}
-                      style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', borderRadius: '10px', fontSize: '13px', color: '#D7147A', fontWeight: '700', transition: 'background 0.15s', background: '#FDF2F8' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', fontWeight: '600', color: '#D7147A', transition: 'background 0.15s', background: '#FDF2F8' }}
                       onMouseEnter={e => e.currentTarget.style.background = '#FCE7F3'}
                       onMouseLeave={e => e.currentTarget.style.background = '#FDF2F8'}
                     >
-                      <Sparkles size={16} color="#D7147A" /> <span>Bireysel Asistanıma Geç</span>
+                      <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Sparkles size={14.5} color="#D7147A" />
+                      </div>
+                      <div style={{ width: '1px', height: '13px', background: '#fbcfe8', flexShrink: 0 }} />
+                      <span style={{ whiteSpace: 'nowrap' }}>Bireysel Asistanıma Geç</span>
                     </div>
                   )}
                   
-                  <div style={{ height: '1px', background: '#f1f5f9', margin: '4px 6px' }}></div>
+                  {/* Ayırıcı Çizgi */}
+                  <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 4px' }} />
                   
+                  {/* Satır 5: Uygulamadan Çıkış Yap */}
                   <div 
                     onClick={() => {
                       setShowMenu(false);
                       useAuthStore.getState().logout();
                       navigate('/welcome');
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', cursor: 'pointer', borderRadius: '10px', fontSize: '13px', color: '#ef4444', fontWeight: '600', transition: 'background 0.15s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', fontWeight: '600', color: '#ef4444', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <LogOut size={16} color="#ef4444" /> <span>Çıkış Yap</span>
+                    <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <LogOut size={14.5} color="#ef4444" />
+                    </div>
+                    <div style={{ width: '1px', height: '13px', background: '#fee2e2', flexShrink: 0 }} />
+                    <span style={{ whiteSpace: 'nowrap' }}>Uygulamadan Çıkış Yap</span>
                   </div>
                 </div>
               </>
@@ -480,23 +563,34 @@ export default function Header({ title, subtitle, showBack = false, onBack, badg
                   <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Henüz giriş yapılmamış</div>
                 </div>
 
-                <div style={{ padding: '6px' }}>
+                <div style={{ padding: '5px' }}>
                   <div 
                     onClick={() => { setShowMenu(false); navigate('/login'); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderRadius: '10px', fontSize: '12px', color: 'var(--primary)', fontWeight: '700', background: '#fdf2f8', transition: 'background 0.15s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', color: 'var(--primary)', fontWeight: '600', background: '#fdf2f8', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#fce7f3'}
                     onMouseLeave={e => e.currentTarget.style.background = '#fdf2f8'}
                   >
-                    <LogIn size={15} color="var(--primary)" /> <span>Giriş Yap</span>
+                    <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <LogIn size={14.5} color="var(--primary)" />
+                    </div>
+                    <div style={{ width: '1px', height: '13px', background: '#fbcfe8', flexShrink: 0 }} />
+                    <span>Giriş Yap</span>
                   </div>
+
+                  {/* Ayırıcı Çizgi */}
+                  <div style={{ height: '1px', background: '#f1f5f9', margin: '2px 4px' }} />
 
                   <div 
                     onClick={() => { setShowMenu(false); navigate('/register'); }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '9px 12px', cursor: 'pointer', borderRadius: '10px', fontSize: '12px', color: '#0f172a', fontWeight: '700', transition: 'background 0.15s', marginTop: '4px' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '7px 10px', cursor: 'pointer', borderRadius: '8px', fontSize: '11.5px', color: '#0f172a', fontWeight: '600', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <UserPlus size={15} color="#0f172a" /> <span>Kayıt Ol</span>
+                    <div style={{ width: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <UserPlus size={14.5} color="#0f172a" />
+                    </div>
+                    <div style={{ width: '1px', height: '13px', background: '#e2e8f0', flexShrink: 0 }} />
+                    <span>Kayıt Ol</span>
                   </div>
                 </div>
               </>

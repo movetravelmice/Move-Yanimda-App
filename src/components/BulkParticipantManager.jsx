@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx';
 import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore, formatTitleCase } from '../store/userStore';
-import { isUserChild, canUserReceiveEmail, isChildEmail } from '../utils/userUtils';
+import { isUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, checkEmailDomainTypo } from '../utils/userUtils';
 
 export default function BulkParticipantManager({ tourId, onClose }) {
     const { tours, addParticipantToTour } = useTourStore();
@@ -177,17 +177,29 @@ export default function BulkParticipantManager({ tourId, onClose }) {
 
             const tcNo = tcNoRaw.replace(/\D/g, '');
 
+            const currentUsersList = useUserStore.getState().users || [];
             let existingUser = null;
             if (tcNo && tcNo.length === 11) {
-                existingUser = users.find(u => u.tcNo === tcNo);
+                existingUser = currentUsersList.find(u => u.tcNo === tcNo);
             }
-            if (!existingUser && email) {
-                existingUser = users.find(u => u.email && u.email.trim().toLowerCase() === email.toLowerCase());
+
+            // Typo check for email domain (e.g. hotml.com -> hotmail.com)
+            let correctedEmail = email ? email.toLowerCase() : '';
+            const emailTypo = checkEmailDomainTypo(correctedEmail);
+            if (emailTypo) {
+                correctedEmail = emailTypo.suggestedEmail;
+            }
+
+            if (!existingUser && (email || correctedEmail)) {
+                existingUser = currentUsersList.find(u => {
+                    const uEmail = (u.email || '').trim().toLowerCase();
+                    return (email && uEmail === email.toLowerCase()) || (correctedEmail && uEmail === correctedEmail.toLowerCase());
+                });
             }
             if (!existingUser && phone) {
                 const cleanP = phone.replace(/\D/g, '');
                 if (cleanP.length >= 7) {
-                    existingUser = users.find(u => {
+                    existingUser = currentUsersList.find(u => {
                         const uPhone = (u.phone || '').replace(/\D/g, '');
                         return uPhone.length >= 7 && (uPhone.endsWith(cleanP.slice(-10)) || cleanP.endsWith(uPhone.slice(-10)));
                     });
@@ -198,6 +210,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 const isAlreadyInTour = tour.participants?.some(p => 
                     p.id === existingUser.id || 
                     (p.email && p.email.trim().toLowerCase() === existingUser.email?.trim().toLowerCase()) || 
+                    (correctedEmail && p.email && p.email.trim().toLowerCase() === correctedEmail.toLowerCase()) ||
                     (p.tcNo && p.tcNo === existingUser.tcNo)
                 );
 
@@ -218,14 +231,15 @@ export default function BulkParticipantManager({ tourId, onClose }) {
 
                 const cleanP = (phone || '').replace(/\D/g, '');
                 const phoneSlug = cleanP.startsWith('90') ? cleanP.slice(2) : cleanP;
-                const finalEmail = (email ? email.toLowerCase() : `user_${phoneSlug || Date.now()}@move.local`);
+                const finalEmail = (correctedEmail || (email ? email.toLowerCase() : `user_${phoneSlug || Date.now()}@move.local`));
                 const newUserPassword = generateSecurePassword(name);
 
                 const newUser = await addUser({
                     name,
                     email: finalEmail,
                     role: 'customer',
-                    phone: phone || '-',
+                    userType: 'corporate',
+                    phone: phone ? normalizePhoneNumber(phone) : '-',
                     company: compValue,
                     password: newUserPassword,
                     tcNo: tcNo || ''

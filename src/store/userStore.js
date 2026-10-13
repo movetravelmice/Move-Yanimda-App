@@ -1,22 +1,11 @@
 import { create } from 'zustand';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { normalizePhoneNumber, toTurkishTitleCase, normalizeTurkishTitleCase } from '../utils/userUtils';
 
 const defaultUsers = [];
 
-export const formatTitleCase = (str) => {
-    if (!str) return '';
-    return String(str)
-        .trim()
-        .split(/\s+/)
-        .map(word => {
-            if (!word) return '';
-            const first = word.charAt(0).toLocaleUpperCase('tr-TR');
-            const rest = word.slice(1).toLocaleLowerCase('tr-TR');
-            return first + rest;
-        })
-        .join(' ');
-};
+export const formatTitleCase = (str) => normalizeTurkishTitleCase(str);
 
 const isDemoUser = (user, id) => {
     if (!user && !id) return false;
@@ -48,7 +37,18 @@ export const useUserStore = create((set, get) => ({
                     const cleanEmail = rawEmail.toLowerCase();
                     const rawName = data.name ? String(data.name).trim() : '';
                     const cleanName = formatTitleCase(rawName);
-                    const userRecord = { ...data, id: userId, email: cleanEmail, name: cleanName };
+                    const rawPhone = data.phone ? String(data.phone).trim() : '';
+                    const cleanPhone = normalizePhoneNumber(rawPhone);
+                    const rawCompany = data.company ? String(data.company).trim() : '';
+                    const cleanCompany = rawCompany ? formatTitleCase(rawCompany) : '';
+                    const userRecord = { 
+                        ...data, 
+                        id: userId, 
+                        email: cleanEmail, 
+                        name: cleanName, 
+                        phone: cleanPhone !== '-' ? cleanPhone : rawPhone,
+                        company: cleanCompany || (data.role === 'customer' ? 'Bireysel' : 'Move Travel & Mice')
+                    };
                     
                     // Kalıcı olarak demo/base44 hesaplarını Firestore'dan temizle
                     if (isDemoUser(userRecord, userId)) {
@@ -56,13 +56,28 @@ export const useUserStore = create((set, get) => ({
                         return; // UI listesine ekleme
                     }
 
-                    // E-posta ve İsim normalizasyonunu (Küçük e-posta, Baş harfi büyük isim) veritabanına da eşitle
+                    // Aynı isim ve e-postaya sahip mükerrer doküman varsa belleğe tekil ekle ve fazlalığı temizle
+                    if (cleanEmail && !cleanEmail.endsWith('@move.local')) {
+                        const existingIdx = fetchedUsers.findIndex(u => u.email === cleanEmail && u.name?.toLowerCase() === cleanName.toLowerCase());
+                        if (existingIdx !== -1) {
+                            deleteDoc(docSnap.ref).catch(err => console.log("Mükerrer doküman temizleme hatası:", err));
+                            return;
+                        }
+                    }
+
+                    // E-posta, İsim, Telefon ve Firma normalizasyonunu veritabanına da eşitle
                     const dbUpdates = {};
                     if (rawEmail && rawEmail !== cleanEmail) {
                         dbUpdates.email = cleanEmail;
                     }
                     if (rawName && rawName !== cleanName) {
                         dbUpdates.name = cleanName;
+                    }
+                    if (rawPhone && cleanPhone !== '-' && rawPhone !== cleanPhone) {
+                        dbUpdates.phone = cleanPhone;
+                    }
+                    if (rawCompany && cleanCompany && rawCompany !== cleanCompany) {
+                        dbUpdates.company = cleanCompany;
                     }
                     if (Object.keys(dbUpdates).length > 0) {
                         setDoc(doc(db, 'users', userId), dbUpdates, { merge: true }).catch(err => console.log("User normalization sync error:", err));
@@ -76,7 +91,7 @@ export const useUserStore = create((set, get) => ({
                     }
                     fetchedUsers.push(userRecord);
                     if (userRecord.company && !userRecord.company.toLowerCase().includes('tgundogan')) {
-                        fetchedCompanies.add(userRecord.company);
+                        fetchedCompanies.add(formatTitleCase(userRecord.company));
                     }
                 });
 
@@ -92,28 +107,65 @@ export const useUserStore = create((set, get) => ({
     },
     
     addUser: async (userObj) => {
+        const normalizedName = formatTitleCase(userObj.name || '');
+        const normalizedEmail = (userObj.email || '').trim().toLowerCase();
         const role = userObj.role || 'customer';
+        const cleanPhone = userObj.phone ? normalizePhoneNumber(userObj.phone) : '-';
+
+        // Check if user already exists (by email if real email, or by tcNo)
+        const currentUsers = get().users || [];
+        const isChild = userObj.isChildProfile || normalizedEmail.startsWith('child_') || normalizedEmail.endsWith('.local');
+        
+        let existingUser = null;
+        if (!isChild && normalizedEmail && !normalizedEmail.endsWith('@move.local')) {
+            existingUser = currentUsers.find(u => u.email && u.email.trim().toLowerCase() === normalizedEmail);
+        }
+        if (!existingUser && userObj.tcNo && String(userObj.tcNo).length === 11) {
+            existingUser = currentUsers.find(u => u.tcNo === String(userObj.tcNo));
+        }
+
+        const rawComp = userObj.company || (role === 'customer' ? 'Bireysel' : 'Move Travel & Mice');
+        const normalizedCompany = formatTitleCase(rawComp);
+
+        if (existingUser) {
+            const updates = {};
+            if (userObj.company && userObj.company !== 'Move Travel & Mice' && existingUser.company === 'Move Travel & Mice') {
+                updates.company = normalizedCompany;
+            }
+            if (cleanPhone !== '-' && (!existingUser.phone || existingUser.phone === '-')) {
+                updates.phone = cleanPhone;
+            }
+            if (userObj.tcNo && !existingUser.tcNo) {
+                updates.tcNo = userObj.tcNo;
+            }
+            if (Object.keys(updates).length > 0) {
+                await get().updateUser(existingUser.id, updates);
+                return { ...existingUser, ...updates };
+            }
+            return existingUser;
+        }
+
         const randomSuffix = Math.random().toString(36).substring(2, 8);
         const newUserId = role + '_' + Date.now() + '_' + randomSuffix;
-        const normalizedName = formatTitleCase(userObj.name || '');
         const safeName = normalizedName ? encodeURIComponent(normalizedName) : 'User';
         const fallbackAvatar = `https://ui-avatars.com/api/?name=${safeName}&background=random&color=fff&bold=true`;
-        const normalizedEmail = (userObj.email || '').trim().toLowerCase();
         
         const newUser = { 
             ...userObj, 
             name: normalizedName,
             id: newUserId, 
             role: role,
+            userType: userObj.userType || 'corporate',
+            company: normalizedCompany,
             status: 'Aktif',
+            phone: cleanPhone,
             email: normalizedEmail,
             password: userObj.password ? String(userObj.password).trim() : '123456',
             avatar: userObj.avatar || fallbackAvatar 
         };
         
         // Optimistic UI Update
-        const currentUsers = get().users;
-        set({ users: [newUser, ...currentUsers.filter(u => u.email?.toLowerCase() !== normalizedEmail)] });
+        set({ users: [newUser, ...currentUsers.filter(u => u.id !== newUserId)] });
 
         try {
             await setDoc(doc(db, 'users', newUserId), newUser);
@@ -133,6 +185,14 @@ export const useUserStore = create((set, get) => ({
 
         if (dataToUpdate.name) {
             dataToUpdate.name = formatTitleCase(dataToUpdate.name);
+        }
+
+        if (dataToUpdate.company) {
+            dataToUpdate.company = formatTitleCase(dataToUpdate.company);
+        }
+
+        if (dataToUpdate.phone) {
+            dataToUpdate.phone = normalizePhoneNumber(dataToUpdate.phone);
         }
 
         if (dataToUpdate.email) {
@@ -203,8 +263,9 @@ export const useUserStore = create((set, get) => ({
 
     addCompany: (companyName) => set((state) => {
         if (!companyName || String(companyName).toLowerCase().includes('tgundogan')) return state;
-        if (!state.companies.includes(companyName)) {
-            return { companies: [...state.companies, companyName] };
+        const cleanComp = formatTitleCase(companyName);
+        if (!state.companies.includes(cleanComp)) {
+            return { companies: [...state.companies, cleanComp] };
         }
         return state;
     }),

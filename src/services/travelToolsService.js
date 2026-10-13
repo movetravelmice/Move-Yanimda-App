@@ -112,13 +112,66 @@ export const speakText = (text, langCode = 'tr') => {
 /**
  * Speech-to-Text Recognition instance builder
  */
+/**
+ * Explicitly request microphone permission using getUserMedia.
+ * This triggers the browser's native permission request prompt dialog ('Allow / Block').
+ * Once permission is granted, tracks are immediately stopped to release the device.
+ */
+export const requestMicrophonePermission = async () => {
+  if (typeof window === 'undefined') {
+    return { granted: false, reason: 'no-window' };
+  }
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    const legacyGUM = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+    if (!legacyGUM) {
+      return { granted: false, reason: 'unsupported' };
+    }
+    return new Promise((resolve) => {
+      legacyGUM.call(navigator, { audio: true }, (stream) => {
+        try { stream.getTracks().forEach(t => t.stop()); } catch (e) {}
+        resolve({ granted: true });
+      }, (err) => {
+        const isDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError';
+        resolve({ granted: false, reason: isDenied ? 'denied' : 'error', error: err });
+      });
+    });
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // Stop all audio tracks immediately to release the microphone device
+    stream.getTracks().forEach(track => {
+      try { track.stop(); } catch (e) {}
+    });
+    // Settle delay for mobile audio hardware
+    await new Promise(r => setTimeout(r, 100));
+    return { granted: true };
+  } catch (err) {
+    console.warn('Microphone permission request failed:', err);
+    const isDenied = err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError' || err.name === 'SecurityError';
+    return {
+      granted: false,
+      reason: isDenied ? 'denied' : 'error',
+      error: err
+    };
+  }
+};
+
+/**
+ * Speech-to-Text Recognition instance builder
+ */
 export const createSpeechRecognizer = ({ lang = 'tr-TR', onResult, onError, onEnd }) => {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     return {
       isSupported: false,
       start: () => {
-        if (onError) onError(new Error('Tarayıcınız ses tanıma (Speech-to-Text) özelliğini desteklemiyor. Chrome veya Edge kullanmayı deneyebilirsiniz.'));
+        if (onError) {
+          const err = new Error('Tarayıcınız ses tanıma (Speech-to-Text) özelliğini desteklemiyor. Google Chrome, Safari veya Edge kullanabilirsiniz.');
+          err.code = 'unsupported';
+          onError(err);
+        }
       },
       stop: () => {}
     };
@@ -137,7 +190,33 @@ export const createSpeechRecognizer = ({ lang = 'tr-TR', onResult, onError, onEn
   };
 
   recognition.onerror = (event) => {
-    if (onError) onError(new Error(`Mikrofon hatası: ${event.error}`));
+    const errType = event.error;
+    if (errType === 'aborted') {
+      return; // Normal stop/cancel, do not trigger error
+    }
+
+    let userFriendlyMsg = 'Mikrofon kullanılırken bir sorun oluştu.';
+    let isPermissionError = false;
+
+    if (errType === 'not-allowed') {
+      userFriendlyMsg = 'Mikrofon erişim izni verilmedi. Lütfen tarayıcı veya cihaz ayarlarından mikrofon iznini onaylayın.';
+      isPermissionError = true;
+    } else if (errType === 'service-not-allowed') {
+      userFriendlyMsg = 'Ses tanıma servisine izin verilmedi. Tarayıcı ayarlarından mikrofon iznini kontrol edin.';
+      isPermissionError = true;
+    } else if (errType === 'audio-capture') {
+      userFriendlyMsg = 'Mikrofon donanımı bulunamadı veya başka bir uygulama tarafından kullanılıyor.';
+    } else if (errType === 'network') {
+      userFriendlyMsg = 'Ses algılama servisiyle bağlantı kurulamadı. İnternet bağlantınızı kontrol edin.';
+    } else if (errType === 'no-speech') {
+      userFriendlyMsg = 'Ses algılanamadı. Lütfen mikrofona biraz daha yakın konuşun.';
+    }
+
+    const err = new Error(userFriendlyMsg);
+    err.code = errType;
+    err.isPermissionError = isPermissionError;
+
+    if (onError) onError(err);
   };
 
   recognition.onend = () => {
@@ -150,7 +229,10 @@ export const createSpeechRecognizer = ({ lang = 'tr-TR', onResult, onError, onEn
       try {
         recognition.start();
       } catch (e) {
-        if (onError) onError(e);
+        if (onError) {
+          e.isPermissionError = (e.name === 'NotAllowedError' || e.code === 'not-allowed');
+          onError(e);
+        }
       }
     },
     stop: () => {

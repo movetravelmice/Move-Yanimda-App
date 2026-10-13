@@ -1,16 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, isUserAdmin, getUserSecondaryRole, hasDualRole } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
 import Header from '../components/Header';
 import { 
   User, Mail, Phone, Lock, Save, LogOut, Camera, Plane, 
   History, BellRing, BellOff, ChevronRight, ArrowLeft, 
   ShieldCheck, HeartPulse, Building2, CheckCircle2, ChevronDown, Check, X,
-  Sparkles
+  Sparkles, Compass, PlaneTakeoff
 } from 'lucide-react';
 import { useTourStore, isTourActive, isTourPast } from '../store/tourStore';
 import { useUserStore, formatTitleCase } from '../store/userStore';
+import { normalizePhoneNumber, checkEmailDomainTypo, normalizeTurkishTitleCase } from '../utils/userUtils';
 import { triggerDeviceNotification } from '../hooks/useDeviceNotifications';
 import ConfirmModal from '../components/ConfirmModal';
 import { Capacitor, registerPlugin } from '@capacitor/core';
@@ -26,6 +27,8 @@ export default function ProfileSettings({ hideHeader = false }) {
   const user = useAuthStore(state => state.user);
   const activeMode = useAuthStore(state => state.activeMode);
   const setActiveMode = useAuthStore(state => state.setActiveMode);
+  const activeStaffRole = useAuthStore(state => state.activeStaffRole);
+  const setActiveStaffRole = useAuthStore(state => state.setActiveStaffRole);
   const updateProfile = useAuthStore(state => state.updateProfile);
   const logout = useAuthStore(state => state.logout);
   const { tours } = useTourStore();
@@ -345,7 +348,7 @@ export default function ProfileSettings({ hideHeader = false }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = user?.role === 'admin' || user?.secondaryRole === 'admin';
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
@@ -353,17 +356,31 @@ export default function ProfileSettings({ hideHeader = false }) {
 
     const fullName = `${formData.firstName} ${formData.lastName}`.trim();
     const isStaff = ['expert', 'admin', 'ticketing'].includes(targetUser?.role || user?.role);
-    const finalCompany = isStaff ? 'Move Travel & Mice' : (formData.company || targetUser?.company || 'Bireysel');
+    const finalCompany = isStaff ? 'Move Travel & Mice' : normalizeTurkishTitleCase(formData.company || targetUser?.company || 'Bireysel');
     
     const rawPhone = (formData.phone || '').trim();
-    const formattedPhone = rawPhone ? `+90 ${rawPhone}` : '';
+    const formattedPhone = rawPhone ? normalizePhoneNumber(rawPhone) : '';
 
     const rawEmergPhone = (formData.emergencyContactPhone || '').trim();
-    const formattedEmergPhone = rawEmergPhone ? (rawEmergPhone.startsWith('+') ? rawEmergPhone : `+90 ${rawEmergPhone}`) : '';
+    const formattedEmergPhone = rawEmergPhone ? normalizePhoneNumber(rawEmergPhone) : '';
+
+    let finalEmail = (formData.email || '').trim().toLowerCase() || targetUser?.email;
+    if (isAdmin && formData.email) {
+      const typoCheck = checkEmailDomainTypo(formData.email.trim().toLowerCase());
+      if (typoCheck) {
+        const confirmCorrection = window.confirm(
+          `E-posta adresinde yazım hatası tespit edildi (${formData.email}).\n\nAdresi "${typoCheck.suggestedEmail}" olarak düzeltip kaydetmek ister misiniz?`
+        );
+        if (confirmCorrection) {
+          finalEmail = typoCheck.suggestedEmail;
+          setFormData(prev => ({ ...prev, email: typoCheck.suggestedEmail }));
+        }
+      }
+    }
 
     const updates = { 
         name: formatTitleCase(fullName || targetUser?.name || 'Misafir'), 
-        email: (formData.email || '').trim().toLowerCase() || targetUser?.email, 
+        email: finalEmail, 
         phone: formattedPhone, 
         company: finalCompany,
         avatar: targetUser?.avatar || user?.avatar || undefined,
@@ -431,11 +448,18 @@ export default function ProfileSettings({ hideHeader = false }) {
   const activeCount = myTours.filter(isTourActive).length;
   const pastCount = myTours.filter(isTourPast).length;
 
+  const secRole = getUserSecondaryRole(targetUser || user);
+  const isDual = hasDualRole(targetUser || user);
+
   const getRoleBadge = () => {
     if (isIndividual) {
       return { text: 'Bireysel Kullanıcı', bg: '#FDF2F8', color: '#D7147A', border: '#F9BED8' };
     }
     const role = targetUser?.role || user?.role;
+    if (isDual) {
+      const secText = secRole === 'expert' ? 'Seyahat Uzmanı' : 'Biletleme';
+      return { text: `👑 Yönetici + ${secText}`, bg: '#eff6ff', color: '#1d4ed8', border: '#93c5fd' };
+    }
     if (role === 'expert') return { text: 'Seyahat Uzmanı', bg: '#FDF2F8', color: '#D7147A', border: '#F9BED8' };
     if (role === 'admin') return { text: 'Yönetici (Admin)', bg: '#eff6ff', color: '#2563eb', border: '#bfdbfe' };
     if (role === 'ticketing') return { text: 'Biletleme Operasyonları', bg: '#faf5ff', color: '#9333ea', border: '#e9d5ff' };
@@ -783,6 +807,86 @@ export default function ProfileSettings({ hideHeader = false }) {
             )
           )}
 
+          {/* Dual Role Panel Switcher in Profile Settings */}
+          {isDual && !isIndividual && !isChildProfile && (
+            <div style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              padding: '16px',
+              marginBottom: '16px',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
+            }}>
+              <div style={{ fontSize: '13px', fontWeight: '800', color: '#1e293b', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={15} color="var(--primary)" />
+                <span>Operasyon Paneli Seçimi (Çift Rol)</span>
+              </div>
+              <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '12px' }}>
+                Hesabınıza tanımlı 2 panel arasında tek tıkla geçiş yapabilirsiniz:
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                {/* Yönetim Paneli */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveStaffRole('admin');
+                    navigate('/dashboard');
+                  }}
+                  style={{
+                    padding: '12px 10px',
+                    borderRadius: '12px',
+                    border: (activeStaffRole === 'admin' || !activeStaffRole) ? '2px solid #2563eb' : '1px solid #e2e8f0',
+                    background: (activeStaffRole === 'admin' || !activeStaffRole) ? '#eff6ff' : '#f8fafc',
+                    color: (activeStaffRole === 'admin' || !activeStaffRole) ? '#1d4ed8' : '#475569',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '6px',
+                    textAlign: 'center'
+                  }}
+                >
+                  <ShieldCheck size={20} color="#2563eb" />
+                  <span style={{ fontSize: '11.5px', fontWeight: '800' }}>Yönetim Paneli</span>
+                  {(activeStaffRole === 'admin' || !activeStaffRole) && (
+                    <span style={{ fontSize: '9px', background: '#2563eb', color: '#fff', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>Aktif</span>
+                  )}
+                </button>
+
+                {/* 2. Rol Paneli */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveStaffRole(secRole);
+                    navigate('/dashboard');
+                  }}
+                  style={{
+                    padding: '12px 10px',
+                    borderRadius: '12px',
+                    border: activeStaffRole === secRole ? `2px solid ${secRole === 'expert' ? '#0284c7' : '#059669'}` : '1px solid #e2e8f0',
+                    background: activeStaffRole === secRole ? (secRole === 'expert' ? '#f0f9ff' : '#ecfdf5') : '#f8fafc',
+                    color: activeStaffRole === secRole ? (secRole === 'expert' ? '#0369a1' : '#047857') : '#475569',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '6px',
+                    textAlign: 'center'
+                  }}
+                >
+                  {secRole === 'expert' ? <Compass size={20} color="#0284c7" /> : <PlaneTakeoff size={20} color="#059669" />}
+                  <span style={{ fontSize: '11.5px', fontWeight: '800' }}>
+                    {secRole === 'expert' ? 'Seyahat Uzmanı' : 'Biletleme'} Paneli
+                  </span>
+                  {activeStaffRole === secRole && (
+                    <span style={{ fontSize: '9px', background: secRole === 'expert' ? '#0284c7' : '#059669', color: '#fff', padding: '1px 6px', borderRadius: '4px', fontWeight: '700' }}>Aktif</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Success Notification Alert */}
           {isSaved && (
               <div style={{ 
@@ -816,16 +920,17 @@ export default function ProfileSettings({ hideHeader = false }) {
                 marginBottom: '16px' 
               }}>
                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <User size={14} color="var(--primary)" />
                     </div>
-                    <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#1e293b' }}>Kişisel & İletişim Bilgileri</span>
+                    <div style={{ width: '1px', height: '14px', background: '#e2e8f0', flexShrink: 0 }} />
+                    <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#1e293b' }}>Kişisel & İletişim Bilgileri</span>
                  </div>
 
                  {/* Name & Surname Fields */}
                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                      <div>
-                       <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '6px' }}>
+                       <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '6px' }}>
                            İsim
                        </label>
                        <input 
@@ -835,9 +940,9 @@ export default function ProfileSettings({ hideHeader = false }) {
                          readOnly={!isAdmin}
                          style={{ 
                            width: '100%', 
-                           padding: '10px 12px', 
-                           fontSize: '13px', 
-                           fontWeight: '600', 
+                           padding: '9px 12px', 
+                           fontSize: '12px', 
+                           fontWeight: '500', 
                            background: !isAdmin ? '#f8fafc' : '#ffffff', 
                            color: !isAdmin ? '#64748b' : '#1e293b', 
                            border: '1px solid #e2e8f0', 
@@ -849,7 +954,7 @@ export default function ProfileSettings({ hideHeader = false }) {
                        />
                      </div>
                      <div>
-                       <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '6px' }}>
+                       <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569', display: 'block', marginBottom: '6px' }}>
                            Soyisim
                        </label>
                        <input 
@@ -859,9 +964,9 @@ export default function ProfileSettings({ hideHeader = false }) {
                          readOnly={!isAdmin}
                          style={{ 
                            width: '100%', 
-                           padding: '10px 12px', 
-                           fontSize: '13px', 
-                           fontWeight: '600', 
+                           padding: '9px 12px', 
+                           fontSize: '12px', 
+                           fontWeight: '500', 
                            background: !isAdmin ? '#f8fafc' : '#ffffff', 
                            color: !isAdmin ? '#64748b' : '#1e293b', 
                            border: '1px solid #e2e8f0', 
@@ -877,8 +982,10 @@ export default function ProfileSettings({ hideHeader = false }) {
                  {/* Email */}
                  {!isChildProfile && (
                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                        <Mail size={13} color="var(--primary)" /> E-posta Adresi
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                        <Mail size={13} color="var(--primary)" />
+                        <div style={{ width: '1px', height: '11px', background: '#e2e8f0', flexShrink: 0 }} />
+                        <span>E-posta Adresi</span>
                     </label>
                     <input 
                       type="email" 
@@ -887,9 +994,9 @@ export default function ProfileSettings({ hideHeader = false }) {
                       readOnly={!isAdmin}
                       style={{ 
                         width: '100%', 
-                        padding: '10px 12px', 
-                        fontSize: '13px', 
-                        fontWeight: '600', 
+                        padding: '9px 12px', 
+                        fontSize: '12px', 
+                        fontWeight: '500', 
                         background: !isAdmin ? '#f8fafc' : '#ffffff', 
                         color: !isAdmin ? '#64748b' : '#1e293b', 
                         border: '1px solid #e2e8f0', 
@@ -899,14 +1006,32 @@ export default function ProfileSettings({ hideHeader = false }) {
                       }}
                       title={!isAdmin ? "Kilitli: Bu alanı yalnızca Yönetici (Admin) değiştirebilir" : ""}
                     />
+                    {isAdmin && (() => {
+                      const typo = checkEmailDomainTypo(formData.email);
+                      if (!typo) return null;
+                      return (
+                        <div style={{ marginTop: '6px', fontSize: '11.5px', color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', padding: '5px 10px', borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                          <span>⚠️ <strong>{typo.suggestedDomain}</strong> mu demek istediniz?</span>
+                          <button
+                            type="button"
+                            onClick={() => setFormData({ ...formData, email: typo.suggestedEmail })}
+                            style={{ border: 'none', background: '#d97706', color: '#fff', fontSize: '10.5px', fontWeight: '700', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', flexShrink: 0 }}
+                          >
+                            Düzelt
+                          </button>
+                        </div>
+                      );
+                    })()}
                  </div>
                  )}
 
                  {/* Phone */}
                  {!isChildProfile && (
                  <div style={{ marginBottom: '16px' }}>
-                    <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                        <Phone size={13} color="var(--primary)" /> Telefon Numarası
+                    <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                        <Phone size={13} color="var(--primary)" />
+                        <div style={{ width: '1px', height: '11px', background: '#e2e8f0', flexShrink: 0 }} />
+                        <span>Telefon Numarası</span>
                     </label>
                     <div style={{ 
                       display: 'flex', 
@@ -920,11 +1045,11 @@ export default function ProfileSettings({ hideHeader = false }) {
                        <div style={{ 
                          display: 'flex', 
                          alignItems: 'center', 
-                         padding: '0 12px', 
+                         padding: '0 10px', 
                          background: '#f8fafc', 
                          borderRight: '1px solid #e2e8f0', 
                          color: '#475569', 
-                         fontSize: '12.5px', 
+                         fontSize: '12px', 
                          fontWeight: '700',
                          userSelect: 'none'
                        }}>
@@ -938,9 +1063,9 @@ export default function ProfileSettings({ hideHeader = false }) {
                          maxLength={14}
                          style={{ 
                            flex: 1, 
-                           padding: '10px 12px', 
-                           fontSize: '13px', 
-                           fontWeight: '600', 
+                           padding: '9px 12px', 
+                           fontSize: '12px', 
+                           fontWeight: '500', 
                            color: '#1e293b', 
                            background: 'transparent', 
                            border: 'none', 
@@ -956,10 +1081,12 @@ export default function ProfileSettings({ hideHeader = false }) {
                  {!isChildProfile && (
                  <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <label style={{ fontSize: '11.5px', fontWeight: '600', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Building2 size={13} color="var(--primary)" /> Firma / Kurum Adı
+                        <label style={{ fontSize: '11px', fontWeight: '600', color: '#475569', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Building2 size={13} color="var(--primary)" />
+                            <div style={{ width: '1px', height: '11px', background: '#e2e8f0', flexShrink: 0 }} />
+                            <span>Firma / Kurum Adı</span>
                         </label>
-                        <span style={{ fontSize: '10px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}>
+                        <span style={{ fontSize: '9.5px', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '500' }}>
                             <Lock size={10} /> {isPersonnel ? 'Move Travel personeli için sabittir' : (getDisplayCompany() === 'Bireysel Kullanıcı' ? 'Hesap türü sabittir' : 'Firma adı sabittir')}
                         </span>
                     </div>
@@ -969,9 +1096,9 @@ export default function ProfileSettings({ hideHeader = false }) {
                       readOnly={true}
                       style={{ 
                         width: '100%', 
-                        padding: '10px 12px', 
-                        fontSize: '13px', 
-                        fontWeight: '600', 
+                        padding: '9px 12px', 
+                        fontSize: '12px', 
+                        fontWeight: '500', 
                         color: '#64748b', 
                         background: '#f8fafc', 
                         border: '1px solid #e2e8f0', 
@@ -1260,7 +1387,8 @@ export default function ProfileSettings({ hideHeader = false }) {
                       <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#fef08a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           <HeartPulse size={14} color="#a16207" />
                       </div>
-                      <span style={{ fontSize: '13.5px', fontWeight: '700', color: '#a16207' }}>
+                      <div style={{ width: '1px', height: '14px', background: '#fde047', flexShrink: 0 }} />
+                      <span style={{ fontSize: '12.5px', fontWeight: '700', color: '#a16207' }}>
                           {isChildProfile ? 'Çocuğa Ait Sağlık & Acil Durum' : 'Sağlık & Acil Durum Bilgileri'}
                       </span>
                   </div>

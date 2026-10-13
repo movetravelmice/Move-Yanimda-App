@@ -37,9 +37,7 @@ export default function AppBottomNav() {
   // Otherwise -> Corporate mode
   const isIndividual = !isGuest && (
     activeMode === 'individual' ||
-    pathname.startsWith('/individual') ||
-    (user?.userType === 'individual' && activeMode !== 'corporate') ||
-    (user?.role === 'individual' && activeMode !== 'corporate')
+    pathname.startsWith('/individual')
   );
   const isCorporate = !isGuest && !isIndividual;
 
@@ -49,10 +47,20 @@ export default function AppBottomNav() {
   let unreadMessagesCount = 0;
   let myUnreadNotificationsCount = 0;
 
+  const isUserInTour = (p) => {
+    if (!p || !user) return false;
+    if (p.id === user.id) return true;
+    if (p.email && user.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()) return true;
+    const pPhone = (p.phone || '').replace(/\D/g, '');
+    const uPhone = (user.phone || '').replace(/\D/g, '');
+    if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) return true;
+    return false;
+  };
+
   if (isCorporate) {
     const myTourIds = tours.filter(t => {
       if (user?.role === 'expert') return (t.guideName === user?.name) || (t.expert?.name === user?.name);
-      if (user?.role === 'customer') return t.participants?.some(p => p.id === user?.id || (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()));
+      if (user?.role === 'customer') return t.participants?.some(isUserInTour);
       if (user?.role === 'ticketing' || user?.role === 'admin') return true;
       return true;
     }).map(t => t.id);
@@ -96,7 +104,7 @@ export default function AppBottomNav() {
         if (t.status === 'past' && isExpiredArchivedTour(t.dates)) return false;
 
         if (user.role === 'customer') {
-          return t.participants?.some(p => p.id === user.id || (p.email && user.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()));
+          return t.participants?.some(isUserInTour);
         }
         if (user.role === 'expert' || user.role === 'admin' || user.role === 'ticketing') {
           return (t.guideName === user.name) || (t.expert?.name === user.name) || (t.expert?.email === user.email) || (t.expert2?.name === user.name) || (t.expert2?.email === user.email);

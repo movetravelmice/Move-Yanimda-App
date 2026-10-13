@@ -31,7 +31,7 @@ export default function TintinFloatingButton() {
   }
 
   const handleClick = () => {
-    if (activeMode === 'individual' || (!activeMode && (user?.userType === 'individual' || user?.role === 'customer'))) {
+    if (activeMode === 'individual') {
       navigate('/tintin');
     } else if (user && ['admin', 'expert', 'ticketing'].includes(user?.role)) {
       navigate('/dashboard/tintin');

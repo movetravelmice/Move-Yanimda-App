@@ -20,6 +20,7 @@ import { db } from '../../lib/firebase';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore, formatTitleCase } from '../../store/userStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { normalizePhoneNumber, formatPhoneInputWithoutPrefix, checkEmailDomainTypo } from '../../utils/userUtils';
 
 export default function RegisterIndividual() {
   const navigate = useNavigate();
@@ -46,7 +47,7 @@ export default function RegisterIndividual() {
 
     const cleanFirst = firstName.trim();
     const cleanLast = lastName.trim();
-    const cleanEmail = email.trim().toLowerCase();
+    let cleanEmail = email.trim().toLowerCase();
     const cleanPhone = phone.trim();
     const cleanPass = password.trim();
     const cleanPassConfirm = passwordConfirm.trim();
@@ -59,6 +60,17 @@ export default function RegisterIndividual() {
     if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
       setError('Lütfen geçerli bir e-posta adresi girin.');
       return;
+    }
+
+    const typoCheck = checkEmailDomainTypo(cleanEmail);
+    if (typoCheck) {
+      const confirmCorrection = window.confirm(
+        `Girdiğiniz e-posta adresinde olası bir yazım hatası tespit edildi (${cleanEmail}).\n\nAdresi "${typoCheck.suggestedEmail}" olarak düzeltip devam etmek ister misiniz?`
+      );
+      if (confirmCorrection) {
+        cleanEmail = typoCheck.suggestedEmail;
+        setEmail(typoCheck.suggestedEmail);
+      }
     }
 
     if (cleanPass.length < 6) {
@@ -90,22 +102,22 @@ export default function RegisterIndividual() {
         return;
       }
 
-      // 2. Generate unique individual user record
-      const userId = 'ind_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+      // 2. Generate unique corporate user record (with access to both corporate & individual tools)
+      const userId = 'cust_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
       const fullName = formatTitleCase(`${cleanFirst} ${cleanLast}`);
       const safeName = encodeURIComponent(fullName);
-      const avatarUrl = `https://ui-avatars.com/api/?name=${safeName}&background=D7147A&color=fff&bold=true`;
+      const avatarUrl = `https://ui-avatars.com/api/?name=${safeName}&background=2563eb&color=fff&bold=true`;
 
       const newUser = {
         id: userId,
         name: fullName,
         email: cleanEmail,
-        phone: cleanPhone || '-',
+        phone: cleanPhone ? normalizePhoneNumber(cleanPhone) : '-',
         password: cleanPass,
         avatar: avatarUrl,
-        userType: 'individual',
+        userType: 'corporate',
         role: 'customer',
-        company: 'Bireysel',
+        company: 'Move Travel & Mice',
         status: 'Aktif',
         createdAt: new Date().toISOString()
       };
@@ -118,10 +130,10 @@ export default function RegisterIndividual() {
       useUserStore.setState({ users: [newUser, ...currentUsers] });
 
       // 5. Authenticate user immediately
-      useAuthStore.setState({ user: newUser });
+      useAuthStore.setState({ user: newUser, activeMode: 'corporate' });
 
       // 6. Direct to main dashboard
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       console.error("Bireysel kayıt hatası:", err);
       setError('Kayıt oluşturulurken bir hata oluştu: ' + (err.message || 'Lütfen tekrar deneyin.'));
@@ -441,20 +453,40 @@ export default function RegisterIndividual() {
                   style={inputStyle}
                 />
               </div>
+              {(() => {
+                const typo = checkEmailDomainTypo(email);
+                if (!typo) return null;
+                return (
+                  <div style={{ marginTop: '5px', fontSize: '11.5px', color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', padding: '5px 10px', borderRadius: '7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                    <span>⚠️ <strong>{typo.suggestedDomain}</strong> mu demek istediniz?</span>
+                    <button
+                      type="button"
+                      onClick={() => setEmail(typo.suggestedEmail)}
+                      style={{ border: 'none', background: '#d97706', color: '#fff', fontSize: '10.5px', fontWeight: '700', padding: '3px 8px', borderRadius: '4px', cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      Düzelt
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Phone Number */}
             <div>
               <label style={labelStyle}>Telefon Numarası</label>
               <div style={getInputBoxStyle('phone')}>
-                <Phone size={14} color={focusedField === 'phone' ? '#D7147A' : '#94a3b8'} style={{ marginRight: '6px', flexShrink: 0 }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginRight: '8px', flexShrink: 0 }}>
+                  <Phone size={14} color={focusedField === 'phone' ? '#D7147A' : '#94a3b8'} />
+                  <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', userSelect: 'none' }}>+90</span>
+                </div>
                 <input
                   type="tel"
-                  placeholder="05XX XXX XX XX"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
+                  placeholder="5XX XXX XX XX"
+                  value={formatPhoneInputWithoutPrefix(phone)}
+                  onChange={e => setPhone(formatPhoneInputWithoutPrefix(e.target.value))}
                   onFocus={() => setFocusedField('phone')}
                   onBlur={() => setFocusedField(null)}
+                  maxLength={14}
                   style={inputStyle}
                 />
               </div>
@@ -656,7 +688,7 @@ export default function RegisterIndividual() {
         }}>
           <span>Made By</span>
           <span style={{ color: '#ef4444', fontSize: '11px', display: 'inline-flex' }}>❤️</span>
-          <span style={{ fontWeight: '500', color: '#64748b' }}>Astraeus Technology & Upix Media</span>
+          <span style={{ fontWeight: '500', color: '#64748b' }}>Upix Media</span>
         </div>
       </div>
 

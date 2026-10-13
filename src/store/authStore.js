@@ -6,15 +6,25 @@ import { useUserStore } from './userStore';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
+export const isUserAdmin = (u) => Boolean(u && (u.role === 'admin' || u.secondaryRole === 'admin'));
+export const getUserSecondaryRole = (u) => {
+  if (!u) return null;
+  if (u.role === 'admin') return (u.secondaryRole === 'expert' || u.secondaryRole === 'ticketing') ? u.secondaryRole : null;
+  if (u.secondaryRole === 'admin') return (u.role === 'expert' || u.role === 'ticketing') ? u.role : null;
+  return null;
+};
+export const hasDualRole = (u) => Boolean(isUserAdmin(u) && getUserSecondaryRole(u));
+
 export const useAuthStore = create(persist((set, get) => ({
   user: null, 
   activeMode: null, // 'corporate' | 'individual'
+  activeStaffRole: null, // 'admin' | 'expert' | 'ticketing'
   setActiveMode: (mode) => set({ activeMode: mode }),
+  setActiveStaffRole: (role) => set({ activeStaffRole: role }),
+  syncUserRecord: (freshData) => set(state => ({ user: state.user ? { ...state.user, ...freshData } : state.user })),
   getActiveMode: () => {
     const state = get();
     if (state.activeMode) return state.activeMode;
-    if (!state.user) return 'individual';
-    if (state.user.userType === 'individual' || state.user.role === 'customer') return 'individual';
     return 'corporate';
   },
   login: async (identifier, password) => {
@@ -96,11 +106,16 @@ export const useAuthStore = create(persist((set, get) => ({
           useSettingsStore.getState().setExpertName(userRecord.name);
       }
       
-      const defaultMode = (userRecord.userType === 'individual' || userRecord.role === 'customer') ? 'individual' : 'corporate';
-      set({ user: userRecord, activeMode: defaultMode });
+      const normalizedUser = {
+          ...userRecord,
+          userType: 'corporate'
+      };
+      const isAdmin = userRecord.role === 'admin' || userRecord.secondaryRole === 'admin';
+      const initialStaffRole = isAdmin ? 'admin' : (userRecord.role || 'customer');
+      set({ user: normalizedUser, activeMode: 'corporate', activeStaffRole: initialStaffRole });
       return { success: true };
   },
-  logout: () => set({ user: null, activeMode: null }),
+  logout: () => set({ user: null, activeMode: null, activeStaffRole: null }),
   updateProfile: (data) => set(state => {
       if (!state.user) return state;
       const updatedUser = { ...state.user, ...data };

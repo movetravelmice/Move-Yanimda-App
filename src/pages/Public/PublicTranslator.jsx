@@ -16,13 +16,19 @@ import {
   MessageSquare,
   MessageCircle,
   VolumeX,
-  Play
+  Play,
+  X,
+  Smartphone,
+  Monitor,
+  ShieldAlert,
+  HelpCircle
 } from 'lucide-react';
 import { 
   SUPPORTED_LANGUAGES, 
   translateText, 
   speakText, 
-  createSpeechRecognizer 
+  createSpeechRecognizer,
+  requestMicrophonePermission
 } from '../../services/travelToolsService';
 import Header from '../../components/Header';
 import CountryFlag from '../../components/CountryFlag';
@@ -56,6 +62,27 @@ export default function PublicTranslator({ isEmbedded = false }) {
   const [errorMsg, setErrorMsg] = useState('');
   const speechRecognizerRef = useRef(null);
   const conversationEndRef = useRef(null);
+
+  // Microphone Permission States
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [isCheckingMic, setIsCheckingMic] = useState(false);
+  const [permissionGuideDevice, setPermissionGuideDevice] = useState('mobile'); // 'mobile' | 'ios' | 'desktop'
+  const [pendingMicAction, setPendingMicAction] = useState(null);
+  const [permissionSuccessMsg, setPermissionSuccessMsg] = useState('');
+
+  // Auto-detect device for permission guide
+  useEffect(() => {
+    if (typeof window !== 'undefined' && navigator.userAgent) {
+      const ua = navigator.userAgent;
+      if (/iPhone|iPad|iPod/i.test(ua)) {
+        setPermissionGuideDevice('ios');
+      } else if (/Android/i.test(ua)) {
+        setPermissionGuideDevice('mobile');
+      } else {
+        setPermissionGuideDevice('desktop');
+      }
+    }
+  }, []);
 
   const getSourceLangObj = () => SUPPORTED_LANGUAGES.find(l => l.code === sourceLang) || SUPPORTED_LANGUAGES[1];
   const getTargetLangObj = () => SUPPORTED_LANGUAGES.find(l => l.code === targetLang) || SUPPORTED_LANGUAGES[2];
@@ -152,6 +179,91 @@ export default function PublicTranslator({ isEmbedded = false }) {
     }
   };
 
+  // ==========================================
+  // MICROPHONE PERMISSION & EXECUTION WRAPPER
+  // ==========================================
+  const executeWithMicrophonePermission = async (actionCallback) => {
+    setErrorMsg('');
+    setPermissionSuccessMsg('');
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setErrorMsg('Tarayıcınız ses tanıma özelliğini desteklemiyor. Google Chrome, Safari veya Microsoft Edge kullanmanızı öneririz.');
+      return;
+    }
+
+    setIsCheckingMic(true);
+
+    try {
+      // Explicitly calls getUserMedia to force the browser to show native permission prompt!
+      const permResult = await requestMicrophonePermission();
+
+      if (!permResult.granted) {
+        setIsCheckingMic(false);
+        setPendingMicAction(() => actionCallback);
+        setShowPermissionModal(true);
+        return;
+      }
+
+      setIsCheckingMic(false);
+      actionCallback();
+    } catch (e) {
+      setIsCheckingMic(false);
+      console.warn("Microphone activation failed:", e);
+      setPendingMicAction(() => actionCallback);
+      setShowPermissionModal(true);
+    }
+  };
+
+  const handleRequestPermissionNow = async () => {
+    setIsCheckingMic(true);
+    setErrorMsg('');
+    try {
+      const permResult = await requestMicrophonePermission();
+      if (permResult.granted) {
+        setPermissionSuccessMsg('Mikrofon erişim izni onaylandı! Ses dinleme başlatılıyor...');
+        setTimeout(() => {
+          setShowPermissionModal(false);
+          setPermissionSuccessMsg('');
+          if (pendingMicAction) {
+            pendingMicAction();
+            setPendingMicAction(null);
+          }
+        }, 750);
+      } else {
+        setErrorMsg('Tarayıcınız otomatik izin onay penceresini göstermedi veya izin reddedildi. Lütfen aşağıdaki adımları uygulayınız.');
+      }
+    } catch (err) {
+      setErrorMsg('Mikrofon izni alınamadı. Lütfen cihaz ayarlarınızı kontrol edin.');
+    } finally {
+      setIsCheckingMic(false);
+    }
+  };
+
+  const handleTriggerDialogue = (speakerSide) => {
+    if (isListeningSource || isListeningTarget) {
+      speechRecognizerRef.current?.stop();
+      setIsListeningSource(false);
+      setIsListeningTarget(false);
+      return;
+    }
+    executeWithMicrophonePermission(() => {
+      startDialogueListening(speakerSide);
+    });
+  };
+
+  const handleTriggerTextMic = (forLang = 'source') => {
+    if (isListeningSource || isListeningTarget) {
+      speechRecognizerRef.current?.stop();
+      setIsListeningSource(false);
+      setIsListeningTarget(false);
+      return;
+    }
+    executeWithMicrophonePermission(() => {
+      handleTextMic(forLang);
+    });
+  };
+
   // Text Mode Microphone
   const handleTextMic = (forLang = 'source') => {
     if (isListeningSource || isListeningTarget) {
@@ -176,7 +288,12 @@ export default function PublicTranslator({ isEmbedded = false }) {
       onError: (err) => {
         setIsListeningSource(false);
         setIsListeningTarget(false);
-        setErrorMsg(err.message);
+        if (err.isPermissionError) {
+          setPendingMicAction(() => () => handleTextMic(forLang));
+          setShowPermissionModal(true);
+        } else {
+          setErrorMsg(err.message);
+        }
       },
       onEnd: () => {
         setIsListeningSource(false);
@@ -255,7 +372,12 @@ export default function PublicTranslator({ isEmbedded = false }) {
       onError: (err) => {
         setIsListeningSource(false);
         setIsListeningTarget(false);
-        setErrorMsg(err.message);
+        if (err.isPermissionError) {
+          setPendingMicAction(() => () => startDialogueListening(speakerSide));
+          setShowPermissionModal(true);
+        } else {
+          setErrorMsg(err.message);
+        }
       },
       onEnd: () => {
         setIsListeningSource(false);
@@ -848,7 +970,7 @@ export default function PublicTranslator({ isEmbedded = false }) {
               {/* Left Button: Source Language (e.g. Türkçe) */}
               <button
                 type="button"
-                onClick={() => startDialogueListening('source')}
+                onClick={() => handleTriggerDialogue('source')}
                 style={{
                   padding: '14px 10px',
                   borderRadius: '16px',
@@ -895,7 +1017,7 @@ export default function PublicTranslator({ isEmbedded = false }) {
               {/* Right Button: Target Language (e.g. İngilizce) */}
               <button
                 type="button"
-                onClick={() => startDialogueListening('target')}
+                onClick={() => handleTriggerDialogue('target')}
                 style={{
                   padding: '14px 10px',
                   borderRadius: '16px',
@@ -1016,7 +1138,7 @@ export default function PublicTranslator({ isEmbedded = false }) {
                 {/* Source Mic */}
                 <button
                   type="button"
-                  onClick={() => handleTextMic('source')}
+                  onClick={() => handleTriggerTextMic('source')}
                   title={`${sourceLangObj.name} ile konuş`}
                   style={{
                     display: 'flex',
@@ -1157,6 +1279,349 @@ export default function PublicTranslator({ isEmbedded = false }) {
                   Çeviri burada görüntülenecektir...
                 </span>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MİKROFON İZNİ & ONAY REHBERİ POPUP / MODAL                          */}
+      {/* ================================================================= */}
+      {showPermissionModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.72)',
+          backdropFilter: 'blur(6px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999,
+          padding: '16px',
+          boxSizing: 'border-box'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '440px',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            backgroundColor: '#ffffff',
+            borderRadius: '24px',
+            padding: '24px 20px',
+            boxShadow: '0 20px 40px -10px rgba(0,0,0,0.3)',
+            border: '1px solid #e2e8f0',
+            boxSizing: 'border-box',
+            position: 'relative'
+          }}>
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={() => { setShowPermissionModal(false); setPendingMicAction(null); }}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: '#f1f5f9',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#64748b'
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            {/* Modal Icon */}
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              background: '#FDF2F8',
+              border: '1.5px solid #F9BED8',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 14px',
+              color: '#D7147A',
+              boxShadow: '0 4px 14px rgba(215, 20, 122, 0.15)'
+            }}>
+              <Mic size={26} />
+            </div>
+
+            {/* Modal Title & Subtitle */}
+            <h3 style={{
+              textAlign: 'center',
+              fontSize: '17px',
+              fontWeight: '800',
+              color: '#0f172a',
+              margin: '0 0 6px'
+            }}>
+              Mikrofon İzni Gerekli
+            </h3>
+            <p style={{
+              textAlign: 'center',
+              fontSize: '12.5px',
+              color: '#64748b',
+              lineHeight: 1.5,
+              margin: '0 0 16px',
+              padding: '0 8px'
+            }}>
+              Seyahat Çevirmeninin sesinizi duyabilmesi ve anında çeviri yapabilmesi için mikrofon erişimine onay vermeniz gerekmektedir.
+            </p>
+
+            {/* Success Notification */}
+            {permissionSuccessMsg && (
+              <div style={{
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                color: '#15803d',
+                borderRadius: '12px',
+                padding: '10px 14px',
+                fontSize: '12px',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                marginBottom: '14px'
+              }}>
+                <Check size={16} />
+                <span>{permissionSuccessMsg}</span>
+              </div>
+            )}
+
+            {/* Direct Native Prompt Trigger Button */}
+            <button
+              type="button"
+              onClick={handleRequestPermissionNow}
+              disabled={isCheckingMic}
+              style={{
+                width: '100%',
+                padding: '13px 18px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+                color: '#ffffff',
+                border: 'none',
+                fontSize: '13.5px',
+                fontWeight: '800',
+                cursor: isCheckingMic ? 'wait' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 14px rgba(215, 20, 122, 0.35)',
+                marginBottom: '16px',
+                opacity: isCheckingMic ? 0.7 : 1,
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {isCheckingMic ? (
+                <>
+                  <Loader2 size={16} style={{ animation: 'spin 1s infinite linear' }} />
+                  <span>Onay Bekleniyor...</span>
+                </>
+              ) : (
+                <>
+                  <Mic size={16} />
+                  <span>İzin Onay Penceresini Aç</span>
+                </>
+              )}
+            </button>
+
+            {/* Device Instructions Box */}
+            <div style={{
+              background: '#f8fafc',
+              borderRadius: '16px',
+              border: '1px solid #e2e8f0',
+              padding: '14px',
+              marginBottom: '14px'
+            }}>
+              <div style={{
+                fontSize: '11.5px',
+                fontWeight: '800',
+                color: '#334155',
+                marginBottom: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}>
+                <span>Onay Penceresi Çıkmıyorsa:</span>
+                <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600' }}>Cihazınızı Seçin</span>
+              </div>
+
+              {/* Device selector tabs */}
+              <div style={{
+                display: 'flex',
+                gap: '6px',
+                marginBottom: '12px'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setPermissionGuideDevice('mobile')}
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: permissionGuideDevice === 'mobile' ? '1px solid #F9BED8' : '1px solid #e2e8f0',
+                    background: permissionGuideDevice === 'mobile' ? '#FDF2F8' : '#ffffff',
+                    color: permissionGuideDevice === 'mobile' ? '#D7147A' : '#64748b',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  📱 Android
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPermissionGuideDevice('ios')}
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: permissionGuideDevice === 'ios' ? '1px solid #F9BED8' : '1px solid #e2e8f0',
+                    background: permissionGuideDevice === 'ios' ? '#FDF2F8' : '#ffffff',
+                    color: permissionGuideDevice === 'ios' ? '#D7147A' : '#64748b',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  🍏 iPhone / iPad
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPermissionGuideDevice('desktop')}
+                  style={{
+                    flex: 1,
+                    padding: '6px 8px',
+                    borderRadius: '8px',
+                    border: permissionGuideDevice === 'desktop' ? '1px solid #F9BED8' : '1px solid #e2e8f0',
+                    background: permissionGuideDevice === 'desktop' ? '#FDF2F8' : '#ffffff',
+                    color: permissionGuideDevice === 'desktop' ? '#D7147A' : '#64748b',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    cursor: 'pointer'
+                  }}
+                >
+                  💻 Bilgisayar
+                </button>
+              </div>
+
+              {/* Step Guide */}
+              {permissionGuideDevice === 'mobile' && (
+                <div style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.6 }}>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>1</span>
+                    <span>Tarayıcının adres çubuğunda yer alan <b>kilit (🔒)</b> veya ayar simgesine dokunun.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>2</span>
+                    <span><b>İzinler</b> veya <b>Site Ayarları</b> menüsüne girin.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>3</span>
+                    <span><b>Mikrofon</b> ayarını <b>"İzin Ver"</b> veya <b>"Açık"</b> yapın.</span>
+                  </div>
+                </div>
+              )}
+
+              {permissionGuideDevice === 'ios' && (
+                <div style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.6 }}>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>1</span>
+                    <span>Safari adres çubuğunun solundaki <b>"aA"</b> veya <b>kilit (🔒)</b> simgesine dokunun.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>2</span>
+                    <span><b>Web Sitesi Ayarları</b>'na dokunun ve <b>Mikrofon</b>'u <b>"İzin Ver"</b> yapın.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>3</span>
+                    <span>Telefonun <i>Ayarlar &gt; Safari / Chrome &gt; Mikrofon</i> izninin açık olduğunu kontrol edin.</span>
+                  </div>
+                </div>
+              )}
+
+              {permissionGuideDevice === 'desktop' && (
+                <div style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.6 }}>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>1</span>
+                    <span>Adres çubuğundaki URL'nin hemen solundaki <b>kilit (🔒)</b> simgesine tıklayın.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>2</span>
+                    <span><b>Mikrofon</b> anahtarını <b>Açık / İzin Ver</b> yapın.</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <span style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#e2e8f0', color: '#1e293b', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', flexShrink: 0 }}>3</span>
+                    <span>Sayfayı yenileyin veya aşağıdaki "İzni Tekrar Dene" butonuna basın.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PWA / App note */}
+            <div style={{
+              background: '#fffbeb',
+              border: '1px solid #fef3c7',
+              borderRadius: '12px',
+              padding: '9px 12px',
+              marginBottom: '16px',
+              fontSize: '11px',
+              color: '#b45309',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '6px',
+              lineHeight: 1.45
+            }}>
+              <AlertCircle size={14} style={{ flexShrink: 0, marginTop: '2px' }} />
+              <span><b>Uygulama (PWA) Olarak Kullanıyorsanız:</b> Cihazınızın <i>Ayarlar &gt; Uygulamalar &gt; Move Yanımda &gt; İzinler</i> ekranından Mikrofon iznini etkinleştiriniz.</span>
+            </div>
+
+            {/* Bottom Actions */}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={handleRequestPermissionNow}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '12px',
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  color: '#334155',
+                  fontSize: '12px',
+                  fontWeight: '700',
+                  cursor: 'pointer'
+                }}
+              >
+                İzni Tekrar Dene
+              </button>
+              <button
+                type="button"
+                onClick={() => { setShowPermissionModal(false); setPendingMicAction(null); }}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: '12px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  color: '#64748b',
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Kapat
+              </button>
             </div>
           </div>
         </div>

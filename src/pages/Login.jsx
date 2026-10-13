@@ -39,11 +39,7 @@ export default function Login() {
 
   useEffect(() => {
     if (user) {
-      if (user.userType === 'individual' || user.role === 'customer') {
-        navigate('/');
-      } else {
-        navigate('/dashboard');
-      }
+      navigate('/dashboard');
     }
   }, [user, navigate]);
 
@@ -58,17 +54,12 @@ export default function Login() {
     
     setIsLoggingIn(true);
     try {
-        const res = await login(cleanEmail, cleanPassword);
-        if (res && !res.success) {
-            setError(res.message);
-            return;
-        }
-        const loggedUser = useAuthStore.getState().user;
-        if (loggedUser?.userType === 'individual' || loggedUser?.role === 'customer') {
-          navigate('/individual/dashboard');
-        } else {
-          navigate('/dashboard');
-        }
+      const res = await login(cleanEmail, cleanPassword);
+      if (res && !res.success) {
+        setError(res.message);
+        return;
+      }
+      navigate('/dashboard');
     } catch (err) {
         setError('Giriş yapılırken bir hata oluştu. Lütfen tekrar deneyin.');
     } finally {
@@ -731,7 +722,7 @@ export default function Login() {
             }}>
                 <span>Made By</span>
                 <span style={{ color: '#ef4444', fontSize: '11px', display: 'inline-flex' }}>❤️</span>
-                <span style={{ fontWeight: '500', color: '#64748b' }}>Astraeus Technology & Upix Media</span>
+                <span style={{ fontWeight: '500', color: '#64748b' }}>Upix Media</span>
             </div>
         </div>
 

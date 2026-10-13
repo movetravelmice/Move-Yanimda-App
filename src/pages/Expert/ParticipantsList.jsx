@@ -7,7 +7,7 @@ import ParticipantTransferManager from '../../components/ParticipantTransferMana
 import BulkParticipantManager from '../../components/BulkParticipantManager';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail } from '../../utils/userUtils';
+import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber } from '../../utils/userUtils';
 
 export default function ParticipantsList() {
     const navigate = useNavigate();
@@ -277,7 +277,7 @@ export default function ParticipantsList() {
 
             const payload = {
                 email: cleanEmail || selectedUser.email,
-                phone: cleanPhone || '-'
+                phone: cleanPhone ? normalizePhoneNumber(cleanPhone) : '-'
             };
 
             await updateUser(selectedUser.id, payload);
@@ -488,7 +488,7 @@ export default function ParticipantsList() {
             addCompany(compValue);
         }
 
-        const formattedPhone = rawPhone ? (rawPhone.startsWith('+') ? rawPhone : `+90 ${rawPhone}`) : '-';
+        const formattedPhone = rawPhone ? normalizePhoneNumber(rawPhone) : '-';
 
         let finalEmail;
         if (isChild) {
@@ -506,6 +506,7 @@ export default function ParticipantsList() {
             name: newName,
             email: finalEmail,
             role: 'customer',
+            userType: 'corporate',
             phone: isChild ? '-' : formattedPhone,
             company: compValue,
             password: newUserPassword,

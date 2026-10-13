@@ -42,7 +42,7 @@ export default function Notifications() {
       if ((n.deletedBy || []).includes(user?.email || 'mock_user')) return false;
 
       // 2. Admins see all notifications
-      if (user?.role === 'admin') return true;
+      if (user?.role === 'admin' || user?.secondaryRole === 'admin') return true;
 
       // 2.1 Senders always see their own sent notifications
       if (n.senderId === user?.id || (n.senderName && n.senderName === user?.name)) return true;
@@ -129,7 +129,7 @@ export default function Notifications() {
                 <div style={{ fontSize: '13px', fontWeight: '800' }}>
                   Toplu Push & Web Bildirimi Gönder
                 </div>
-                <div style={{ fontSize: '10.5px', color: 'rgba(255, 255, 255, 0.85)' }}>
+                <div style={{ fontSize: '9px', color: 'rgba(255, 255, 255, 0.88)', marginTop: '2px', lineHeight: '1.25' }}>
                   {user?.role === 'expert'
                     ? 'Tur katılımcılarına veya kullanıcılara anlık push bildirim iletin'
                     : user?.role === 'ticketing'
@@ -147,13 +147,14 @@ export default function Notifications() {
         <div 
           className="card" 
           style={{ 
-            padding: '10px 14px', 
+            padding: '15px 16px', 
             marginBottom: '12px', 
             display: 'flex', 
             justifyContent: 'space-between', 
             alignItems: 'center',
-            borderRadius: '12px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+            borderRadius: '16px',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -208,38 +209,47 @@ export default function Notifications() {
                   }}
                   style={{ 
                     background: isUnread ? '#fff5f9' : 'var(--surface)', 
-                    padding: '13px 15px', 
+                    padding: '11px 14px', 
                     borderRadius: '14px', 
                     border: `1.2px solid ${isUnread ? '#F9BED8' : 'var(--border-color)'}`,
                     display: 'flex', 
+                    alignItems: 'center',
                     gap: '12px', 
                     transition: 'all 0.2s', 
                     cursor: 'pointer',
                     boxShadow: '0 2px 6px rgba(0,0,0,0.03)'
                   }}
                 >
+                  {/* Duyuru İkonu (Yuvarlaksız, Üstten ve Alttan Ortalanmış) */}
                   <div style={{ 
-                    width: '36px', 
-                    height: '36px', 
-                    borderRadius: '50%', 
-                    background: isExpertAlert ? '#fef2f2' : (isPromo ? '#FDF2F8' : '#eff6ff'), 
                     color: isExpertAlert ? '#ef4444' : (isPromo ? '#D7147A' : '#3b82f6'), 
                     display: 'flex', 
                     alignItems: 'center', 
                     justifyContent: 'center', 
                     flexShrink: 0,
-                    marginTop: '2px'
+                    alignSelf: 'center',
+                    padding: '0 2px'
                   }}>
-                    {isExpertAlert ? <AlertTriangle size={17} /> : (isPromo ? <Sparkles size={17} /> : <Megaphone size={17} />)}
+                    {isExpertAlert ? <AlertTriangle size={18} /> : (isPromo ? <Sparkles size={18} /> : <Megaphone size={18} />)}
                   </div>
 
+                  {/* İkon ile Yazı Arasındaki Dikey Çizgi */}
+                  <div style={{ 
+                    width: '1px', 
+                    alignSelf: 'stretch', 
+                    background: '#e2e8f0', 
+                    flexShrink: 0,
+                    margin: '2px 0'
+                  }} />
+
+                  {/* Metin Alanı */}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px', gap: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px', gap: '6px' }}>
                       <h3 
                         title={n.title}
                         style={{ 
-                          fontSize: '13px', 
-                          fontWeight: '800', 
+                          fontSize: '12px', 
+                          fontWeight: '700', 
                           color: '#0f172a', 
                           margin: 0, 
                           lineHeight: 1.3,
@@ -249,28 +259,28 @@ export default function Notifications() {
                       >
                         {n.title}
                       </h3>
-                      {isUnread && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#D7147A', flexShrink: 0 }} />}
+                      {isUnread && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#D7147A', flexShrink: 0 }} />}
                     </div>
 
-                    <p style={{ fontSize: '12px', color: '#475569', margin: 0, lineHeight: 1.45, wordBreak: 'break-word' }}>
+                    <p style={{ fontSize: '11px', color: '#475569', margin: 0, lineHeight: 1.4, wordBreak: 'break-word' }}>
                       {n.message}
                     </p>
                     
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '5px' }}>
                       {n.senderName ? (
-                        <div style={{ fontSize: '10.5px', fontWeight: '700', color: '#D7147A' }}>
+                        <div style={{ fontSize: '9.5px', fontWeight: '700', color: '#D7147A' }}>
                           Gönderen: {n.senderName}
                         </div>
                       ) : <div />}
 
-                      <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '9.5px', color: '#94a3b8' }}>
                         {new Date(n.date).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </div>
                     </div>
 
                     {n.actionUrl && (
-                      <div style={{ marginTop: '4px', fontSize: '11px', color: '#2563eb', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                        <span>Sayfaya Git</span> <ExternalLink size={11} />
+                      <div style={{ marginTop: '4px', fontSize: '10px', color: '#2563eb', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                        <span>Sayfaya Git</span> <ExternalLink size={10} />
                       </div>
                     )}
                   </div>

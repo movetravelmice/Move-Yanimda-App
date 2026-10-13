@@ -60,6 +60,21 @@ function App() {
     initFirestoreSettings();
   }, [corporateName, deleteTour, initFirestoreUsers, initFirestoreTours, initFirestoreChats, initFirestoreNotifications, initFirestoreSettings]);
 
+  // Synchronize authenticated session when Firestore user data updates
+  useEffect(() => {
+    if (user?.id && users.length > 0) {
+      const freshUser = users.find(u => u.id === user.id || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()));
+      if (freshUser) {
+        if (freshUser.role !== user.role || freshUser.secondaryRole !== user.secondaryRole) {
+          useAuthStore.getState().syncUserRecord({
+            role: freshUser.role,
+            secondaryRole: freshUser.secondaryRole
+          });
+        }
+      }
+    }
+  }, [users, user?.id, user?.email, user?.role, user?.secondaryRole]);
+
   useEffect(() => {
     if (tours.length > 0 && users.length > 0 && whatsappConfig?.isEnabled) {
       if (checkAndSendFlightReminders) {
@@ -84,7 +99,7 @@ function App() {
 
   const getRootRedirect = () => {
     if (!user) return <WelcomeLanding />;
-    if (activeMode === 'individual' || (!activeMode && (user.userType === 'individual' || user.role === 'customer'))) {
+    if (activeMode === 'individual') {
       return <Navigate to="/individual/dashboard" replace />;
     }
     return <Navigate to="/dashboard" replace />;

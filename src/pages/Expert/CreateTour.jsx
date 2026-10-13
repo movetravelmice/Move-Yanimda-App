@@ -272,7 +272,7 @@ export default function CreateTour() {
     const currentEditingTour = tourId ? tours.find(t => t.id === tourId) : null;
 
     const expertsList = React.useMemo(() => {
-        const list = [...allUsers.filter(u => u.role === 'expert' || u.role === 'admin')];
+        const list = [...allUsers.filter(u => u.role === 'expert' || u.role === 'admin' || u.secondaryRole === 'expert' || u.secondaryRole === 'admin')];
         
         // If current logged-in user is expert and not in list, add them
         if (currentUser && !list.some(e => e.id === currentUser.id || (e.email && e.email.toLowerCase() === currentUser.email?.toLowerCase()))) {
@@ -693,7 +693,7 @@ export default function CreateTour() {
         }
     };
 
-    const isAdmin = currentUser?.role === 'admin';
+    const isAdmin = currentUser?.role === 'admin' || currentUser?.secondaryRole === 'admin';
     const availableSecondExperts = expertsList.filter(u => u.email !== selectedExpert1);
 
     return (

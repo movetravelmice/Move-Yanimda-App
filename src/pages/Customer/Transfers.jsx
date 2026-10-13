@@ -12,11 +12,21 @@ export default function Transfers() {
   const { user } = useAuthStore();
   const users = useUserStore(state => state.users);
 
-  const myTours = tours.filter(t => t.participants?.some(p => p.id === user?.id || (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase())));
+  const isUserMatch = (p) => {
+    if (!p || !user) return false;
+    if (p.id === user.id) return true;
+    if (p.email && user.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()) return true;
+    const pPhone = (p.phone || '').replace(/\D/g, '');
+    const uPhone = (user.phone || '').replace(/\D/g, '');
+    if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) return true;
+    return false;
+  };
+
+  const myTours = tours.filter(t => t.participants?.some(isUserMatch));
   const activeTour = tourId ? myTours.find(t => t.id === tourId) : (myTours.find(isTourActive) || myTours[0]);
   
   // Find primary user and their linked family members
-  const myParticipant = activeTour?.participants?.find(p => p.id === user?.id || (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()));
+  const myParticipant = activeTour?.participants?.find(isUserMatch);
   const familyParticipants = activeTour?.participants?.filter(p => p.linkedTo && (Array.isArray(p.linkedTo) ? (p.linkedTo.includes(user?.id) || p.linkedTo.includes(myParticipant?.id)) : (p.linkedTo === user?.id || p.linkedTo === myParticipant?.id))) || [];
   
   const allRelatedParticipants = myParticipant ? [myParticipant, ...familyParticipants] : [...familyParticipants];

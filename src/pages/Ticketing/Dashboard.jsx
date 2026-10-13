@@ -14,20 +14,23 @@ import {
   X, 
   Send, 
   Phone, 
-  CheckCircle2 
+  CheckCircle2,
+  ShieldCheck 
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 import { useNotificationStore } from '../../store/notificationStore';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore, isUserAdmin } from '../../store/authStore';
 
 export default function TicketingDashboard() {
   const navigate = useNavigate();
   const { tours } = useTourStore();
   const allUsers = useUserStore(state => state.users);
   const user = useAuthStore(state => state.user);
+  const setActiveStaffRole = useAuthStore(state => state.setActiveStaffRole);
+  const isAdmin = isUserAdmin(user);
   const { addNotification } = useNotificationStore();
 
   const activeTours = tours.filter(isTourActive);
@@ -180,6 +183,43 @@ export default function TicketingDashboard() {
       )}
       
       <div style={{ padding: '16px' }}>
+
+        {/* Admin Switcher Banner */}
+        {isAdmin && (
+          <div 
+            onClick={() => {
+              setActiveStaffRole('admin');
+              navigate('/dashboard');
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #1e293b 0%, #2563eb 100%)',
+              color: 'white',
+              borderRadius: '14px',
+              padding: '11px 14px',
+              marginBottom: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              boxShadow: '0 3px 10px rgba(37, 99, 235, 0.2)',
+              transition: 'transform 0.15s ease'
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ShieldCheck size={18} color="#93c5fd" />
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>👑 Yönetim Paneline Dön</span>
+                <span style={{ fontSize: '10px', color: '#bfdbfe', marginLeft: '6px' }}>Tüm şirket operasyonlarını yönetin</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#dbeafe', fontSize: '11px', fontWeight: '600' }}>
+              <span>Geç</span>
+              <ChevronRight size={14} />
+            </div>
+          </div>
+        )}
 
         {/* EKSİK BİLET PANOSU (MİNİMAL & ELEGANT) */}
         {missingTicketsGroups.length > 0 && (

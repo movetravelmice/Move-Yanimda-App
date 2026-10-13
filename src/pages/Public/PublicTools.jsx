@@ -684,23 +684,23 @@ export default function PublicTools({ isEmbedded = false }) {
                         background: '#ffffff',
                         borderRadius: '16px',
                         border: '1px solid #e2e8f0',
-                        padding: '13px 12px',
+                        padding: '14px 12px',
                         cursor: 'pointer',
                         display: 'flex',
                         flexDirection: 'column',
                         justifyContent: 'space-between',
                         boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)',
-                        minHeight: '132px',
+                        minHeight: '138px',
                         position: 'relative'
                       }}
                     >
                       <div>
                         {/* Top row: Squircle icon + Tag */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                           <div style={{
-                            width: '38px',
-                            height: '38px',
-                            borderRadius: '11px',
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '10px',
                             background: t.bg,
                             color: t.color,
                             display: 'flex',
@@ -708,43 +708,46 @@ export default function PublicTools({ isEmbedded = false }) {
                             justifyContent: 'center',
                             boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
                           }}>
-                            <Icon size={19} strokeWidth={2.2} />
+                            <Icon size={17} strokeWidth={2.2} />
                           </div>
                           <span style={{
-                            fontSize: '9.5px',
+                            fontSize: '8.5px',
                             fontWeight: '700',
                             color: t.badgeColor,
                             background: t.badgeBg,
                             padding: '2px 6px',
-                            borderRadius: '6px'
+                            borderRadius: '6px',
+                            letterSpacing: '-0.1px'
                           }}>
                             {t.tag}
                           </span>
                         </div>
 
-                        {/* Title & Desc */}
-                        <h3 style={{
-                          fontSize: '12.5px',
-                          fontWeight: '700',
-                          color: '#0f172a',
-                          margin: '0 0 3px 0',
-                          letterSpacing: '-0.2px',
-                          lineHeight: 1.25
-                        }}>
-                          {t.title}
-                        </h3>
-                        <p style={{
-                          fontSize: '10.5px',
-                          color: '#64748b',
-                          margin: 0,
-                          lineHeight: 1.35,
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden'
-                        }}>
-                          {t.desc}
-                        </p>
+                        {/* Title & Desc with balanced top & bottom spacing */}
+                        <div style={{ padding: '2px 0 6px 0' }}>
+                          <h3 style={{
+                            fontSize: '11px',
+                            fontWeight: '700',
+                            color: '#0f172a',
+                            margin: '0 0 4px 0',
+                            letterSpacing: '-0.2px',
+                            lineHeight: 1.25
+                          }}>
+                            {t.title}
+                          </h3>
+                          <p style={{
+                            fontSize: '9.5px',
+                            color: '#64748b',
+                            margin: 0,
+                            lineHeight: 1.4,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}>
+                            {t.desc}
+                          </p>
+                        </div>
                       </div>
 
                       {/* Bottom mini action */}
@@ -753,15 +756,15 @@ export default function PublicTools({ isEmbedded = false }) {
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         paddingTop: '8px',
-                        marginTop: '8px',
+                        marginTop: '10px',
                         borderTop: '1px solid #f1f5f9'
                       }}>
-                        <span style={{ fontSize: '10px', fontWeight: '600', color: '#94a3b8' }}>
+                        <span style={{ fontSize: '9.5px', fontWeight: '600', color: '#94a3b8' }}>
                           {t.categoryLabel}
                         </span>
                         <div style={{
-                          width: '22px',
-                          height: '22px',
+                          width: '20px',
+                          height: '20px',
                           borderRadius: '50%',
                           background: 'rgba(215, 20, 122, 0.08)',
                           display: 'flex',
@@ -769,7 +772,7 @@ export default function PublicTools({ isEmbedded = false }) {
                           justifyContent: 'center',
                           color: '#D7147A'
                         }}>
-                          <ArrowRight size={11} strokeWidth={2.5} />
+                          <ArrowRight size={10} strokeWidth={2.5} />
                         </div>
                       </div>
                     </div>
@@ -792,7 +795,7 @@ export default function PublicTools({ isEmbedded = false }) {
                         background: '#ffffff',
                         borderRadius: '14px',
                         border: '1px solid #e2e8f0',
-                        padding: '11px 12px',
+                        padding: '12px 14px',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
@@ -801,9 +804,9 @@ export default function PublicTools({ isEmbedded = false }) {
                       }}
                     >
                       <div style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '11px',
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
                         background: t.bg,
                         color: t.color,
                         display: 'flex',
@@ -811,15 +814,15 @@ export default function PublicTools({ isEmbedded = false }) {
                         justifyContent: 'center',
                         flexShrink: 0
                       }}>
-                        <Icon size={20} strokeWidth={2.2} />
+                        <Icon size={18} strokeWidth={2.2} />
                       </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                          <span style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a' }}>
+                      <div style={{ flex: 1, minWidth: 0, padding: '2px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                          <span style={{ fontSize: '11.5px', fontWeight: '700', color: '#0f172a' }}>
                             {t.title}
                           </span>
                           <span style={{
-                            fontSize: '9.5px',
+                            fontSize: '8.5px',
                             fontWeight: '700',
                             color: t.badgeColor,
                             background: t.badgeBg,
@@ -829,7 +832,7 @@ export default function PublicTools({ isEmbedded = false }) {
                             {t.tag}
                           </span>
                         </div>
-                        <div style={{ fontSize: '10.5px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontSize: '9.5px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {t.desc}
                         </div>
                       </div>

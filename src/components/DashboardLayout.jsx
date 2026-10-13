@@ -42,6 +42,8 @@ export default function DashboardLayout() {
   const user = useAuthStore(state => state.user);
   const activeMode = useAuthStore(state => state.activeMode);
   const setActiveMode = useAuthStore(state => state.setActiveMode);
+  const activeStaffRole = useAuthStore(state => state.activeStaffRole);
+  const setActiveStaffRole = useAuthStore(state => state.setActiveStaffRole);
   const location = useLocation();
 
   useEffect(() => {
@@ -57,12 +59,17 @@ export default function DashboardLayout() {
     return <Navigate to="/login" />;
   }
 
-  // Strictly block individual users from accessing corporate dashboard routes
-  if (user.userType === 'individual') {
-    return <Navigate to="/individual/dashboard" replace />;
-  }
-
   const renderDashboard = () => {
+    const isAdmin = user.role === 'admin' || user.secondaryRole === 'admin';
+    const secondaryRole = user.role === 'admin' ? user.secondaryRole : (user.secondaryRole === 'admin' ? user.role : null);
+
+    if (isAdmin && secondaryRole) {
+      const currentRole = activeStaffRole || 'admin';
+      if (currentRole === 'expert') return <ExpertDashboard />;
+      if (currentRole === 'ticketing') return <TicketingDashboard />;
+      return <AdminDashboard />;
+    }
+
     switch (user.role) {
       case 'customer': return <CustomerDashboard />;
       case 'expert': return <ExpertDashboard />;
@@ -77,6 +84,9 @@ export default function DashboardLayout() {
     <>
       <Routes>
         <Route path="/" element={renderDashboard()} />
+        <Route path="admin" element={<AdminDashboard />} />
+        <Route path="expert" element={<ExpertDashboard />} />
+        <Route path="ticketing" element={<TicketingDashboard />} />
         <Route path="currency" element={<Currency />} />
         <Route path="transfers" element={<Transfers />} />
         <Route path="transfers/:tourId" element={<Transfers />} />

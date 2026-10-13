@@ -106,10 +106,73 @@ export const DEFAULT_CHECKLIST_TEMPLATES = [
   }
 ];
 
+export const DEFAULT_DEMO_TRAVELS = [
+  {
+    id: 'travel_demo_rome',
+    userId: 'usr_demo_burak',
+    title: 'Roma & Floransa Keşfi',
+    startDate: '2026-10-15',
+    endDate: '2026-10-20',
+    origin: 'İstanbul, Türkiye',
+    originCity: 'İstanbul',
+    originCountry: 'Türkiye',
+    destination: 'Roma, İtalya',
+    city: 'Roma',
+    country: 'İtalya',
+    countryCode: 'it',
+    coverImage: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?w=800&auto=format&fit=crop&q=80',
+    notes: 'Kolezyum, Vatikan, Trevi Çeşmesi ve Trastevere turu'
+  }
+];
+
+export const DEFAULT_DEMO_CHECKLISTS = [
+  {
+    id: 'checklist_demo_rome',
+    userId: 'usr_demo_burak',
+    title: 'Roma Seyahati Bavul & Hazırlık Listesi',
+    category: 'Genel',
+    travelId: 'travel_demo_rome',
+    items: [
+      { id: 'item_1', text: 'Pasaport ve vize kontrolü (En az 6 ay geçerlilik)', completed: true },
+      { id: 'item_2', text: 'Kolezyum & Vatikan online bilet karekodları', completed: true },
+      { id: 'item_3', text: 'Euro nakit döviz & yurt dışı kart açtırma', completed: true },
+      { id: 'item_4', text: 'Priz dönüştürücü adaptör (İtalya Type C/L)', completed: false },
+      { id: 'item_5', text: 'Rahat yürüyüş spor ayakkabısı', completed: true },
+      { id: 'item_6', text: 'Powerbank & Hızlı şarj kablosu', completed: false },
+      { id: 'item_7', text: 'Kişisel seyahat sağlık sigortası poliçesi', completed: true },
+      { id: 'item_8', text: 'Havalimanı transfer onay kodu', completed: false }
+    ]
+  },
+  {
+    id: 'checklist_demo_beach',
+    userId: 'usr_demo_burak',
+    title: 'Yaz Tatili & Plaj Listesi',
+    category: 'Tatil',
+    items: [
+      { id: 'b_1', text: 'Yüksek koruma faktörlü güneş kremi (SPF 50+)', completed: true },
+      { id: 'b_2', text: 'Güneş gözlüğü ve koruma kılıfı', completed: true },
+      { id: 'b_3', text: 'Plaj havlusu ve deniz ayakkabısı', completed: false }
+    ]
+  }
+];
+
+export const DEFAULT_DEMO_BUDGETS = [
+  {
+    id: 'budget_demo_rome',
+    userId: 'usr_demo_burak',
+    travelId: 'travel_demo_rome',
+    title: 'Roma Seyahati Bütçesi',
+    currency: 'EUR',
+    totalBudget: 2500,
+    totalSpent: 920,
+    members: []
+  }
+];
+
 export const useIndividualStore = create((set, get) => ({
-  travels: [],
-  checklists: [],
-  budgets: [],
+  travels: DEFAULT_DEMO_TRAVELS,
+  checklists: DEFAULT_DEMO_CHECKLISTS,
+  budgets: DEFAULT_DEMO_BUDGETS,
   expenses: [],
   invitations: [],
   isLoading: false,
@@ -135,7 +198,7 @@ export const useIndividualStore = create((set, get) => ({
         });
         // Sort by start date ascending
         list.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
-        set({ travels: list });
+        set({ travels: list.length > 0 ? list : DEFAULT_DEMO_TRAVELS });
       }, (err) => console.error("Travels stream error:", err));
       unsubs.push(unsubTravels);
     } catch (e) {
@@ -150,7 +213,7 @@ export const useIndividualStore = create((set, get) => ({
         snapshot.forEach(docSnap => {
           list.push({ id: docSnap.id, ...docSnap.data() });
         });
-        set({ checklists: list });
+        set({ checklists: list.length > 0 ? list : DEFAULT_DEMO_CHECKLISTS });
       }, (err) => console.error("Checklists stream error:", err));
       unsubs.push(unsubChecklists);
     } catch (e) {
@@ -172,7 +235,7 @@ export const useIndividualStore = create((set, get) => ({
             list.push({ id: docSnap.id, ...data });
           }
         });
-        set({ budgets: list });
+        set({ budgets: list.length > 0 ? list : DEFAULT_DEMO_BUDGETS });
       }, (err) => console.error("Budgets stream error:", err));
       unsubs.push(unsubBudgets);
     } catch (e) {

@@ -1,6 +1,6 @@
 {
   "appId": "com.move.travelapp",
-  "appName": "MoveTravel",
+  "appName": "Move Yanımda",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "plugins": {

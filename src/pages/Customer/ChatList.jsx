@@ -225,8 +225,8 @@ export default function ChatList() {
     });
 
     // Inject universal organizational chats
-    if (user?.role === 'admin') {
-        const allExperts = users.filter(u => u.role === 'expert');
+    if (user?.role === 'admin' || user?.secondaryRole === 'admin') {
+        const allExperts = users.filter(u => u.id !== user?.id && (u.role === 'expert' || (u.role === 'admin' && u.secondaryRole === 'expert')));
         allExperts.forEach(exp => {
             const cId = `direct_admin_${user.id}_expert_${exp.id}`;
             active.push({
@@ -235,14 +235,14 @@ export default function ChatList() {
                 category: 'expert',
                 badgeType: 'expert',
                 name: exp.name,
-                tourName: 'Yetkili Seyahat Uzmanı',
+                tourName: null,
                 unread: messages.filter(m => m.chatId === cId && m.status !== 'read' && m.sender !== mySenderKey).length,
                 avatar: exp.avatar || "https://ui-avatars.com/api/?name=" + encodeURIComponent(exp.name.charAt(0)) + "&background=3b82f6&color=fff",
                 isArchive: false,
                 ...getChatPreview(cId)
             });
         });
-        const allTicketing = users.filter(u => u.role === 'ticketing');
+        const allTicketing = users.filter(u => u.id !== user?.id && (u.role === 'ticketing' || (u.role === 'admin' && u.secondaryRole === 'ticketing')));
         allTicketing.forEach(tick => {
             const cId = `direct_admin_${user.id}_ticketing_${tick.id}`;
             active.push({
@@ -259,7 +259,7 @@ export default function ChatList() {
             });
         });
     } else if (user?.role === 'expert') {
-        const allAdmins = users.filter(u => u.role === 'admin');
+        const allAdmins = users.filter(u => u.id !== user?.id && (u.role === 'admin' || u.secondaryRole === 'admin'));
         allAdmins.forEach(adm => {
             const cId = `direct_admin_${adm.id}_expert_${user.id}`;
             active.push({
@@ -292,7 +292,7 @@ export default function ChatList() {
             });
         });
     } else if (user?.role === 'ticketing') {
-        const allAdmins = users.filter(u => u.role === 'admin');
+        const allAdmins = users.filter(u => u.id !== user?.id && (u.role === 'admin' || u.secondaryRole === 'admin'));
         allAdmins.forEach(adm => {
             const cId = `direct_admin_${adm.id}_ticketing_${user.id}`;
             active.push({
@@ -515,9 +515,17 @@ export default function ChatList() {
                  )}
              </div>
              {renderBadgeIcon(chat.badgeType)}
-         </div>
-         
-         {/* Content Area */}
+          </div>
+
+          {/* Dikey Ayırıcı Çizgi (Resim ile Yazılar Arasında) */}
+          <div style={{
+            width: '1px',
+            height: '26px',
+            background: isUnread ? 'rgba(215, 20, 122, 0.25)' : '#e2e8f0',
+            flexShrink: 0
+          }} />
+          
+          {/* Content Area */}
          <div style={{ flex: 1, minWidth: 0 }}>
              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '2px' }}>
                  <div style={{ minWidth: 0, paddingRight: '6px', flex: 1, display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -547,8 +555,8 @@ export default function ChatList() {
                  </span>
              </div>
 
-             {/* Tour or Role Pill only for direct chats */}
-             {chat.type === 'direct' && chat.tourName && (
+             {/* Tour or Role Pill only for direct chats (Yetkili Seyahat Uzmanı kaldırıldı) */}
+              {chat.type === 'direct' && chat.tourName && !chat.tourName.toLowerCase().includes('seyahat uzmanı') && (!chat.category || chat.category !== 'expert') && (
                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px' }}>
                  <span style={{ 
                    fontSize: '9.5px', 
@@ -654,126 +662,138 @@ export default function ChatList() {
              )}
          </div>
 
-         {/* Filter Tabs Pills */}
-         <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', marginBottom: '14px', scrollbarWidth: 'none' }}>
-             <button
-               onClick={() => setActiveTab('all')}
-               style={{
-                 padding: '5px 11px',
-                 borderRadius: '16px',
-                 border: activeTab === 'all' ? '1.2px solid var(--primary)' : '1px solid #e2e8f0',
-                 background: activeTab === 'all' ? 'var(--primary)' : 'var(--surface)',
-                 color: activeTab === 'all' ? 'white' : '#64748b',
-                 fontSize: '11.5px',
-                 fontWeight: '600',
-                 cursor: 'pointer',
-                 display: 'flex',
-                 alignItems: 'center',
-                 gap: '4px',
-                 whiteSpace: 'nowrap',
-                 transition: 'all 0.15s',
-                 boxShadow: activeTab === 'all' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
-               }}
-             >
-               Tümü <span style={{ fontSize: '10px', opacity: 0.85 }}>({activeChats.length})</span>
-             </button>
+         {/* Filter Tabs Pills (Kart İçinde) */}
+          <div style={{
+            background: 'white',
+            borderRadius: '16px',
+            border: '1px solid #e2e8f0',
+            padding: '8px 10px',
+            boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)',
+            marginBottom: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            overflowX: 'auto',
+            scrollbarWidth: 'none'
+          }}>
+              <button
+                onClick={() => setActiveTab('all')}
+                style={{
+                  padding: '6px 11px',
+                  borderRadius: '12px',
+                  border: activeTab === 'all' ? '1.2px solid var(--primary)' : '1px solid #f1f5f9',
+                  background: activeTab === 'all' ? 'var(--primary)' : '#f8fafc',
+                  color: activeTab === 'all' ? 'white' : '#64748b',
+                  fontSize: '11.5px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s',
+                  boxShadow: activeTab === 'all' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
+                }}
+              >
+                Tümü <span style={{ fontSize: '10px', opacity: 0.85 }}>({activeChats.length})</span>
+              </button>
 
-             <button
-               onClick={() => setActiveTab('groups')}
-               style={{
-                 padding: '5px 11px',
-                 borderRadius: '16px',
-                 border: activeTab === 'groups' ? '1.2px solid var(--primary)' : '1px solid #e2e8f0',
-                 background: activeTab === 'groups' ? 'var(--primary)' : 'var(--surface)',
-                 color: activeTab === 'groups' ? 'white' : '#64748b',
-                 fontSize: '11.5px',
-                 fontWeight: '600',
-                 cursor: 'pointer',
-                 display: 'flex',
-                 alignItems: 'center',
-                 gap: '4px',
-                 whiteSpace: 'nowrap',
-                 transition: 'all 0.15s',
-                 boxShadow: activeTab === 'groups' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
-               }}
-             >
-               <Users size={12} /> Tur Grupları <span style={{ fontSize: '10px', opacity: 0.85 }}>({groupChats.length})</span>
-             </button>
+              <button
+                onClick={() => setActiveTab('groups')}
+                style={{
+                  padding: '6px 11px',
+                  borderRadius: '12px',
+                  border: activeTab === 'groups' ? '1.2px solid var(--primary)' : '1px solid #f1f5f9',
+                  background: activeTab === 'groups' ? 'var(--primary)' : '#f8fafc',
+                  color: activeTab === 'groups' ? 'white' : '#64748b',
+                  fontSize: '11.5px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.15s',
+                  boxShadow: activeTab === 'groups' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
+                }}
+              >
+                <Users size={12} /> Tur Grupları <span style={{ fontSize: '10px', opacity: 0.85 }}>({groupChats.length})</span>
+              </button>
 
-             {staffChats.length > 0 && (
-               <button
-                 onClick={() => setActiveTab('staff')}
-                 style={{
-                   padding: '5px 11px',
-                   borderRadius: '16px',
-                   border: activeTab === 'staff' ? '1.2px solid #6366f1' : '1px solid #e2e8f0',
-                   background: activeTab === 'staff' ? '#6366f1' : 'var(--surface)',
-                   color: activeTab === 'staff' ? 'white' : '#64748b',
-                   fontSize: '11.5px',
-                   fontWeight: '600',
-                   cursor: 'pointer',
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '4px',
-                   whiteSpace: 'nowrap',
-                   transition: 'all 0.15s',
-                   boxShadow: activeTab === 'staff' ? '0 2px 6px rgba(99, 102, 241, 0.2)' : 'none'
-                 }}
-               >
-                 <ShieldCheck size={12} /> Personel & Yetkili <span style={{ fontSize: '10px', opacity: 0.85 }}>({staffChats.length})</span>
-               </button>
-             )}
+              {staffChats.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('staff')}
+                  style={{
+                    padding: '6px 11px',
+                    borderRadius: '12px',
+                    border: activeTab === 'staff' ? '1.2px solid #6366f1' : '1px solid #f1f5f9',
+                    background: activeTab === 'staff' ? '#6366f1' : '#f8fafc',
+                    color: activeTab === 'staff' ? 'white' : '#64748b',
+                    fontSize: '11.5px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s',
+                    boxShadow: activeTab === 'staff' ? '0 2px 6px rgba(99, 102, 241, 0.2)' : 'none'
+                  }}
+                >
+                  <ShieldCheck size={12} /> Personel & Yetkili <span style={{ fontSize: '10px', opacity: 0.85 }}>({staffChats.length})</span>
+                </button>
+              )}
 
-             {customerChats.length > 0 && (
-               <button
-                 onClick={() => setActiveTab('customers')}
-                 style={{
-                   padding: '5px 11px',
-                   borderRadius: '16px',
-                   border: activeTab === 'customers' ? '1.2px solid #0284c7' : '1px solid #e2e8f0',
-                   background: activeTab === 'customers' ? '#0284c7' : 'var(--surface)',
-                   color: activeTab === 'customers' ? 'white' : '#64748b',
-                   fontSize: '11.5px',
-                   fontWeight: '600',
-                   cursor: 'pointer',
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '4px',
-                   whiteSpace: 'nowrap',
-                   transition: 'all 0.15s',
-                   boxShadow: activeTab === 'customers' ? '0 2px 6px rgba(2, 132, 199, 0.2)' : 'none'
-                 }}
-               >
-                 <User size={12} /> Müşteriler <span style={{ fontSize: '10px', opacity: 0.85 }}>({customerChats.length})</span>
-               </button>
-             )}
+              {customerChats.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('customers')}
+                  style={{
+                    padding: '6px 11px',
+                    borderRadius: '12px',
+                    border: activeTab === 'customers' ? '1.2px solid #0284c7' : '1px solid #f1f5f9',
+                    background: activeTab === 'customers' ? '#0284c7' : '#f8fafc',
+                    color: activeTab === 'customers' ? 'white' : '#64748b',
+                    fontSize: '11.5px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s',
+                    boxShadow: activeTab === 'customers' ? '0 2px 6px rgba(2, 132, 199, 0.2)' : 'none'
+                  }}
+                >
+                  <User size={12} /> Müşteriler <span style={{ fontSize: '10px', opacity: 0.85 }}>({customerChats.length})</span>
+                </button>
+              )}
 
-             {unreadCount > 0 && (
-               <button
-                 onClick={() => setActiveTab('unread')}
-                 style={{
-                   padding: '5px 11px',
-                   borderRadius: '16px',
-                   border: activeTab === 'unread' ? '1.2px solid #D7147A' : '1px solid #F9BED8',
-                   background: activeTab === 'unread' ? '#D7147A' : '#FDF2F8',
-                   color: activeTab === 'unread' ? 'white' : '#D7147A',
-                   fontSize: '11.5px',
-                   fontWeight: '700',
-                   cursor: 'pointer',
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '4px',
-                   whiteSpace: 'nowrap',
-                   transition: 'all 0.15s',
-                   boxShadow: activeTab === 'unread' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
-                 }}
-               >
-                 <Sparkles size={11} /> Okunmamış <span style={{ fontSize: '9.5px', background: activeTab === 'unread' ? 'rgba(255,255,255,0.25)' : '#D7147A', color: 'white', padding: '1px 5px', borderRadius: '6px' }}>{unreadCount}</span>
-               </button>
-             )}
-         </div>
+              {unreadCount > 0 && (
+                <button
+                  onClick={() => setActiveTab('unread')}
+                  style={{
+                    padding: '6px 11px',
+                    borderRadius: '12px',
+                    border: activeTab === 'unread' ? '1.2px solid #D7147A' : '1px solid #F9BED8',
+                    background: activeTab === 'unread' ? '#D7147A' : '#FDF2F8',
+                    color: activeTab === 'unread' ? 'white' : '#D7147A',
+                    fontSize: '11.5px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s',
+                    boxShadow: activeTab === 'unread' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
+                  }}
+                >
+                  <Sparkles size={11} /> Okunmamış <span style={{ fontSize: '9.5px', background: activeTab === 'unread' ? 'rgba(255,255,255,0.25)' : '#D7147A', color: 'white', padding: '1px 5px', borderRadius: '6px' }}>{unreadCount}</span>
+                </button>
+              )}
+          </div>
 
-         {/* Chat List Categorized into Separate Cards */}
+          {/* Chat List Categorized into Separate Cards */}
          <div>
             {totalFilteredCount === 0 ? (
                 <div style={{ textAlign: 'center', padding: '28px 16px', color: 'var(--text-muted)', fontSize: '13px', background: 'var(--surface)', borderRadius: '14px', border: '1px dashed #e2e8f0' }}>

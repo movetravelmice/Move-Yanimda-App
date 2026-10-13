@@ -1,16 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Calendar, Edit3, Eye, MessageCircle, Users, Megaphone, X, Send, Plus, Trash2, Timer, RotateCcw, Phone, ChevronRight, Info, CheckCircle2 } from 'lucide-react';
+import { MapPin, Calendar, Edit3, Eye, MessageCircle, Users, Megaphone, X, Send, Plus, Trash2, Timer, RotateCcw, Phone, ChevronRight, Info, CheckCircle2, ShieldCheck } from 'lucide-react';
 import Header from '../../components/Header';
 import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive, isTourPast } from '../../store/tourStore';
 import { useNotificationStore } from '../../store/notificationStore';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore, isUserAdmin } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
 import ExpertRollCallPanel from '../../components/ExpertRollCallPanel';
 
 export default function ExpertDashboard() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, setActiveStaffRole } = useAuthStore();
+  const isAdmin = isUserAdmin(user);
   const { users: allUsers } = useUserStore();
   const { tours, editTour, startRollCall, endRollCall, setTourStatus } = useTourStore();
   const { addNotification } = useNotificationStore();
@@ -156,6 +157,44 @@ export default function ExpertDashboard() {
       <Header title={dynamicTitle} />
       
       <div style={{ padding: '0 16px', paddingBottom: '32px' }}>
+
+        {/* Admin Switcher Banner */}
+        {isAdmin && (
+          <div 
+            onClick={() => {
+              setActiveStaffRole('admin');
+              navigate('/dashboard');
+            }}
+            style={{
+              background: 'linear-gradient(135deg, #1e293b 0%, #2563eb 100%)',
+              color: 'white',
+              borderRadius: '14px',
+              padding: '11px 14px',
+              marginTop: '10px',
+              marginBottom: '14px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              cursor: 'pointer',
+              boxShadow: '0 3px 10px rgba(37, 99, 235, 0.2)',
+              transition: 'transform 0.15s ease'
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <ShieldCheck size={18} color="#93c5fd" />
+              <div>
+                <span style={{ fontSize: '12px', fontWeight: '800' }}>👑 Yönetim Paneline Dön</span>
+                <span style={{ fontSize: '10px', color: '#bfdbfe', marginLeft: '6px' }}>Tüm şirket operasyonlarını yönetin</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#dbeafe', fontSize: '11px', fontWeight: '600' }}>
+              <span>Geç</span>
+              <ChevronRight size={14} />
+            </div>
+          </div>
+        )}
         
         <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', marginTop: '8px', marginBottom: '16px', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
             <h2 style={{ fontSize: '14px', fontWeight: '700', margin: '0', color: 'var(--text-main)', letterSpacing: '-0.2px' }}>Atandığım Aktif Turlar</h2>
