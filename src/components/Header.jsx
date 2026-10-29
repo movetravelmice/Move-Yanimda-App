@@ -157,7 +157,11 @@ export default function Header({ title, subtitle, preTitle, showBack = false, on
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside, { passive: true });
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
   }, []);
 
   const handleAvatarChange = (e) => {
@@ -238,7 +242,7 @@ export default function Header({ title, subtitle, preTitle, showBack = false, on
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      zIndex: 50,
+      zIndex: showMenu ? 10000 : 70,
       padding: 'calc(30px + env(safe-area-inset-top, 0px)) 18px 26px 18px',
       minHeight: 'calc(108px + env(safe-area-inset-top, 0px))',
       boxSizing: 'border-box',
