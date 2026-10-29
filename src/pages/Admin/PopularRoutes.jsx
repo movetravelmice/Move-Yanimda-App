@@ -240,20 +240,6 @@ export default function PopularRoutes() {
                 </div>
               </div>
             </div>
-
-            {/* Aktif Sayaç Rozeti */}
-            <div style={{
-              background: activeCount === 6 ? '#ecfdf5' : '#FDF2F8',
-              border: `1.5px solid ${activeCount === 6 ? '#a7f3d0' : '#F9BED8'}`,
-              color: activeCount === 6 ? '#059669' : '#D7147A',
-              padding: '6px 12px',
-              borderRadius: '12px',
-              fontSize: '12px',
-              fontWeight: '800',
-              textAlign: 'center'
-            }}>
-              Vitrinde: <strong>{activeCount} / 6</strong>
-            </div>
           </div>
 
           <div style={{
