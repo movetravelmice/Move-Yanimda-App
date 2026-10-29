@@ -74,19 +74,33 @@ function App() {
   // Synchronize authenticated session when Firestore user data updates safely
   useEffect(() => {
     if (user?.id && users.length > 0) {
-      const freshUser = users.find(u => u.id === user.id || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()));
+      const freshUser = users.find(u => u.id === user.id);
       if (freshUser) {
-        const freshRole = freshUser.role || user.role || 'customer';
-        const freshSecRole = freshUser.secondaryRole || user.secondaryRole || null;
-        if (freshRole !== user.role || freshSecRole !== user.secondaryRole) {
+        const hasChanged = 
+          (freshUser.email && freshUser.email !== user.email) ||
+          (freshUser.name && freshUser.name !== user.name) ||
+          (freshUser.phone && freshUser.phone !== user.phone) ||
+          (freshUser.avatar && freshUser.avatar !== user.avatar) ||
+          (freshUser.role && freshUser.role !== user.role) ||
+          (freshUser.secondaryRole !== user.secondaryRole) ||
+          (freshUser.company && freshUser.company !== user.company) ||
+          (freshUser.tcNo !== undefined && freshUser.tcNo !== user.tcNo);
+
+        if (hasChanged) {
           useAuthStore.getState().syncUserRecord({
-            role: freshRole,
-            secondaryRole: freshSecRole
+            email: freshUser.email || user.email,
+            name: freshUser.name || user.name,
+            phone: freshUser.phone || user.phone,
+            avatar: freshUser.avatar || user.avatar,
+            role: freshUser.role || user.role || 'customer',
+            secondaryRole: freshUser.secondaryRole || null,
+            company: freshUser.company || user.company,
+            tcNo: freshUser.tcNo !== undefined ? freshUser.tcNo : user.tcNo
           });
         }
       }
     }
-  }, [users, user?.id, user?.email, user?.role, user?.secondaryRole]);
+  }, [users, user?.id, user?.email, user?.name, user?.phone, user?.avatar, user?.role, user?.secondaryRole, user?.company, user?.tcNo]);
 
   useEffect(() => {
     if (tours.length > 0 && users.length > 0 && whatsappConfig?.isEnabled) {

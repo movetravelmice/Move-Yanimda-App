@@ -233,6 +233,36 @@ export const useUserStore = create((set, get) => ({
         try {
             if (targetId) {
                 await setDoc(doc(db, 'users', targetId), { ...dataToUpdate, id: targetId }, { merge: true });
+                
+                // Automatically sync participant details in tours if email, name or phone changed
+                if (dataToUpdate.email || dataToUpdate.name || dataToUpdate.phone) {
+                    try {
+                        const toursRef = collection(db, 'tours');
+                        const toursSnap = await getDocs(toursRef);
+                        for (const tDoc of toursSnap.docs) {
+                            const tData = tDoc.data();
+                            const parts = tData.participants || [];
+                            let updated = false;
+                            const newParts = parts.map(p => {
+                                if (p.id === targetId || (existing?.email && p.email?.toLowerCase() === existing.email.toLowerCase())) {
+                                    updated = true;
+                                    return {
+                                        ...p,
+                                        email: dataToUpdate.email || p.email,
+                                        name: dataToUpdate.name || p.name,
+                                        phone: dataToUpdate.phone || p.phone
+                                    };
+                                }
+                                return p;
+                            });
+                            if (updated) {
+                                await updateDoc(tDoc.ref, { participants: newParts });
+                            }
+                        }
+                    } catch (tourSyncErr) {
+                        console.warn("Tour participants auto-sync error:", tourSyncErr);
+                    }
+                }
             } else if (normalizedEmail) {
                 const q = query(collection(db, 'users'), where('email', '==', dataToUpdate.email));
                 const snap = await getDocs(q);
