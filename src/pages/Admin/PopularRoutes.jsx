@@ -4,6 +4,7 @@ import {
   Compass,
   PlusCircle,
   Edit2,
+  Edit3,
   Trash2,
   Check,
   X,
@@ -288,180 +289,367 @@ export default function PopularRoutes() {
         </div>
 
         {/* 2. ROTA KARTLARI LİSTESİ */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {routes.map((r, index) => {
-            const isFeatured = Boolean(r.isActive);
-            return (
-              <div
-                key={r.id || index}
-                style={{
-                  background: '#ffffff',
-                  borderRadius: '16px',
-                  border: isFeatured ? '1.5px solid #F9BED8' : '1px solid #e2e8f0',
-                  padding: '12px',
-                  boxShadow: isFeatured ? '0 4px 14px rgba(215, 20, 122, 0.06)' : '0 2px 6px rgba(0,0,0,0.02)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  position: 'relative'
-                }}
-              >
-                {/* Sol Görsel Önizleme */}
-                <div style={{
-                  width: '90px',
-                  height: '75px',
-                  borderRadius: '12px',
-                  overflow: 'hidden',
-                  position: 'relative',
-                  backgroundColor: '#f1f5f9',
-                  flexShrink: 0
-                }}>
-                  <img
-                    src={r.image}
-                    alt={r.city}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                  <div style={{
-                    position: 'absolute',
-                    top: '4px',
-                    left: '4px',
-                    fontSize: '10px',
-                    fontWeight: '700',
-                    background: 'rgba(15, 23, 42, 0.75)',
-                    color: 'white',
-                    padding: '2px 6px',
-                    borderRadius: '6px',
-                    backdropFilter: 'blur(3px)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '3px'
-                  }}>
-                    {getCurrencySymbol(r.currency) && (
-                      <span style={{ color: '#fbbf24', fontWeight: '800' }}>{getCurrencySymbol(r.currency)}</span>
-                    )}
-                    <span>{r.currency}</span>
-                  </div>
-                </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {routes.length === 0 ? (
+            <div style={{ padding: '32px 20px', textAlign: 'center', color: '#64748b', fontSize: '13px', background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+              Henüz kayıtlı bir rota bulunamadı.
+            </div>
+          ) : (
+            routes.map((r, index) => {
+              const isFeatured = Boolean(r.isActive);
+              return (
+                <div
+                  key={r.id || index}
+                  style={{
+                    background: '#ffffff',
+                    borderRadius: '16px',
+                    border: isFeatured ? '1.5px solid #F9BED8' : '1px solid #edf2f7',
+                    boxShadow: isFeatured ? '0 4px 18px rgba(215, 20, 122, 0.08)' : '0 4px 18px rgba(0, 0, 0, 0.04)',
+                    overflow: 'hidden',
+                    transition: 'transform 0.2s, box-shadow 0.2s'
+                  }}
+                >
+                  {/* Top Full-Bleed Cover Image with Badges */}
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 1', overflow: 'hidden', background: '#0f172a' }}>
+                    <img
+                      loading="lazy"
+                      src={r.image}
+                      alt={r.city}
+                      style={{ width: '100%', height: '100%', display: 'block', objectFit: 'cover' }}
+                    />
 
-                {/* Orta Bilgiler */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '2px' }}>
-                    <CountryFlag flag={r.flag} country={r.country} size="sm" />
-                    <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                      {r.city}
-                    </h3>
-                    <span style={{ fontSize: '11px', color: '#64748b' }}>
-                      ({r.country})
-                    </span>
-                  </div>
+                    {/* Subtle Gradient Shadow */}
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 45%, rgba(0,0,0,0.5) 100%)',
+                      pointerEvents: 'none'
+                    }} />
 
-                  <div style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '6px',
-                    fontSize: '10.5px',
-                    color: '#475569',
-                    marginTop: '4px'
-                  }}>
-                    <span style={{ background: '#f8fafc', padding: '2px 6px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                      🕒 {formatDuration(r.time)}
-                    </span>
-                    <span style={{ background: '#f8fafc', padding: '2px 6px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                      ✈️ {formatDuration(r.flight)}
-                    </span>
-                    <span style={{ background: '#f8fafc', padding: '2px 6px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
-                      🔌 {r.plug}
-                    </span>
-                  </div>
-                </div>
+                    {/* Top Left Badge: Flag & Currency */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '10px',
+                        left: '10px',
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(8px)',
+                        padding: '3px 9px',
+                        borderRadius: '30px',
+                        boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        zIndex: 2
+                      }}
+                    >
+                      <CountryFlag flag={r.flag} country={r.country} size="sm" />
+                      <span style={{ fontSize: '11px', fontWeight: '800', color: '#0f172a' }}>
+                        {getCurrencySymbol(r.currency) && (
+                          <span style={{ color: '#d97706', marginRight: '3px', fontWeight: '900' }}>{getCurrencySymbol(r.currency)}</span>
+                        )}
+                        {r.currency}
+                      </span>
+                    </div>
 
-                {/* Sağ Aksiyonlar: Aktif/Pasif Toggle + Sıralama + Düzenle/Sil */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                  {/* Vitrin Toggle Butonu */}
-                  <button
-                    onClick={() => handleToggleActive(r.id)}
-                    style={{
-                      display: 'inline-flex',
+                    {/* Top Right: Vitrin Durumu Toggle */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleActive(r.id);
+                      }}
+                      title={isFeatured ? "Vitrinden Kaldır (Pasife Al)" : "Vitrine Ekle (Aktif Yap)"}
+                      style={{
+                        position: 'absolute',
+                        top: '10px',
+                        right: '10px',
+                        background: isFeatured ? 'rgba(253, 242, 248, 0.95)' : 'rgba(255, 255, 255, 0.92)',
+                        backdropFilter: 'blur(8px)',
+                        border: `1.5px solid ${isFeatured ? '#F9BED8' : '#e2e8f0'}`,
+                        color: isFeatured ? '#D7147A' : '#64748b',
+                        padding: '4px 10px',
+                        borderRadius: '30px',
+                        fontSize: '11px',
+                        fontWeight: '800',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        zIndex: 2,
+                        transition: 'transform 0.15s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                      <div style={{
+                        width: '7px',
+                        height: '7px',
+                        borderRadius: '50%',
+                        background: isFeatured ? '#D7147A' : '#94a3b8'
+                      }} />
+                      <span>{isFeatured ? 'Vitrinde Aktif' : 'Pasif'}</span>
+                    </button>
+
+                    {/* Bottom Left inside cover: Country Name */}
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '10px',
+                      left: '12px',
+                      display: 'flex',
                       alignItems: 'center',
                       gap: '4px',
-                      background: isFeatured ? '#FDF2F8' : '#f8fafc',
-                      color: isFeatured ? '#D7147A' : '#94a3b8',
-                      border: `1px solid ${isFeatured ? '#F9BED8' : '#e2e8f0'}`,
-                      padding: '4px 8px',
-                      borderRadius: '8px',
-                      fontSize: '11px',
-                      fontWeight: '800',
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
+                      color: '#ffffff',
+                      fontSize: '11.5px',
+                      fontWeight: '700',
+                      textShadow: '0 1px 4px rgba(0,0,0,0.7)',
+                      zIndex: 2
+                    }}>
+                      <MapPin size={13} color="#ffffff" />
+                      <span>{r.country}</span>
+                    </div>
+
+                    {/* Bottom Right inside cover: Order index */}
                     <div style={{
-                      width: '8px',
-                      height: '8px',
-                      borderRadius: '50%',
-                      background: isFeatured ? '#D7147A' : '#cbd5e1'
-                    }} />
-                    <span>{isFeatured ? 'Vitrinde Aktif' : 'Pasif'}</span>
-                  </button>
+                      position: 'absolute',
+                      bottom: '10px',
+                      right: '12px',
+                      background: 'rgba(15, 23, 42, 0.65)',
+                      backdropFilter: 'blur(4px)',
+                      color: '#ffffff',
+                      padding: '2px 8px',
+                      borderRadius: '8px',
+                      fontSize: '10.5px',
+                      fontWeight: '700',
+                      zIndex: 2
+                    }}>
+                      Sıra #{index + 1}
+                    </div>
+                  </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    {/* Sıralama */}
-                    <button
-                      onClick={() => handleMoveOrder(index, 'up')}
-                      disabled={index === 0}
-                      style={{
-                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px',
-                        width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: index === 0 ? 'not-allowed' : 'pointer', opacity: index === 0 ? 0.3 : 1
-                      }}
-                      title="Yukarı Taşı"
-                    >
-                      <ArrowUp size={12} />
-                    </button>
+                  {/* Card Body Content */}
+                  <div style={{ padding: '14px 16px 16px 16px' }}>
 
-                    <button
-                      onClick={() => handleMoveOrder(index, 'down')}
-                      disabled={index === routes.length - 1}
-                      style={{
-                        background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px',
-                        width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: index === routes.length - 1 ? 'not-allowed' : 'pointer', opacity: index === routes.length - 1 ? 0.3 : 1
-                      }}
-                      title="Aşağı Taşı"
-                    >
-                      <ArrowDown size={12} />
-                    </button>
+                    {/* Route Title */}
+                    <h2 style={{
+                      fontSize: '14px',
+                      fontWeight: '800',
+                      margin: '0 0 10px 0',
+                      padding: '0 2px',
+                      color: '#1e293b',
+                      lineHeight: '1.4',
+                      letterSpacing: '-0.2px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}>
+                      <span>{r.city}</span>
+                      <span style={{ fontSize: '12px', color: '#64748b', fontWeight: '600' }}>({r.country})</span>
+                    </h2>
 
-                    {/* Düzenle */}
-                    <button
-                      onClick={() => handleOpenEdit(r)}
-                      style={{
-                        background: '#FDF2F8', border: '1px solid #F9BED8', color: '#D7147A', borderRadius: '6px',
-                        width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer'
-                      }}
-                      title="Düzenle"
-                    >
-                      <Edit2 size={12} />
-                    </button>
+                    {/* Info Strip (Time, Flight, Plug & Badge) */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: '#f8fafc',
+                      padding: '8px 10px',
+                      borderRadius: '10px',
+                      border: '1px solid #f1f5f9',
+                      marginBottom: '12px',
+                      gap: '8px',
+                      overflow: 'hidden',
+                      flexWrap: 'nowrap'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: 'clamp(10px, 2.9vw, 11.5px)',
+                        color: '#475569',
+                        fontWeight: '600',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        flex: 1,
+                        minWidth: 0
+                      }}>
+                        <Clock size={12} color="var(--primary)" style={{ flexShrink: 0 }} />
+                        <span>{formatDuration(r.time)}</span>
+                        <span style={{ color: '#cbd5e1' }}>•</span>
+                        <Plane size={12} color="var(--primary)" style={{ flexShrink: 0 }} />
+                        <span>{formatDuration(r.flight)}</span>
+                        <span style={{ color: '#cbd5e1' }}>•</span>
+                        <Zap size={12} color="var(--primary)" style={{ flexShrink: 0 }} />
+                        <span>{r.plug}</span>
+                      </div>
 
-                    {/* Sil */}
-                    <button
-                      onClick={() => handleDelete(r.id)}
-                      style={{
-                        background: '#fef2f2', border: '1px solid #fecdd3', color: '#dc2626', borderRadius: '6px',
-                        width: '24px', height: '24px', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer'
-                      }}
-                      title="Sil"
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                      <span style={{
+                        background: isFeatured ? 'var(--primary-light)' : '#f1f5f9',
+                        color: isFeatured ? 'var(--primary)' : '#64748b',
+                        fontSize: 'clamp(9.5px, 2.7vw, 11px)',
+                        fontWeight: '700',
+                        padding: '3px 7px',
+                        borderRadius: '6px',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0
+                      }}>
+                        {isFeatured ? 'Vitrinde' : 'Yedek Rota'}
+                      </span>
+                    </div>
+
+                    {/* Side-by-Side Action Buttons Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                      {/* 1. Düzenle */}
+                      <button
+                        onClick={() => handleOpenEdit(r)}
+                        title="Rotayı Düzenle"
+                        style={{
+                          aspectRatio: '1',
+                          width: '100%',
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          outline: 'none'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = '#f1f5f9';
+                          e.currentTarget.style.borderColor = '#cbd5e1';
+                          e.currentTarget.style.boxShadow = '0 3px 10px rgba(71,85,105,0.15)';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = '#f8fafc';
+                          e.currentTarget.style.borderColor = '#e2e8f0';
+                          e.currentTarget.style.boxShadow = 'none';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                        }}
+                      >
+                        <Edit3 size={18} color="#475569" strokeWidth={2.2} />
+                      </button>
+
+                      {/* 2. Sıralamada Yukarı Taşı */}
+                      <button
+                        onClick={() => handleMoveOrder(index, 'up')}
+                        disabled={index === 0}
+                        title={index === 0 ? "En başta" : "Sıralamada Yukarı Taşı"}
+                        style={{
+                          aspectRatio: '1',
+                          width: '100%',
+                          background: index === 0 ? '#f8fafc' : '#eff6ff',
+                          border: `1px solid ${index === 0 ? '#e2e8f0' : '#dbeafe'}`,
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: index === 0 ? 'not-allowed' : 'pointer',
+                          opacity: index === 0 ? 0.35 : 1,
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          outline: 'none'
+                        }}
+                        onMouseEnter={e => {
+                          if (index !== 0) {
+                            e.currentTarget.style.background = '#dbeafe';
+                            e.currentTarget.style.borderColor = '#93c5fd';
+                            e.currentTarget.style.boxShadow = '0 3px 10px rgba(37,99,235,0.18)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (index !== 0) {
+                            e.currentTarget.style.background = '#eff6ff';
+                            e.currentTarget.style.borderColor = '#dbeafe';
+                            e.currentTarget.style.boxShadow = 'none';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }
+                        }}
+                      >
+                        <ArrowUp size={18} color={index === 0 ? '#94a3b8' : '#2563eb'} strokeWidth={2.2} />
+                      </button>
+
+                      {/* 3. Sıralamada Aşağı Taşı */}
+                      <button
+                        onClick={() => handleMoveOrder(index, 'down')}
+                        disabled={index === routes.length - 1}
+                        title={index === routes.length - 1 ? "En sonda" : "Sıralamada Aşağı Taşı"}
+                        style={{
+                          aspectRatio: '1',
+                          width: '100%',
+                          background: index === routes.length - 1 ? '#f8fafc' : '#f0fdf4',
+                          border: `1px solid ${index === routes.length - 1 ? '#e2e8f0' : '#dcfce7'}`,
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: index === routes.length - 1 ? 'not-allowed' : 'pointer',
+                          opacity: index === routes.length - 1 ? 0.35 : 1,
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          outline: 'none'
+                        }}
+                        onMouseEnter={e => {
+                          if (index !== routes.length - 1) {
+                            e.currentTarget.style.background = '#dcfce7';
+                            e.currentTarget.style.borderColor = '#86efac';
+                            e.currentTarget.style.boxShadow = '0 3px 10px rgba(22,163,74,0.18)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (index !== routes.length - 1) {
+                            e.currentTarget.style.background = '#f0fdf4';
+                            e.currentTarget.style.borderColor = '#dcfce7';
+                            e.currentTarget.style.boxShadow = 'none';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                          }
+                        }}
+                      >
+                        <ArrowDown size={18} color={index === routes.length - 1 ? '#94a3b8' : '#16a34a'} strokeWidth={2.2} />
+                      </button>
+
+                      {/* 4. Sil */}
+                      <button
+                        onClick={() => handleDelete(r.id)}
+                        title="Rotayı Sil"
+                        style={{
+                          aspectRatio: '1',
+                          width: '100%',
+                          background: '#fef2f2',
+                          border: '1px solid #fee2e2',
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          outline: 'none'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = '#fee2e2';
+                          e.currentTarget.style.borderColor = '#fca5a5';
+                          e.currentTarget.style.boxShadow = '0 3px 10px rgba(239,68,68,0.2)';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = '#fef2f2';
+                          e.currentTarget.style.borderColor = '#fee2e2';
+                          e.currentTarget.style.boxShadow = 'none';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                        }}
+                      >
+                        <Trash2 size={18} color="#ef4444" strokeWidth={2.2} />
+                      </button>
+                    </div>
+
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
       </div>
