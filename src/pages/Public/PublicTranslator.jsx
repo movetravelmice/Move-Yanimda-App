@@ -28,6 +28,7 @@ import {
   SUPPORTED_LANGUAGES, 
   translateText, 
   speakText, 
+  stopSpeech,
   createSpeechRecognizer,
   requestMicrophonePermission
 } from '../../services/travelToolsService';
@@ -134,9 +135,7 @@ export default function PublicTranslator({ isEmbedded = false }) {
       if (speechRecognizerRef.current) {
         speechRecognizerRef.current.stop();
       }
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
+      stopSpeech();
     };
   }, []);
 
@@ -342,6 +341,8 @@ export default function PublicTranslator({ isEmbedded = false }) {
       return;
     }
 
+    stopSpeech();
+    setCurrentlySpeakingId(null);
     setErrorMsg('');
 
     const isSource = speakerSide === 'source';
@@ -376,12 +377,14 @@ export default function PublicTranslator({ isEmbedded = false }) {
 
           setConversation(prev => [...prev, newItem]);
 
-          // Auto-speak if enabled
+          // Auto-speak if enabled with short delay to allow audio hardware transition on Android
           if (autoSpeak && res.translatedText) {
             setCurrentlySpeakingId(newItem.id);
-            speakText(res.translatedText, toCode).finally(() => {
-              setCurrentlySpeakingId(null);
-            });
+            setTimeout(() => {
+              speakText(res.translatedText, toCode).finally(() => {
+                setCurrentlySpeakingId(null);
+              });
+            }, 180);
           }
         } catch (err) {
           setErrorMsg(err.message || 'Konuşma çevrilirken bir hata oluştu.');
@@ -416,10 +419,11 @@ export default function PublicTranslator({ isEmbedded = false }) {
 
   const handlePlayMessageAudio = async (item) => {
     if (currentlySpeakingId === item.id) {
-      if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+      stopSpeech();
       setCurrentlySpeakingId(null);
       return;
     }
+    stopSpeech();
     setCurrentlySpeakingId(item.id);
     try {
       await speakText(item.translatedText, item.toLang);
