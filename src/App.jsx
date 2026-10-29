@@ -15,7 +15,6 @@ import PublicTranslator from './pages/Public/PublicTranslator';
 import PublicTools from './pages/Public/PublicTools';
 import BudgetInviteAccept from './pages/Individual/BudgetInviteAccept';
 import IndividualLayout from './pages/Individual/IndividualLayout';
-import AppBottomNav from './components/AppBottomNav';
 import TintinFloatingButton from './components/TintinFloatingButton';
 import TintinChat from './pages/Customer/TintinChat';
 import CityGuidePage from './pages/Public/CityGuidePage';
@@ -183,9 +182,7 @@ function App() {
         {/* Global Floating AI Assistant (Tintin) */}
         <TintinFloatingButton />
 
-        {/* Global Signature Floating Bottom Navigation (Corporate, Individual, Public) */}
-        <AppBottomNav />
-      
+              
         </div>
       </div>
     </BrowserRouter>
