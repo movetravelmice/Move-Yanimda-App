@@ -51,10 +51,11 @@
 
 html, body, #root {
   width: 100%;
-  min-height: 100vh;
+  min-height: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
-  background-color: var(--bg-color);
+  background-color: var(--primary);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
@@ -64,32 +65,40 @@ html, body, #root {
 @media (min-width: 640px) {
   html, body, #root {
     background-color: #E2E8F0;
+    min-height: 100vh;
   }
 }
 
-/* Outer wrapper: centers the phone mockup on desktop with a clean neutral background (matching astrablok) */
+/* Outer wrapper: full bleed on mobile, centers phone mockup on desktop */
 .mobile-app-wrapper {
   width: 100%;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 100dvh;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--bg-color);
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  background-color: var(--primary);
   padding: 0;
+  margin: 0;
 }
 
 @media (min-width: 640px) {
   .mobile-app-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background-color: #E2E8F0;
     padding: 32px 16px;
   }
 }
 
-/* Realistic mobile phone viewport (matching astrablok) */
+/* Realistic mobile phone viewport */
 .mobile-app-container,
 .container {
   width: 100%;
-  max-width: 420px;
+  max-width: 100%;
   min-height: 100dvh;
   height: 100dvh;
   background-color: var(--bg-color);
@@ -97,11 +106,14 @@ html, body, #root {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  margin: 0;
+  padding: 0;
 }
 
 @media (min-width: 640px) {
   .mobile-app-container,
   .container {
+    max-width: 420px;
     height: 844px;
     max-height: calc(100vh - 48px);
     min-height: 700px;
