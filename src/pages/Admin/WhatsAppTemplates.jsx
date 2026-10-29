@@ -5,7 +5,8 @@ import Header from '../../components/Header';
 import { 
   Save, Info, HelpCircle, Send, MessageSquare, Code, Eye, 
   Sparkles, Check, CheckCircle2, Loader2, Copy, ExternalLink,
-  Layers, Globe, ShieldCheck, Share2, ChevronDown
+  Layers, Globe, ShieldCheck, Share2, ChevronDown, UserPlus,
+  Compass, FileText, Clock, Star
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -85,6 +86,8 @@ export default function WhatsAppTemplates() {
     const { whatsappConfig, setWhatsappConfig } = useSettingsStore();
 
     const [selectedTemplateKey, setSelectedTemplateKey] = useState('tourReviewTemplate');
+    const [isTemplateDropdownOpen, setIsTemplateDropdownOpen] = useState(false);
+    const templateDropdownRef = useRef(null);
     const [activeTab, setActiveTab] = useState('edit'); // 'edit', 'preview', 'facebook_meta', 'test'
     const [isTabDropdownOpen, setIsTabDropdownOpen] = useState(false);
     const tabDropdownRef = useRef(null);
@@ -99,6 +102,53 @@ export default function WhatsAppTemplates() {
     const [copiedSnippet, setCopiedSnippet] = useState(false);
     const [isCreatingOnMeta, setIsCreatingOnMeta] = useState(false);
     const [metaCreateResult, setMetaCreateResult] = useState(null);
+
+    const templateIcons = {
+        newUserTemplate: {
+            icon: <UserPlus size={15} />,
+            color: '#059669',
+            bgColor: '#ecfdf5',
+            borderColor: '#a7f3d0',
+            badge: 'Hoş Geldin'
+        },
+        newTourTemplate: {
+            icon: <Compass size={15} />,
+            color: '#0284c7',
+            bgColor: '#f0f9ff',
+            borderColor: '#bae6fd',
+            badge: 'Tur Kaydı'
+        },
+        passwordResetTemplate: {
+            icon: <ShieldCheck size={15} />,
+            color: '#dc2626',
+            bgColor: '#fef2f2',
+            borderColor: '#fecaca',
+            badge: 'Güvenlik / OTP'
+        },
+        ticketAddedTemplate: {
+            icon: <FileText size={15} />,
+            color: '#7c3aed',
+            bgColor: '#f5f3ff',
+            borderColor: '#ddd6fe',
+            badge: 'E-Bilet PDF'
+        },
+        checkInTemplate: {
+            icon: <Clock size={15} />,
+            color: '#d97706',
+            bgColor: '#fffbeb',
+            borderColor: '#fde68a',
+            badge: 'Check-in'
+        },
+        tourReviewTemplate: {
+            icon: <Star size={15} />,
+            color: 'var(--primary)',
+            bgColor: '#fdf2f8',
+            borderColor: '#fbcfe8',
+            badge: 'Puanlama'
+        }
+    };
+
+    const currentTplStyle = templateIcons[selectedTemplateKey] || templateIcons.tourReviewTemplate;
 
     const tabOptions = [
         {
@@ -153,6 +203,9 @@ export default function WhatsAppTemplates() {
         const handleClickOutside = (e) => {
             if (tabDropdownRef.current && !tabDropdownRef.current.contains(e.target)) {
                 setIsTabDropdownOpen(false);
+            }
+            if (templateDropdownRef.current && !templateDropdownRef.current.contains(e.target)) {
+                setIsTemplateDropdownOpen(false);
             }
         };
         document.addEventListener('mousedown', handleClickOutside);
@@ -444,22 +497,176 @@ export default function WhatsAppTemplates() {
 
             <div style={{ maxWidth: '680px', margin: '0 auto', padding: '14px 12px' }}>
                 
-                {/* 1. Template Selector Card */}
-                <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '12px 14px', marginBottom: '10px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
-                    <label style={{ fontSize: '10px', fontWeight: '800', color: '#64748b', marginBottom: '4px', display: 'block' }}>
-                        YÖNETİLECEK ŞABLON
-                    </label>
-                    <select 
-                        value={selectedTemplateKey}
-                        onChange={(e) => setSelectedTemplateKey(e.target.value)}
-                        style={{ width: '100%', padding: '7px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', outline: 'none', background: '#f8fafc', color: '#1e293b', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer' }}
-                    >
-                        {Object.entries(defaultWaTemplates).map(([key, value]) => (
-                            <option key={key} value={key}>{value.title}</option>
-                        ))}
-                    </select>
+                {/* 1. Template Selector Card (Sleek Dropdown Menu) */}
+                <div style={{ 
+                    background: 'white', 
+                    borderRadius: '16px', 
+                    border: '1px solid #e2e8f0', 
+                    padding: '12px 14px', 
+                    marginBottom: '10px', 
+                    boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)',
+                    position: 'relative',
+                    zIndex: isTemplateDropdownOpen ? 120 : 20
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <label style={{ fontSize: '10px', fontWeight: '800', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.3px' }}>
+                            <MessageSquare size={13} color="var(--primary)" />
+                            <span>YÖNETİLECEK ŞABLON</span>
+                        </label>
+                        <span style={{ 
+                            fontSize: '9.5px', 
+                            fontWeight: '700', 
+                            padding: '2px 8px', 
+                            borderRadius: '6px', 
+                            background: currentTplStyle.bgColor, 
+                            color: currentTplStyle.color,
+                            border: `1px solid ${currentTplStyle.borderColor}`
+                        }}>
+                            {currentTplStyle.badge}
+                        </span>
+                    </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px', fontSize: '10.5px', color: '#64748b' }}>
+                    <div ref={templateDropdownRef} style={{ position: 'relative' }}>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setIsTemplateDropdownOpen(prev => !prev);
+                                setIsTabDropdownOpen(false);
+                            }}
+                            style={{
+                                width: '100%',
+                                padding: '9px 12px',
+                                borderRadius: '12px',
+                                border: isTemplateDropdownOpen ? '1.5px solid var(--primary)' : '1px solid #cbd5e1',
+                                background: isTemplateDropdownOpen ? '#fdf2f8' : '#f8fafc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '9px',
+                                    background: currentTplStyle.bgColor,
+                                    color: currentTplStyle.color,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                }}>
+                                    {currentTplStyle.icon}
+                                </div>
+                                <div style={{ textAlign: 'left', minWidth: 0 }}>
+                                    <div style={{ fontSize: '12px', fontWeight: '800', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {templateMeta.title}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <span style={{ fontFamily: 'monospace' }}>Meta: {metaTemplateName || templateMeta.metaName}</span>
+                                        <span>•</span>
+                                        <span>{templateMeta.variables.length} Değişken</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <ChevronDown 
+                                size={16} 
+                                color="#64748b" 
+                                style={{
+                                    transform: isTemplateDropdownOpen ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s ease',
+                                    flexShrink: 0,
+                                    marginLeft: '8px'
+                                }}
+                            />
+                        </button>
+
+                        {/* Dropdown Menu Overlay */}
+                        {isTemplateDropdownOpen && (
+                            <div style={{
+                                position: 'absolute',
+                                top: 'calc(100% + 6px)',
+                                left: 0,
+                                right: 0,
+                                zIndex: 120,
+                                background: 'white',
+                                borderRadius: '14px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 12px 28px -4px rgba(15, 23, 42, 0.14), 0 4px 10px -2px rgba(15, 23, 42, 0.08)',
+                                padding: '6px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px',
+                                maxHeight: '340px',
+                                overflowY: 'auto'
+                            }}>
+                                {Object.entries(defaultWaTemplates).map(([key, item]) => {
+                                    const isActive = selectedTemplateKey === key;
+                                    const style = templateIcons[key] || templateIcons.newUserTemplate;
+                                    return (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedTemplateKey(key);
+                                                setIsTemplateDropdownOpen(false);
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 10px',
+                                                borderRadius: '10px',
+                                                border: isActive ? `1.5px solid ${style.borderColor}` : '1px solid transparent',
+                                                background: isActive ? style.bgColor : 'transparent',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                textAlign: 'left'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!isActive) e.currentTarget.style.background = '#f8fafc';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!isActive) e.currentTarget.style.background = 'transparent';
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                                                <div style={{
+                                                    width: '30px',
+                                                    height: '30px',
+                                                    borderRadius: '8px',
+                                                    background: style.bgColor,
+                                                    color: style.color,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {style.icon}
+                                                </div>
+                                                <div style={{ minWidth: 0 }}>
+                                                    <div style={{ fontSize: '12px', fontWeight: isActive ? '800' : '700', color: isActive ? style.color : '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {item.title}
+                                                    </div>
+                                                    <div style={{ fontSize: '10px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                                        {item.description}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {isActive && <Check size={16} color={style.color} style={{ flexShrink: 0, marginLeft: '8px' }} />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', fontSize: '10.5px', color: '#64748b' }}>
                         <Info size={12} color="#059669" style={{ flexShrink: 0 }} />
                         <span>{templateMeta.description}</span>
                     </div>
@@ -473,7 +680,8 @@ export default function WhatsAppTemplates() {
                     padding: '12px 14px', 
                     marginBottom: '12px', 
                     boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)',
-                    position: 'relative'
+                    position: 'relative',
+                    zIndex: isTabDropdownOpen ? 120 : 10
                 }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                         <label style={{ fontSize: '10px', fontWeight: '800', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.3px' }}>
