@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useTourStore } from '../../store/tourStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { generateTintinReply } from '../../services/aiService';
+import { findMatchingParticipant } from '../../utils/userUtils';
 
 export default function TintinChat() {
   const navigate = useNavigate();

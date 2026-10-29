@@ -120,6 +120,25 @@ export default class ErrorBoundary extends React.Component {
                 <Home size={16} /> Ana Sayfaya Dön
               </button>
             </div>
+
+            {this.state.error?.message && (
+              <div style={{
+                marginTop: '16px',
+                padding: '10px',
+                borderRadius: '8px',
+                background: '#fef2f2',
+                border: '1px solid #fee2e2',
+                color: '#dc2626',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                textAlign: 'left',
+                wordBreak: 'break-word',
+                maxHeight: '80px',
+                overflowY: 'auto'
+              }}>
+                Hata Detayı: {this.state.error.message}
+              </div>
+            )}
           </div>
         </div>
       );

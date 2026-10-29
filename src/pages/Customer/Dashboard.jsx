@@ -8,6 +8,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
 import ExpertModal from '../../components/ExpertModal';
+import { findMatchingParticipant } from '../../utils/userUtils';
 
 const StarRating = ({ value = 0, onChange, size = 16, color = '#f59e0b', emptyColor = '#cbd5e1' }) => {
   const [hoverVal, setHoverVal] = useState(0);
