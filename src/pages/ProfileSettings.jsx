@@ -470,7 +470,7 @@ export default function ProfileSettings({ hideHeader = false }) {
   const roleBadge = getRoleBadge();
 
   return (
-    <div style={{ paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))', minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
+    <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
       
       {/* Toast Notification Pop-up */}
       {toastPopup && (

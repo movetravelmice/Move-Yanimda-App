@@ -711,7 +711,7 @@ export default function AdminUsers() {
     const adultCustomers = allUsers.filter(u => u.role === 'customer' && !isUserChild(u));
 
     return (
-      <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
+      <div style={{ paddingBottom: 'calc(180px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
         {/* Custom Popup Alert Modal */}
         {popupMsg.show && (
           <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(4px)' }}>
@@ -739,7 +739,7 @@ export default function AdminUsers() {
           }} 
         />
 
-        <div style={{ padding: '0 16px 40px 16px', maxWidth: '520px', margin: '0 auto' }}>
+        <div style={{ padding: '0 16px calc(160px + env(safe-area-inset-bottom, 0px)) 16px', maxWidth: '520px', margin: '0 auto' }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             
             {/* Form Card */}
@@ -1453,7 +1453,10 @@ export default function AdminUsers() {
               padding: '14px 16px', 
               boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
               display: 'flex', 
-              gap: '10px' 
+              gap: '10px',
+              marginBottom: '32px',
+              position: 'relative',
+              zIndex: 10 
             }}>
               <button 
                 type="button"
@@ -1508,7 +1511,7 @@ export default function AdminUsers() {
   }
 
   return (
-    <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh', position: 'relative' }} onClick={() => setOpenDropdownId(null)}>
+    <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh', position: 'relative' }} onClick={() => setOpenDropdownId(null)}>
       
       {/* Custom Popup Alert Modal */}
       {popupMsg.show && (
