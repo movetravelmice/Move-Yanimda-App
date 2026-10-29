@@ -291,7 +291,7 @@ export default function PopularRoutes() {
   // -------------------------------------------------------------
   if (modalOpen) {
     return (
-      <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh' }}>
+      <div style={{ paddingBottom: 'calc(180px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
         <Header
           title={editingRoute ? `${editingRoute.city} Rotasını Düzenle` : 'Yeni Popüler Rota Ekle'}
           showBack
@@ -874,7 +874,14 @@ export default function PopularRoutes() {
             </div>
 
             {/* 5. AKSİYON BUTONLARI */}
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '32px' }}>
+            <div style={{
+              display: 'flex',
+              gap: '10px',
+              marginTop: '10px',
+              marginBottom: '16px',
+              position: 'relative',
+              zIndex: 10
+            }}>
               <button
                 type="button"
                 onClick={() => setModalOpen(false)}
@@ -911,6 +918,9 @@ export default function PopularRoutes() {
                 {editingRoute ? 'Güncellemeyi Kaydet' : 'Rotayı Kaydet'}
               </button>
             </div>
+
+            {/* Alt Menü ve Tintin Butonu İçin Ekstra Boşluk Alanı */}
+            <div style={{ height: '110px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
           </form>
         </div>
       </div>
@@ -918,7 +928,7 @@ export default function PopularRoutes() {
   }
 
   return (
-    <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
+    <div style={{ paddingBottom: 'calc(180px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
       <Header title="Popüler Rotalar Vitrini" showBack />
 
       <div style={{ maxWidth: '680px', margin: '0 auto', padding: '16px 14px' }}>
@@ -1376,6 +1386,9 @@ export default function PopularRoutes() {
             })
           )}
         </div>
+
+        {/* Alt Menü ve Tintin Butonu İçin Ekstra Boşluk */}
+        <div style={{ height: '90px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
 
       </div>
 
