@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore } from '../store/userStore';
+import { isUserChild } from '../utils/userUtils';
 import { 
   Mail, 
   KeyRound, 
@@ -97,8 +98,13 @@ export default function Login() {
           return;
       }
 
-      if (userRecord.isChildProfile === true || (userRecord.email && (userRecord.email.startsWith('child_') || userRecord.email.endsWith('.local') || userRecord.email.includes('@move.local')))) {
+      if (isUserChild(userRecord)) {
           setError('Çocuk hesapları ebeveyn kontrolündedir ve e-posta alamaz. Lütfen ebeveyn hesabınızla giriş yapınız.');
+          return;
+      }
+
+      if (userRecord.email && (userRecord.email.endsWith('@move.local') || userRecord.email.endsWith('.local'))) {
+          setError('Hesabınıza ait harici bir e-posta tanımlı değildir. Lütfen telefon numaranız ve şifrenizle giriş yapınız.');
           return;
       }
       

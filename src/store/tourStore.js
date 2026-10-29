@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { formatTitleCase } from './userStore';
+import { isUserChild } from '../utils/userUtils';
 
 const excelSerialToDate = (serial) => {
     const s = Number(serial);
@@ -673,7 +674,7 @@ export const useTourStore = create((set, get) => ({
           let updatedParticipants = false;
           const newParticipants = tour.participants.map(p => {
               const globalUser = users.find(u => u.id === p.id || u.email === p.email) || p;
-              const isChild = globalUser.isChildProfile === true || (globalUser.email && (globalUser.email.startsWith('child_') || globalUser.email.endsWith('.local') || globalUser.email.includes('@move.local')));
+              const isChild = isUserChild(globalUser, users);
               if (isChild) return p;
 
               const outgoingFlight = p.flights?.find(f => f.type === 'Gidiş Uçuşu' || f.type === 'Gidis Ucusu') || p.flights?.[0];
@@ -737,7 +738,7 @@ export const useTourStore = create((set, get) => ({
               let updatedParticipants = false;
               const newParticipants = (tour.participants || []).map(p => {
                   const globalUser = users.find(u => u.id === p.id || u.email === p.email) || p;
-                  const isChild = globalUser.isChildProfile === true || (globalUser.email && (globalUser.email.startsWith('child_') || globalUser.email.endsWith('.local') || globalUser.email.includes('@move.local')));
+                  const isChild = isUserChild(globalUser, users);
                   if (isChild) return p;
                   
                   if (!p.reviewReminderSent) {
