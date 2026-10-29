@@ -632,6 +632,59 @@ export default function AdminUsers() {
                       }
                   }
               }
+
+              // Auto-link new customer to any tour participant matching their name, phone, or TC
+              if (newUser && formData.role === 'customer') {
+                  try {
+                      const { collection, getDocs, doc, updateDoc, deleteDoc } = await import('firebase/firestore');
+                      const { db } = await import('../../lib/firebase');
+                      const { normalizeTurkish } = await import('../../utils/userUtils');
+                      const toursSnap = await getDocs(collection(db, 'tours'));
+                      const uNorm = normalizeTurkish(newUser.name);
+                      const uPhone = (newUser.phone || '').replace(/\D/g, '').slice(-10);
+
+                      for (const tDoc of toursSnap.docs) {
+                          const tData = tDoc.data();
+                          if (tData.status === 'cancelled') continue;
+                          const parts = tData.participants || [];
+                          let tourUpdated = false;
+                          let oldPlaceholderId = null;
+
+                          const updatedParts = parts.map(p => {
+                              const pNorm = normalizeTurkish(p.name);
+                              const pPhone = (p.phone || '').replace(/\D/g, '').slice(-10);
+                              const nameMatch = uNorm && pNorm && uNorm === pNorm;
+                              const phoneMatch = uPhone && pPhone && uPhone === pPhone;
+
+                              if (nameMatch || phoneMatch) {
+                                  tourUpdated = true;
+                                  if (p.id && p.id !== newUser.id) {
+                                      oldPlaceholderId = p.id;
+                                  }
+                                  return {
+                                      ...p,
+                                      id: newUser.id,
+                                      userId: newUser.id,
+                                      name: newUser.name,
+                                      email: newUser.email,
+                                      phone: newUser.phone,
+                                      tcNo: newUser.tcNo || p.tcNo || ''
+                                  };
+                              }
+                              return p;
+                          });
+
+                          if (tourUpdated) {
+                              await updateDoc(tDoc.ref, { participants: updatedParts });
+                              if (oldPlaceholderId && oldPlaceholderId.startsWith('customer_')) {
+                                  try { await deleteDoc(doc(db, 'users', oldPlaceholderId)); } catch(e){}
+                              }
+                          }
+                      }
+                  } catch (e) {
+                      console.warn("Auto-link tour participant error:", e);
+                  }
+              }
           }
 
           if (userPayload.company && userPayload.company !== '-' && userPayload.company !== 'Move Travel & Mice') {
