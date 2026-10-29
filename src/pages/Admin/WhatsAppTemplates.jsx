@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import Header from '../../components/Header';
 import { 
   Save, Info, HelpCircle, Send, MessageSquare, Code, Eye, 
   Sparkles, Check, CheckCircle2, Loader2, Copy, ExternalLink,
-  Layers, Globe, ShieldCheck, Share2
+  Layers, Globe, ShieldCheck, Share2, ChevronDown
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -86,6 +86,8 @@ export default function WhatsAppTemplates() {
 
     const [selectedTemplateKey, setSelectedTemplateKey] = useState('tourReviewTemplate');
     const [activeTab, setActiveTab] = useState('edit'); // 'edit', 'preview', 'facebook_meta', 'test'
+    const [isTabDropdownOpen, setIsTabDropdownOpen] = useState(false);
+    const tabDropdownRef = useRef(null);
     const [metaTemplateName, setMetaTemplateName] = useState('');
     const [bodyPattern, setBodyPattern] = useState('');
     const [loading, setLoading] = useState(false);
@@ -97,6 +99,69 @@ export default function WhatsAppTemplates() {
     const [copiedSnippet, setCopiedSnippet] = useState(false);
     const [isCreatingOnMeta, setIsCreatingOnMeta] = useState(false);
     const [metaCreateResult, setMetaCreateResult] = useState(null);
+
+    const tabOptions = [
+        {
+            id: 'edit',
+            title: 'Şablon Düzenle',
+            subtitle: 'Metin, dinamik değişkenler ve Meta şablon adı',
+            badge: 'Düzenleme',
+            icon: <Code size={15} />,
+            color: '#059669',
+            bgColor: '#ecfdf5',
+            activeBg: '#f0fdf4',
+            borderColor: '#a7f3d0'
+        },
+        {
+            id: 'preview',
+            title: 'Canlı Önizleme',
+            subtitle: 'WhatsApp mesaj balonu & buton simülasyonu',
+            badge: 'Önizleme',
+            icon: <Eye size={15} />,
+            color: 'var(--primary)',
+            bgColor: '#fdf2f8',
+            activeBg: '#fdf2f8',
+            borderColor: '#fbcfe8'
+        },
+        {
+            id: 'facebook_meta',
+            title: 'Meta / Facebook Şablonu',
+            subtitle: 'Resmi Cloud API JSON yükü ve entegrasyonu',
+            badge: 'Meta API',
+            icon: <Globe size={15} />,
+            color: '#1877f2',
+            bgColor: '#eff6ff',
+            activeBg: '#eff6ff',
+            borderColor: '#bfdbfe'
+        },
+        {
+            id: 'test',
+            title: 'Test Gönder',
+            subtitle: 'Belirtilen telefon numarasına anlık test iletimi',
+            badge: 'Canlı Test',
+            icon: <Send size={15} />,
+            color: '#d97706',
+            bgColor: '#fffbeb',
+            activeBg: '#fffbeb',
+            borderColor: '#fde68a'
+        }
+    ];
+
+    const currentTabObj = tabOptions.find(t => t.id === activeTab) || tabOptions[0];
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (tabDropdownRef.current && !tabDropdownRef.current.contains(e.target)) {
+                setIsTabDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        document.addEventListener('touchstart', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('touchstart', handleClickOutside);
+        };
+    }, []);
 
     const templateMeta = defaultWaTemplates[selectedTemplateKey] || defaultWaTemplates.tourReviewTemplate;
 
@@ -374,7 +439,7 @@ export default function WhatsAppTemplates() {
     };
 
     return (
-        <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
+        <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh' }}>
             <Header title="WhatsApp Şablon Yönetimi" showBack />
 
             <div style={{ maxWidth: '680px', margin: '0 auto', padding: '14px 12px' }}>
@@ -400,96 +465,165 @@ export default function WhatsAppTemplates() {
                     </div>
                 </div>
 
-                {/* 2. Sleek Tab Navigation */}
-                <div style={{ display: 'flex', gap: '4px', marginBottom: '10px' }}>
-                    <button
-                        onClick={() => setActiveTab('edit')}
-                        style={{
-                            flex: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '3px',
-                            padding: '6px 4px',
-                            borderRadius: '9px',
-                            fontSize: 'clamp(9px, 2.5vw, 10.5px)',
-                            fontWeight: activeTab === 'edit' ? '800' : '600',
-                            background: activeTab === 'edit' ? '#059669' : 'white',
-                            color: activeTab === 'edit' ? 'white' : '#64748b',
-                            border: activeTab === 'edit' ? 'none' : '1px solid #e2e8f0',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        <Code size={11} style={{ flexShrink: 0 }} /> Şablon Düzenle
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('preview')}
-                        style={{
-                            flex: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '3px',
-                            padding: '6px 4px',
-                            borderRadius: '9px',
-                            fontSize: 'clamp(9px, 2.5vw, 10.5px)',
-                            fontWeight: activeTab === 'preview' ? '800' : '600',
-                            background: activeTab === 'preview' ? '#059669' : 'white',
-                            color: activeTab === 'preview' ? 'white' : '#64748b',
-                            border: activeTab === 'preview' ? 'none' : '1px solid #e2e8f0',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        <Eye size={11} style={{ flexShrink: 0 }} /> Önizleme
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('facebook_meta')}
-                        style={{
-                            flex: 1.2,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '3px',
-                            padding: '6px 4px',
-                            borderRadius: '9px',
-                            fontSize: 'clamp(9px, 2.5vw, 10.5px)',
-                            fontWeight: activeTab === 'facebook_meta' ? '800' : '600',
-                            background: activeTab === 'facebook_meta' ? '#1877f2' : 'white',
-                            color: activeTab === 'facebook_meta' ? 'white' : '#1877f2',
-                            border: activeTab === 'facebook_meta' ? 'none' : '1px solid #bfdbfe',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        <Globe size={11} style={{ flexShrink: 0 }} /> Meta / Facebook Şablonu
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('test')}
-                        style={{
-                            flex: 1,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '3px',
-                            padding: '6px 4px',
-                            borderRadius: '9px',
-                            fontSize: 'clamp(9px, 2.5vw, 10.5px)',
-                            fontWeight: activeTab === 'test' ? '800' : '600',
-                            background: activeTab === 'test' ? '#059669' : 'white',
-                            color: activeTab === 'test' ? 'white' : '#64748b',
-                            border: activeTab === 'test' ? 'none' : '1px solid #e2e8f0',
-                            cursor: 'pointer',
-                            whiteSpace: 'nowrap',
-                            transition: 'all 0.15s ease'
-                        }}
-                    >
-                        <Send size={11} style={{ flexShrink: 0 }} /> Test Gönder
-                    </button>
+                {/* 2. İşlem & Görünüm Modu Seçim Kartı (Dropdown Menu) */}
+                <div style={{ 
+                    background: 'white', 
+                    borderRadius: '16px', 
+                    border: '1px solid #e2e8f0', 
+                    padding: '12px 14px', 
+                    marginBottom: '12px', 
+                    boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)',
+                    position: 'relative'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                        <label style={{ fontSize: '10px', fontWeight: '800', color: '#64748b', display: 'flex', alignItems: 'center', gap: '5px', letterSpacing: '0.3px' }}>
+                            <Layers size={13} color="var(--primary)" />
+                            <span>İŞLEM / GÖRÜNÜM MODU</span>
+                        </label>
+                        <span style={{ 
+                            fontSize: '9.5px', 
+                            fontWeight: '700', 
+                            padding: '2px 8px', 
+                            borderRadius: '6px', 
+                            background: currentTabObj.bgColor, 
+                            color: currentTabObj.color,
+                            border: `1px solid ${currentTabObj.borderColor}`
+                        }}>
+                            {currentTabObj.badge}
+                        </span>
+                    </div>
+
+                    <div ref={tabDropdownRef} style={{ position: 'relative' }}>
+                        <button
+                            type="button"
+                            onClick={() => setIsTabDropdownOpen(prev => !prev)}
+                            style={{
+                                width: '100%',
+                                padding: '9px 12px',
+                                borderRadius: '12px',
+                                border: isTabDropdownOpen ? '1.5px solid var(--primary)' : '1px solid #cbd5e1',
+                                background: isTabDropdownOpen ? '#fdf2f8' : '#f8fafc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease',
+                                outline: 'none',
+                                boxSizing: 'border-box'
+                            }}
+                        >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '9px',
+                                    background: currentTabObj.bgColor,
+                                    color: currentTabObj.color,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                }}>
+                                    {currentTabObj.icon}
+                                </div>
+                                <div style={{ textAlign: 'left' }}>
+                                    <div style={{ fontSize: '12px', fontWeight: '800', color: '#1e293b' }}>
+                                        {currentTabObj.title}
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>
+                                        {currentTabObj.subtitle}
+                                    </div>
+                                </div>
+                            </div>
+                            <ChevronDown 
+                                size={16} 
+                                color="#64748b" 
+                                style={{
+                                    transform: isTabDropdownOpen ? 'rotate(180deg)' : 'none',
+                                    transition: 'transform 0.2s ease',
+                                    flexShrink: 0,
+                                    marginLeft: '8px'
+                                }}
+                            />
+                        </button>
+
+                        {/* Dropdown Menu Overlay */}
+                        {isTabDropdownOpen && (
+                            <div style={{
+                                position: 'absolute',
+                                top: 'calc(100% + 6px)',
+                                left: 0,
+                                right: 0,
+                                zIndex: 100,
+                                background: 'white',
+                                borderRadius: '14px',
+                                border: '1px solid #e2e8f0',
+                                boxShadow: '0 12px 28px -4px rgba(15, 23, 42, 0.12), 0 4px 10px -2px rgba(15, 23, 42, 0.06)',
+                                padding: '6px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '4px'
+                            }}>
+                                {tabOptions.map((tab) => {
+                                    const isActive = activeTab === tab.id;
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            type="button"
+                                            onClick={() => {
+                                                setActiveTab(tab.id);
+                                                setIsTabDropdownOpen(false);
+                                            }}
+                                            style={{
+                                                width: '100%',
+                                                padding: '9px 10px',
+                                                borderRadius: '10px',
+                                                border: isActive ? `1.5px solid ${tab.borderColor}` : '1px solid transparent',
+                                                background: isActive ? tab.activeBg : 'transparent',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s ease',
+                                                textAlign: 'left'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                if (!isActive) e.currentTarget.style.background = '#f8fafc';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                if (!isActive) e.currentTarget.style.background = 'transparent';
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <div style={{
+                                                    width: '30px',
+                                                    height: '30px',
+                                                    borderRadius: '8px',
+                                                    background: tab.bgColor,
+                                                    color: tab.color,
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>
+                                                    {tab.icon}
+                                                </div>
+                                                <div>
+                                                    <div style={{ fontSize: '12px', fontWeight: isActive ? '800' : '700', color: isActive ? tab.color : '#1e293b' }}>
+                                                        {tab.title}
+                                                    </div>
+                                                    <div style={{ fontSize: '10px', color: '#64748b' }}>
+                                                        {tab.subtitle}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {isActive && <Check size={16} color={tab.color} style={{ flexShrink: 0, marginLeft: '8px' }} />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {loading ? (
