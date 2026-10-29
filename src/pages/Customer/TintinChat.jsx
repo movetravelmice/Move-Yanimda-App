@@ -503,7 +503,7 @@ export default function TintinChat() {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      height: '100dvh',
+      height: '100%', minHeight: '100%',
       marginBottom: 'calc(-95px - env(safe-area-inset-bottom, 0px))',
       backgroundColor: '#f8fafc',
       position: 'relative',

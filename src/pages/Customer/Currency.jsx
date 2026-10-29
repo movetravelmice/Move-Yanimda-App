@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Coins, ArrowUpDown, Clock, ChevronDown, Check } from 'lucide-react';
+import { RefreshCw, Coins, ArrowUpDown, Clock, ChevronDown, Check, TrendingUp, Loader2 } from 'lucide-react';
 import Header from '../../components/Header';
 import { useSettingsStore } from '../../store/settingsStore';
+import { getApiBaseUrl } from '../../utils/apiConfig';
 
 const currencyMetadata = {
   USD: { name: 'Amerikan Doları', symbol: '$' },
@@ -190,24 +191,15 @@ export default function Currency({ isEmbedded = false }) {
   const [from, setFrom] = useState('USD');
   const [to, setTo] = useState('TRY');
   
-  const [rates, setRates] = useState({
-    TRY: 1,
-    USD: 33.50,
-    EUR: 36.20,
-    GBP: 42.10,
-    JPY: 0.22,
-    CHF: 37.15,
-    CAD: 24.50,
-    AUD: 22.10,
-    CNY: 4.60,
-    RUB: 0.36,
-    AED: 9.12
-  });
-  
+  const [rates, setRates] = useState({});
+  const [isRatesLoaded, setIsRatesLoaded] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [countdown, setCountdown] = useState(60);
   const [provider, setProvider] = useState('tcmb'); // 'tcmb' or 'akbank'
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const defaultCurrencyList = ['USD', 'EUR', 'TRY', 'GBP', 'JPY', 'CHF', 'CAD', 'AUD', 'CNY', 'RUB', 'AED', 'SAR', 'KWD', 'DKK', 'SEK', 'NOK', 'RON', 'BGN', 'QAR'];
+  const availableOptions = Object.keys(rates).length > 0 ? Object.keys(rates) : defaultCurrencyList;
 
   const symbols = {
     TRY: "₺", USD: "$", EUR: "€", GBP: "£", JPY: "¥", 
@@ -218,24 +210,61 @@ export default function Currency({ isEmbedded = false }) {
   const executeRefreshLogic = async (currentProvider = provider) => {
     setIsLoading(true);
     try {
-      const url = currentProvider === 'tcmb' ? '/api/tcmb-rates' : `/api/akbank-rates?apikey=${akbankApiKey || ''}`;
+      const baseUrl = getApiBaseUrl();
+      const url = currentProvider === 'tcmb' 
+        ? `${baseUrl}/api/tcmb-rates` 
+        : `${baseUrl}/api/akbank-rates?apikey=${akbankApiKey || ''}`;
+      
       const res = await fetch(url);
       const data = await res.json();
       
       if (data && data.success && data.rates) {
-        setRates(prevRates => {
-          const updated = { ...prevRates };
-          Object.keys(updated).forEach(k => {
-            if (data.rates[k] !== undefined) {
-              updated[k] = Number(data.rates[k]);
-            }
-          });
-          return updated;
+        const formatted = {};
+        Object.keys(data.rates).forEach(k => {
+          formatted[k] = Number(data.rates[k]);
         });
+        if (!formatted.TRY) formatted.TRY = 1;
+        setRates(formatted);
+        setIsRatesLoaded(true);
         setLastUpdate(new Date());
+      } else {
+        // Fallback: public currency API if server endpoint was unreachable
+        try {
+          const fallbackRes = await fetch('https://open.er-api.com/v6/latest/TRY');
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData && fallbackData.rates) {
+            const converted = { TRY: 1 };
+            Object.keys(fallbackData.rates).forEach(cur => {
+              const r = Number(fallbackData.rates[cur]);
+              if (r > 0) converted[cur] = 1 / r;
+            });
+            setRates(converted);
+            setIsRatesLoaded(true);
+            setLastUpdate(new Date());
+          }
+        } catch (fbErr) {
+          console.warn('Fallback currency fetch error:', fbErr);
+        }
       }
     } catch (error) {
       console.error(`${currentProvider.toUpperCase()} kur hatası:`, error);
+      // Fallback in catch
+      try {
+        const fallbackRes = await fetch('https://open.er-api.com/v6/latest/TRY');
+        const fallbackData = await fallbackRes.json();
+        if (fallbackData && fallbackData.rates) {
+          const converted = { TRY: 1 };
+          Object.keys(fallbackData.rates).forEach(cur => {
+            const r = Number(fallbackData.rates[cur]);
+            if (r > 0) converted[cur] = 1 / r;
+          });
+          setRates(converted);
+          setIsRatesLoaded(true);
+          setLastUpdate(new Date());
+        }
+      } catch (fbErr) {
+        console.warn('Fallback currency fetch error:', fbErr);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -272,9 +301,10 @@ export default function Currency({ isEmbedded = false }) {
   }, [provider]);
 
   const calculateConversion = () => {
+    if (!isRatesLoaded || !rates || !rates[from] || !rates[to]) return null;
     if (!amount || isNaN(amount)) return '0.0000';
-    const amountInTry = parseFloat(amount) * (rates[from] || 1);
-    return (amountInTry / (rates[to] || 1)).toFixed(4);
+    const amountInTry = parseFloat(amount) * Number(rates[from]);
+    return (amountInTry / Number(rates[to])).toFixed(4);
   };
 
   const formatCurrency = (value, curr) => {
@@ -297,24 +327,31 @@ export default function Currency({ isEmbedded = false }) {
   const mainContent = (
     <div style={{ padding: isEmbedded ? '0' : '0 16px' }}>
 
-        {/* Provider Selection Segmented Control */}
-        <div style={{ 
-          display: 'flex', 
-          background: '#f1f5f9', 
-          borderRadius: '14px', 
-          padding: '3px', 
+        {/* Provider Selection Card */}
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '16px',
+          border: '1px solid #edf2f7',
+          padding: '8px 10px',
           marginBottom: '14px',
-          border: '1px solid #e2e8f0'
+          boxShadow: '0 4px 16px rgba(0,0,0,0.04)'
         }}>
+          <div style={{ 
+            display: 'flex', 
+            background: '#f1f5f9', 
+            borderRadius: '12px', 
+            padding: '3px', 
+            border: '1px solid #e2e8f0'
+          }}>
             <button 
                 onClick={() => setProvider('tcmb')}
                 style={{ 
                   flex: 1, 
                   padding: '8px 12px', 
-                  borderRadius: '11px', 
+                  borderRadius: '10px', 
                   border: 'none', 
                   fontSize: '12px', 
-                  fontWeight: provider === 'tcmb' ? '600' : '500', 
+                  fontWeight: provider === 'tcmb' ? '700' : '500', 
                   cursor: 'pointer', 
                   background: provider === 'tcmb' ? '#ffffff' : 'transparent', 
                   color: provider === 'tcmb' ? 'var(--primary)' : '#64748b', 
@@ -328,10 +365,10 @@ export default function Currency({ isEmbedded = false }) {
                 style={{ 
                   flex: 1, 
                   padding: '8px 12px', 
-                  borderRadius: '11px', 
+                  borderRadius: '10px', 
                   border: 'none', 
                   fontSize: '12px', 
-                  fontWeight: provider === 'akbank' ? '600' : '500', 
+                  fontWeight: provider === 'akbank' ? '700' : '500', 
                   cursor: 'pointer', 
                   background: provider === 'akbank' ? '#ffffff' : 'transparent', 
                   color: provider === 'akbank' ? 'var(--primary)' : '#64748b', 
@@ -340,6 +377,7 @@ export default function Currency({ isEmbedded = false }) {
                 }}>
                 Akbank Kurları
             </button>
+          </div>
         </div>
 
         {/* Currency Converter Card */}
@@ -357,6 +395,13 @@ export default function Currency({ isEmbedded = false }) {
               <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#FDF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Coins size={15} color="var(--primary)" />
               </div>
+              <div style={{
+                width: '1.2px',
+                height: '20px',
+                background: '#F9BED8',
+                borderRadius: '1px',
+                flexShrink: 0
+              }} />
               <span style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>Canlı Kur Çevirici</span>
               <span style={{ fontSize: '10px', fontWeight: '500', background: '#f8fafc', color: '#64748b', padding: '2px 7px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
                 {provider === 'tcmb' ? 'TCMB' : 'Akbank'}
@@ -402,7 +447,7 @@ export default function Currency({ isEmbedded = false }) {
               <CustomCurrencySelect 
                 value={from} 
                 onChange={setFrom} 
-                options={Object.keys(rates)} 
+                options={availableOptions} 
                 symbols={symbols} 
                 metadata={currencyMetadata} 
               />
@@ -444,7 +489,7 @@ export default function Currency({ isEmbedded = false }) {
               <CustomCurrencySelect 
                 value={to} 
                 onChange={setTo} 
-                options={Object.keys(rates)} 
+                options={availableOptions} 
                 symbols={symbols} 
                 metadata={currencyMetadata} 
               />
@@ -473,7 +518,14 @@ export default function Currency({ isEmbedded = false }) {
                 textOverflow: 'ellipsis',
                 boxSizing: 'border-box'
               }}>
-                {formatCurrency(calculateConversion(), to)}
+                {(!isRatesLoaded || isLoading || calculateConversion() === null) ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', fontWeight: '700', color: '#D7147A' }}>
+                    <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+                    <span>Yükleniyor...</span>
+                  </div>
+                ) : (
+                  formatCurrency(calculateConversion(), to)
+                )}
               </div>
             </div>
           </div>
@@ -491,9 +543,21 @@ export default function Currency({ isEmbedded = false }) {
         }}>
           {/* Card Header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', paddingBottom: '10px', borderBottom: '1px solid #f1f5f9' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>Tüm Güncel Kurlar</span>
-              <span style={{ fontSize: '10.5px', fontWeight: '400', color: '#94a3b8' }}>(TRY Karşılığı)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#FDF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <TrendingUp size={15} color="var(--primary)" />
+              </div>
+              <div style={{
+                width: '1.2px',
+                height: '20px',
+                background: '#F9BED8',
+                borderRadius: '1px',
+                flexShrink: 0
+              }} />
+              <div>
+                <span style={{ fontSize: '13px', fontWeight: '600', color: '#334155' }}>Tüm Güncel Kurlar</span>
+                <span style={{ fontSize: '10.5px', fontWeight: '400', color: '#94a3b8', marginLeft: '6px' }}>(TRY Karşılığı)</span>
+              </div>
             </div>
             <button 
               onClick={handleManualRefresh} 
@@ -505,7 +569,14 @@ export default function Currency({ isEmbedded = false }) {
 
           {/* Rates List */}
           <div style={{ maxHeight: '320px', overflowY: 'auto', paddingRight: '2px' }}>
-            {Object.keys(rates).filter(c => c !== 'TRY').map((curr, index, arr) => {
+            {(!isRatesLoaded && isLoading) ? (
+              <div style={{ padding: '36px 16px', textAlign: 'center', color: '#64748b' }}>
+                <Loader2 size={22} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 8px auto', display: 'block', color: 'var(--primary)' }} />
+                <div style={{ fontSize: '12px', fontWeight: '600', color: '#334155' }}>Canlı kurlar yükleniyor...</div>
+                <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '3px' }}>TCMB & güncel piyasa verileri alınıyor</div>
+              </div>
+            ) : (
+              Object.keys(rates).filter(c => c !== 'TRY').map((curr, index, arr) => {
               const meta = currencyMetadata[curr] || { name: curr, symbol: symbols[curr] || curr };
               return (
                 <div 
@@ -557,7 +628,8 @@ export default function Currency({ isEmbedded = false }) {
                     </div>
                 </div>
               );
-            })}
+            })
+            )}
           </div>
         </div>
 

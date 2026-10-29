@@ -1,10 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { X, Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore, formatTitleCase } from '../store/userStore';
 import { isUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, checkEmailDomainTypo } from '../utils/userUtils';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
 export default function BulkParticipantManager({ tourId, onClose }) {
     const { tours, addParticipantToTour } = useTourStore();
@@ -21,7 +21,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
 
     if (!tour) return null;
 
-    const handleDownloadTemplate = () => {
+    const handleDownloadTemplate = async () => {
+        const XLSX = await import('xlsx');
         const templateData = [
             {
                 'Ad Soyad': 'Ahmet Yılmaz',
@@ -52,8 +53,9 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         setFileName(file.name);
 
         const reader = new FileReader();
-        reader.onload = (evt) => {
+        reader.onload = async (evt) => {
             try {
+                const XLSX = await import('xlsx');
                 const bstr = evt.target.result;
                 const wb = XLSX.read(bstr, { type: 'binary' });
                 const wsname = wb.SheetNames[0];
@@ -120,7 +122,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
 
         if (smtpConfig?.host && smtpConfig?.user && canUserReceiveEmail(participantEmail, users) && !isInternalPlaceholder) {
             try {
-                const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                const baseUrl = getApiBaseUrl();
                 await fetch(`${baseUrl}/api/send-tour-email`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

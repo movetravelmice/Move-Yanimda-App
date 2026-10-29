@@ -44,10 +44,11 @@ export const useUserStore = create((set, get) => ({
                     const userRecord = { 
                         ...data, 
                         id: userId, 
+                        role: data.role || 'customer',
                         email: cleanEmail, 
                         name: cleanName, 
                         phone: cleanPhone !== '-' ? cleanPhone : rawPhone,
-                        company: cleanCompany || (data.role === 'customer' ? 'Bireysel' : 'Move Travel & Mice')
+                        company: cleanCompany || ((data.role || 'customer') === 'customer' ? 'Bireysel' : 'Move Travel & Mice')
                     };
                     
                     // Kalıcı olarak demo/base44 hesaplarını Firestore'dan temizle

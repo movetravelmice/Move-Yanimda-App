@@ -18,6 +18,7 @@ import {
   MapPin,
   LocateFixed,
   Loader2,
+  Send,
   X,
   Check,
   CheckSquare,
@@ -41,6 +42,7 @@ import {
   Clock
 } from 'lucide-react';
 import CountryFlag from '../../../components/CountryFlag';
+import PinterestWeatherCard from '../../../components/PinterestWeatherCard';
 
 // Popüler Seyahat Destinasyonları
 const POPULAR_DESTINATIONS = [
@@ -502,7 +504,6 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
 
   // Canlı Hava Durumu Durumu
   const [weatherData, setWeatherData] = useState(null);
-  const [forecastDays, setForecastDays] = useState([]);
   const [loadingWeather, setLoadingWeather] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [checkedItems, setCheckedItems] = useState({});
@@ -535,7 +536,7 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
     }
   }, [cityParam]);
 
-  // Canlı hava verisi ve 3 günlük tahmin çek
+  // Canlı hava verisi ve 4 günlük tahmin çek (PinterestWeatherCard formatı)
   useEffect(() => {
     let isMounted = true;
     async function fetchWeather() {
@@ -547,34 +548,43 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
         const data = await res.json();
 
         if (isMounted && data?.current) {
+          const isDayVal = data.current.is_day !== undefined
+            ? Boolean(data.current.is_day)
+            : (new Date().getHours() >= 6 && new Date().getHours() < 20);
+
+          let localTime = '';
+          if (data.current.time && data.current.time.includes('T')) {
+            localTime = data.current.time.split('T')[1].slice(0, 5);
+          }
+
+          const daysMap = ['PAZ', 'PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CTS'];
+          const dailyForecast = [];
+          if (data.daily && Array.isArray(data.daily.time)) {
+            for (let i = 1; i <= 4; i++) {
+              if (data.daily.time[i]) {
+                const d = new Date(data.daily.time[i] + 'T12:00:00');
+                dailyForecast.push({
+                  day: daysMap[d.getDay()],
+                  code: data.daily.weather_code?.[i] ?? 1,
+                  max: Math.round(data.daily.temperature_2m_max?.[i] ?? 20),
+                  min: Math.round(data.daily.temperature_2m_min?.[i] ?? 12)
+                });
+              }
+            }
+          }
+
           setWeatherData({
             temp: Math.round(data.current.temperature_2m),
             feelsLike: Math.round(data.current.apparent_temperature),
             humidity: data.current.relative_humidity_2m,
             wind: Math.round(data.current.wind_speed_10m),
             code: data.current.weather_code,
-            isDay: Boolean(data.current.is_day),
-            tempMax: data.daily?.temperature_2m_max?.[0] ? Math.round(data.daily.temperature_2m_max[0]) : null,
-            tempMin: data.daily?.temperature_2m_min?.[0] ? Math.round(data.daily.temperature_2m_min[0]) : null
+            isDay: isDayVal,
+            tempMax: data.daily?.temperature_2m_max?.[0] ? Math.round(data.daily.temperature_2m_max[0]) : Math.round(data.current.temperature_2m + 2),
+            tempMin: data.daily?.temperature_2m_min?.[0] ? Math.round(data.daily.temperature_2m_min[0]) : Math.round(data.current.temperature_2m - 3),
+            localTime: localTime,
+            dailyForecast: dailyForecast.length === 4 ? dailyForecast : null
           });
-
-          // 3 Günlük Tahmin
-          if (data.daily?.time) {
-            const days = [];
-            for (let i = 0; i < Math.min(3, data.daily.time.length); i++) {
-              const dateStr = data.daily.time[i];
-              const dateObj = new Date(dateStr);
-              const dayName = i === 0 ? 'Bugün' : i === 1 ? 'Yarın' : dateObj.toLocaleDateString('tr-TR', { weekday: 'long' });
-              days.push({
-                dayName,
-                dateStr,
-                code: data.daily.weather_code[i],
-                tempMax: Math.round(data.daily.temperature_2m_max[i]),
-                tempMin: Math.round(data.daily.temperature_2m_min[i])
-              });
-            }
-            setForecastDays(days);
-          }
         }
       } catch (err) {
         console.warn('Weather fetch error:', err);
@@ -649,6 +659,31 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
     newParams.set('tab', 'outfit');
     newParams.set('city', city.name);
     setSearchParams(newParams);
+  };
+
+  const handleSearchSubmit = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    if (geoResults.length > 0) {
+      handleSelectCity(geoResults[0]);
+    } else {
+      fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(searchQuery.trim())}&count=1&language=tr&format=json`)
+        .then(res => res.json())
+        .then(data => {
+          if (data?.results?.[0]) {
+            const r = data.results[0];
+            handleSelectCity({
+              name: r.name,
+              country: r.country || '',
+              flag: '📍',
+              lat: r.latitude,
+              lon: r.longitude
+            });
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   // GPS ile Konum Tespiti
@@ -773,7 +808,7 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
       >
         {/* Üst Başlık & Konum Butonu */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               width: '26px',
               height: '26px',
@@ -787,6 +822,13 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
             }}>
               <Compass size={14} />
             </div>
+            <div style={{
+              width: '1.2px',
+              height: '22px',
+              background: '#F9BED8',
+              borderRadius: '1px',
+              flexShrink: 0
+            }} />
             <div>
               <h2 style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
                 Gideceğiniz Şehri Seçin
@@ -826,22 +868,23 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
           </button>
         </div>
 
-        {/* Arama Giriş Alanı */}
+        {/* Arama Giriş Alanı (2. Görseldeki Tasarım) */}
         <div style={{ position: 'relative' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: '#f8fafc',
-            borderRadius: '10px',
-            border: showDropdown ? '1.5px solid #D7147A' : '1px solid #cbd5e1',
-            padding: '6px 10px',
-            transition: 'all 0.15s ease'
-          }}>
-            {isSearching ? (
-              <Loader2 size={14} color="#D7147A" className="animate-spin" style={{ marginRight: '6px', flexShrink: 0 }} />
-            ) : (
-              <Search size={14} color="#94a3b8" style={{ marginRight: '6px', flexShrink: 0 }} />
-            )}
+          <form
+            onSubmit={handleSearchSubmit}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: '#ffffff',
+              borderRadius: '16px',
+              border: showDropdown ? '1.5px solid #D7147A' : '1.5px solid #F9BED8',
+              padding: '5px 6px 5px 12px',
+              boxShadow: showDropdown ? '0 0 0 3px rgba(215, 20, 122, 0.08)' : '0 4px 12px rgba(215, 20, 122, 0.08)',
+              transition: 'all 0.2s ease',
+              marginBottom: 0
+            }}
+          >
+            <Search size={15} color="#D7147A" style={{ flexShrink: 0, marginRight: '8px' }} />
 
             <input
               type="text"
@@ -858,9 +901,9 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
                 background: 'transparent',
                 flex: 1,
                 minWidth: 0,
-                fontSize: '11px',
+                fontSize: '11.5px',
                 fontWeight: '600',
-                color: '#0f172a'
+                color: '#1e293b'
               }}
             />
 
@@ -870,21 +913,49 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
                 onClick={() => {
                   setSearchQuery('');
                   setGeoResults([]);
+                  setShowDropdown(false);
                 }}
                 style={{
                   background: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
                   color: '#94a3b8',
-                  padding: '2px',
+                  padding: '4px',
+                  marginRight: '4px',
                   display: 'flex',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
-                <X size={13} />
+                <X size={14} />
               </button>
             )}
-          </div>
+
+            <button
+              type="submit"
+              title="Şehir Ara"
+              style={{
+                background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(215, 20, 122, 0.3)'
+              }}
+            >
+              {isSearching ? (
+                <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <Send size={13} style={{ marginLeft: '-1px' }} />
+              )}
+            </button>
+          </form>
 
           {/* Autocomplete Dropdown Listesi */}
           {showDropdown && (
@@ -940,158 +1011,14 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
       </div>
 
       {/* ========================================================
-          2. CANLI HAVA DURUMU & ATMOSFER KARTI (HERO CARD)
+          2. CANLI HAVA DURUMU & TAKVİM KARTI (ANA SAYFA PINTEREST STİLİ)
       ======================================================== */}
-      <div style={{
-        position: 'relative',
-        borderRadius: '16px',
-        overflow: 'hidden',
-        background: weatherMeta.bgGradient,
-        color: '#ffffff',
-        padding: '14px 16px',
-        boxShadow: '0 4px 18px -2px rgba(15, 23, 42, 0.12)',
-        transition: 'all 0.3s ease'
-      }}>
-        {/* Arka Plan Efekti */}
-        <div style={{
-          position: 'absolute',
-          top: '-30px',
-          right: '-30px',
-          width: '140px',
-          height: '140px',
-          borderRadius: '50%',
-          background: 'rgba(255, 255, 255, 0.12)',
-          filter: 'blur(28px)',
-          pointerEvents: 'none'
-        }} />
-
-        <div style={{ position: 'relative', zIndex: 1 }}>
-          {/* Üst Çubuk: Şehir */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <CountryFlag country={selectedCity.country || selectedCity.name} size="sm" />
-              <span style={{ fontSize: '13.5px', fontWeight: '800', letterSpacing: '-0.2px' }}>
-                {selectedCity.name}
-              </span>
-              {selectedCity.country && (
-                <span style={{ fontSize: '10px', opacity: 0.85, fontWeight: '600' }}>
-                  ({selectedCity.country})
-                </span>
-              )}
-            </div>
-          </div>
-
-          {/* Orta Kısım: Derece & İkon */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                <span style={{
-                  fontSize: '28px',
-                  fontWeight: '900',
-                  letterSpacing: '-1px',
-                  lineHeight: 1
-                }}>
-                  {currentTemp}°C
-                </span>
-                {weatherData?.feelsLike !== undefined && (
-                  <span style={{ fontSize: '10.5px', opacity: 0.9, fontWeight: '700' }}>
-                    Hissedilen {weatherData.feelsLike}°
-                  </span>
-                )}
-              </div>
-
-              <div style={{
-                fontSize: '11px',
-                fontWeight: '700',
-                marginTop: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                opacity: 0.95
-              }}>
-                <span>{weatherMeta.text}</span>
-                <span style={{ opacity: 0.5 }}>•</span>
-                <span style={{ fontSize: '10px', opacity: 0.9 }}>
-                  Y: {weatherData?.tempMax ?? currentTemp + 2}° / D: {weatherData?.tempMin ?? currentTemp - 3}°
-                </span>
-              </div>
-            </div>
-
-            {/* İkon Rozeti */}
-            <div style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '14px',
-              background: 'rgba(255, 255, 255, 0.18)',
-              backdropFilter: 'blur(8px)',
-              border: '1px solid rgba(255, 255, 255, 0.3)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.08)',
-              flexShrink: 0
-            }}>
-              <WeatherIcon size={26} color="#ffffff" strokeWidth={2.2} />
-            </div>
-          </div>
-
-          {/* Alt Mikro İstatistikler */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '6px',
-            paddingTop: '10px',
-            borderTop: '1px solid rgba(255, 255, 255, 0.2)'
-          }}>
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.12)',
-              borderRadius: '10px',
-              padding: '5px 6px',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '8px', opacity: 0.8, fontWeight: '700' }}>NEM</div>
-              <div style={{ fontSize: '10.5px', fontWeight: '800', marginTop: '1px' }}>
-                %{weatherData?.humidity ?? 65}
-              </div>
-            </div>
-
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.12)',
-              borderRadius: '10px',
-              padding: '5px 6px',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '8px', opacity: 0.8, fontWeight: '700' }}>RÜZGAR</div>
-              <div style={{ fontSize: '10.5px', fontWeight: '800', marginTop: '1px' }}>
-                {weatherData?.wind ?? 14} km/s
-              </div>
-            </div>
-
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.12)',
-              borderRadius: '10px',
-              padding: '5px 6px',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '8px', opacity: 0.8, fontWeight: '700' }}>HİSSEDİLEN</div>
-              <div style={{ fontSize: '10.5px', fontWeight: '800', marginTop: '1px' }}>
-                {weatherData?.feelsLike ?? currentTemp}°C
-              </div>
-            </div>
-
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.12)',
-              borderRadius: '10px',
-              padding: '5px 6px',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '8px', opacity: 0.8, fontWeight: '700' }}>DURUM</div>
-              <div style={{ fontSize: '10px', fontWeight: '800', marginTop: '1px' }}>
-                {currentTemp >= 23 ? 'Ilık / Yaz' : currentTemp >= 14 ? 'Mevsimlik' : 'Serin / Soğuk'}
-              </div>
-            </div>
-          </div>
-        </div>
+      <div style={{ marginBottom: '14px' }}>
+        <PinterestWeatherCard
+          weatherData={weatherData}
+          cityName={selectedCity.name}
+          loading={loadingWeather}
+        />
       </div>
 
       {/* ========================================================
@@ -1246,7 +1173,7 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
         padding: '12px 14px',
         boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
           <div style={{
             width: '24px',
             height: '24px',
@@ -1259,6 +1186,13 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
           }}>
             <Clock size={13} />
           </div>
+          <div style={{
+            width: '1.2px',
+            height: '18px',
+            background: '#F9BED8',
+            borderRadius: '1px',
+            flexShrink: 0
+          }} />
           <div>
             <h3 style={{ fontSize: '11.5px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
               Günün Saatlerine Göre Katman Rehberi
@@ -1350,7 +1284,7 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
       }}>
         {/* Başlık ve Eylemler */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', flexWrap: 'wrap', gap: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <div style={{
               width: '24px',
               height: '24px',
@@ -1363,6 +1297,13 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
             }}>
               <Luggage size={13} />
             </div>
+            <div style={{
+              width: '1.2px',
+              height: '18px',
+              background: '#F9BED8',
+              borderRadius: '1px',
+              flexShrink: 0
+            }} />
             <div>
               <h3 style={{ fontSize: '11.5px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
                 Ne Giymeli & Bavula Ne Koymalı?
@@ -1561,91 +1502,6 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
         </div>
       </div>
 
-      {/* ========================================================
-          6. 3 GÜNLÜK HAVA & BAVUL ÖNGÖRÜSÜ (FORECAST)
-      ======================================================== */}
-      {forecastDays.length > 0 && (
-        <div style={{
-          background: '#ffffff',
-          borderRadius: '16px',
-          border: '1.2px solid #e2e8f0',
-          padding: '12px 14px',
-          boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
-            <div style={{
-              width: '24px',
-              height: '24px',
-              borderRadius: '7px',
-              background: '#e0f2fe',
-              color: '#0284c7',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Calendar size={13} />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '11.5px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
-                Önümüzdeki Günlerin Giyim Durumu
-              </h3>
-              <div style={{ fontSize: '9px', color: '#64748b', marginTop: '3px' }}>
-                Hava değişimlerine karşı hazırlıklı olun
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-            {forecastDays.map((f, i) => {
-              const meta = getWeatherMeta(f.code, true);
-              const DayIcon = meta.icon;
-              return (
-                <div
-                  key={i}
-                  style={{
-                    background: '#f8fafc',
-                    borderRadius: '10px',
-                    padding: '8px 6px',
-                    border: '1px solid #e2e8f0',
-                    textAlign: 'center'
-                  }}
-                >
-                  <div style={{ fontSize: '9.5px', fontWeight: '800', color: '#1e293b', marginBottom: '3px' }}>
-                    {f.dayName}
-                  </div>
-                  <div style={{
-                    width: '26px',
-                    height: '26px',
-                    borderRadius: '7px',
-                    background: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 4px auto',
-                    border: '1px solid #e2e8f0'
-                  }}>
-                    <DayIcon size={14} color={meta.iconColor} />
-                  </div>
-                  <div style={{ fontSize: '10.5px', fontWeight: '800', color: '#0f172a' }}>
-                    {f.tempMax}° / <span style={{ fontSize: '8.5px', color: '#64748b' }}>{f.tempMin}°</span>
-                  </div>
-                  <div style={{
-                    fontSize: '8px',
-                    fontWeight: '700',
-                    color: meta.accentColor,
-                    marginTop: '2px',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis'
-                  }}>
-                    {meta.text}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* ========================================================
           7. UZMAN BAVUL TÜYOLARI (PACKING HACKS)
@@ -1657,7 +1513,7 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
         padding: '12px 14px',
         boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
           <div style={{
             width: '24px',
             height: '24px',
@@ -1670,6 +1526,13 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
           }}>
             <Layers size={13} />
           </div>
+          <div style={{
+            width: '1.2px',
+            height: '18px',
+            background: '#F9BED8',
+            borderRadius: '1px',
+            flexShrink: 0
+          }} />
           <div>
             <h3 style={{ fontSize: '11.5px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
               Uzman Bavul & Seyahat İpuçları
@@ -1714,61 +1577,69 @@ export default function OutfitGuide({ isEmbedded = false, initialCity = '' }) {
       </div>
 
       {/* ========================================================
-          8. ALT HIZLI GEÇİŞ AKSİYONLARI
+          8. ALT HIZLI GEÇİŞ AKSİYONLARI (KART İÇİNDE)
       ======================================================== */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-        gap: '8px',
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: '1.2px solid #e2e8f0',
+        padding: '12px',
+        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
         marginBottom: '16px'
       }}>
-        <button
-          type="button"
-          onClick={() => navigate('/individual/checklists')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '12px',
-            padding: '9px 12px',
-            fontSize: '10.5px',
-            fontWeight: '800',
-            cursor: 'pointer',
-            boxShadow: '0 3px 10px rgba(215, 20, 122, 0.2)',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <CheckSquare size={14} strokeWidth={2.4} />
-          <span>Checkliste Kaydet</span>
-        </button>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '8px'
+        }}>
+          <button
+            type="button"
+            onClick={() => navigate('/individual/checklists')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '10px 12px',
+              fontSize: '11px',
+              fontWeight: '800',
+              cursor: 'pointer',
+              boxShadow: '0 3px 10px rgba(215, 20, 122, 0.2)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <CheckSquare size={14} strokeWidth={2.4} />
+            <span>Checkliste Kaydet</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => navigate('/travel-tools?tab=currency')}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '5px',
-            background: '#ffffff',
-            color: '#0f172a',
-            border: '1.2px solid #cbd5e1',
-            borderRadius: '12px',
-            padding: '9px 12px',
-            fontSize: '10.5px',
-            fontWeight: '800',
-            cursor: 'pointer',
-            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <span>Döviz Çevirici</span>
-          <ChevronRight size={13} strokeWidth={2.4} />
-        </button>
+          <button
+            type="button"
+            onClick={() => navigate('/travel-tools?tab=currency')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '5px',
+              background: '#ffffff',
+              color: '#0f172a',
+              border: '1.2px solid #cbd5e1',
+              borderRadius: '12px',
+              padding: '10px 12px',
+              fontSize: '11px',
+              fontWeight: '800',
+              cursor: 'pointer',
+              boxShadow: '0 1px 3px rgba(15, 23, 42, 0.04)',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <span>Döviz Çevirici</span>
+            <ChevronRight size={13} strokeWidth={2.4} />
+          </button>
+        </div>
       </div>
 
     </div>

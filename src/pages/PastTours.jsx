@@ -2,24 +2,32 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Calendar, Eye, Search, Star, MapPin, X, Users, Info, MessageCircle, UserCheck, Compass, PlaneTakeoff, Phone, Timer } from 'lucide-react';
 import Header from '../components/Header';
-import { useTourStore, calculateDaysAndNights, getTourExperts, isTourPast } from '../store/tourStore';
+import { useTourStore, calculateDaysAndNights, getTourExperts, isTourPast, getUserTourReview } from '../store/tourStore';
 import { useAuthStore } from '../store/authStore';
 import { useUserStore } from '../store/userStore';
 import { useSettingsStore } from '../store/settingsStore';
 
-const StarRating = ({ value, onChange, size = 16 }) => {
+const StarRating = ({ value = 0, onChange, size = 16, color = '#f59e0b', emptyColor = '#cbd5e1' }) => {
+  const [hoverVal, setHoverVal] = useState(0);
+  const displayVal = hoverVal > 0 ? hoverVal : value;
+
   return (
-    <div style={{ display: 'flex', gap: '4px' }}>
+    <div 
+      style={{ display: 'flex', gap: '4px' }}
+      onMouseLeave={() => { if (onChange) setHoverVal(0); }}
+    >
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
           size={size}
-          onClick={() => onChange && onChange(star)}
-          fill={star <= value ? 'var(--primary)' : 'none'}
-          color={star <= value ? 'var(--primary)' : 'var(--text-muted)'}
-          style={{ cursor: onChange ? 'pointer' : 'default', transition: 'transform 0.2s' }}
-          onMouseEnter={(e) => { if (onChange) e.currentTarget.style.transform = 'scale(1.2)' }}
-          onMouseLeave={(e) => { if (onChange) e.currentTarget.style.transform = 'scale(1)' }}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onChange) onChange(star);
+          }}
+          fill={star <= displayVal ? color : 'none'}
+          color={star <= displayVal ? color : emptyColor}
+          style={{ cursor: onChange ? 'pointer' : 'default', transition: 'transform 0.15s, fill 0.15s' }}
+          onMouseEnter={() => { if (onChange) setHoverVal(star); }}
         />
       ))}
     </div>
@@ -183,8 +191,8 @@ export default function PastTours() {
                 }}
               >
                 {/* Top Full-Bleed Cover Image */}
-                <div style={{ height: '160px', position: 'relative', width: '100%', overflow: 'hidden', background: '#f1f5f9' }}>
-                  <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(100%)', opacity: 0.92 }} />
+                <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 1', overflow: 'hidden', background: '#0f172a' }}>
+                  <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', display: 'block', objectFit: 'cover', filter: 'grayscale(100%) brightness(0.88)', opacity: 0.92 }} />
                   
                   {/* Subtle Gradient Shadow */}
                   <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 45%, rgba(0,0,0,0.4) 100%)', pointerEvents: 'none' }} />
@@ -372,40 +380,57 @@ export default function PastTours() {
                       </div>
 
                       {/* Rating Banner Strip */}
-                      <div>
-                        {!reviewedTours[tour.id] ? (
-                          <div 
-                            onClick={() => navigate('/dashboard/review/' + tour.id)}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FDF2F8', border: '1px solid #FCE7F3', borderRadius: '12px', padding: '9px 14px', cursor: 'pointer' }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: '#D7147A' }}>
-                              <Star size={15} color="#D7147A" fill="#D7147A" />
-                              <span>Seyahati Puanlayın</span>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                              <StarRating 
-                                value={0} 
-                                onChange={(val) => navigate('/dashboard/review/' + tour.id + '?rating=' + val)} 
-                                size={19} 
-                              />
-                            </div>
+                <div>
+                  {(() => {
+                    const userReview = getUserTourReview(tour, user);
+                    const isReviewed = Boolean(userReview && userReview.rating);
+                    const ratingScore = userReview?.rating || 0;
+
+                    if (!isReviewed) {
+                      return (
+                        <div 
+                          onClick={() => navigate('/dashboard/review/' + tour.id)}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FDF2F8', border: '1px solid #FCE7F3', borderRadius: '12px', padding: '9px 14px', cursor: 'pointer' }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: '#D7147A' }}>
+                            <Star size={15} color="#D7147A" fill="#D7147A" />
+                            <span>Seyahati Puanlayın</span>
                           </div>
-                        ) : (
                           <div 
-                            onClick={() => navigate('/dashboard/review/' + tour.id)}
-                            title="Değerlendirmenizi Görüntüleyin / Güncelleyin"
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fdf2f8', border: '1px solid #fce7f3', borderRadius: '12px', padding: '9px 14px', cursor: 'pointer', transition: 'background 0.2s' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#fce7f3'}
-                            onMouseLeave={e => e.currentTarget.style.background = '#fdf2f8'}
+                            style={{ display: 'flex', alignItems: 'center' }}
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: '#db2777' }}>
-                              <Star size={15} color="#db2777" fill="#db2777" />
-                              <span>Puanınız: {Number(reviewedTours[tour.id]).toFixed(1)} / 5</span>
-                            </div>
-                            <StarRating value={reviewedTours[tour.id]} size={16} />
+                            <StarRating 
+                              value={0} 
+                              onChange={(val) => navigate('/dashboard/review/' + tour.id + '?rating=' + val)} 
+                              size={19} 
+                              color="#f59e0b"
+                              emptyColor="#94a3b8"
+                            />
                           </div>
-                        )}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div 
+                        onClick={() => navigate('/dashboard/review/' + tour.id)} 
+                        title="Değerlendirmenizi Görüntüleyin / Güncelleyin"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fdf2f8', border: '1px solid #fce7f3', borderRadius: '12px', padding: '9px 14px', cursor: 'pointer', transition: 'background 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#fce7f3'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#fdf2f8'}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '700', color: '#db2777' }}>
+                          <Star size={15} color="#db2777" fill="#db2777" />
+                          <span>Puanınız: {Number(ratingScore).toFixed(1)} / 5</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                          <StarRating value={Math.round(ratingScore)} size={16} color="#f59e0b" emptyColor="#cbd5e1" />
+                        </div>
                       </div>
+                    );
+                  })()}
+                </div>
                     </div>
                   )}
 
@@ -418,52 +443,7 @@ export default function PastTours() {
       </div>
 
       {/* Expert Info Modal */}
-      {expertModalData && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '360px', padding: '24px', animation: 'fadeIn 0.2s ease-out', textAlign: 'center', position: 'relative' }}>
-            <div onClick={() => setExpertModalData(null)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                <X size={20} />
-            </div>
-
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-main)' }}>
-                {expertModalData.expert2 ? 'Seyahat Uzmanlarımız' : 'Seyahat Uzmanı'}
-            </h2>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[expertModalData.expert1, expertModalData.expert2].filter(Boolean).map((exp, idx) => (
-                    <div key={idx} style={{ background: '#f8fafc', borderRadius: '16px', padding: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', marginBottom: '12px' }}>
-                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--primary-light)', flexShrink: 0 }}>
-                               <img loading="lazy" src={exp.avatar} alt={exp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            </div>
-                            <div style={{ textAlign: 'left', flex: 1 }}>
-                                <h3 style={{ fontSize: '15px', fontWeight: 'bold', margin: '0 0 2px 0', color: 'var(--text-main)' }}>{exp.name}</h3>
-                                <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '600' }}>{idx === 0 ? '1. Seyahat Uzmanı' : '2. Seyahat Uzmanı'}</span>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                            <a 
-                              href={`tel:${exp.phone}`}
-                              style={{ flex: 1, padding: '10px 0', borderRadius: '10px', background: '#ffffff', border: '1px solid #cbd5e1', color: 'var(--text-main)', fontSize: '13px', fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
-                            >
-                                <Phone size={15} color="var(--primary)" /> Ara
-                            </a>
-                            <a 
-                              href={`https://wa.me/${exp.phone.replace(/[^0-9]/g, '')}`} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              style={{ flex: 1, padding: '10px 0', borderRadius: '10px', background: '#25D366', color: 'white', fontSize: '13px', fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 2px 6px rgba(37,211,102,0.3)' }}
-                            >
-                                <MessageCircle size={15} color="white" /> WhatsApp
-                            </a>
-                        </div>
-                    </div>
-                ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <ExpertModal data={expertModalData} onClose={() => setExpertModalData(null)} />
 
       {/* Popup Message Modal */}
       {popupMsg.show && (

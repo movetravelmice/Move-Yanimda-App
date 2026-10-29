@@ -86,6 +86,16 @@ const CATEGORY_THEMES = {
   }
 };
 
+// Dropdown options for template categories (matching the theme)
+const TEMPLATE_CATEGORY_OPTIONS = [
+  { value: 'Tümü', label: 'Tüm Kategoriler', icon: '🌟', subtitle: 'Tüm hazır şablonlar' },
+  { value: 'Genel', label: 'Yurt Dışı Seyahati', icon: '✈️', subtitle: 'Pasaport, vize ve evraklar' },
+  { value: 'Tatil', label: 'Plaj & Tatil', icon: '🏖️', subtitle: 'Güneş, mayo ve deniz ekipmanları' },
+  { value: 'İş', label: 'İş Seyahati', icon: '💼', subtitle: 'Laptop, takım elbise & toplantı' },
+  { value: 'Hafta Sonu', label: 'Hafta Sonu Kaçamağı', icon: '🎒', subtitle: '2-3 günlük pratik çanta' },
+  { value: 'Aile', label: 'Çocuk & Aile Seyahati', icon: '👶', subtitle: 'Bebek & çocuk ihtiyaçları' }
+];
+
 // Preset AI smart packing templates
 const AI_PRESET_PACKING_LISTS = [
   {
@@ -202,6 +212,8 @@ export default function Checklists() {
   const [templateCategoryFilter, setTemplateCategoryFilter] = useState('Tümü');
   const [myListsFilter, setMyListsFilter] = useState('all'); // 'all', 'in_progress', 'completed'
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isSearchHovered, setIsSearchHovered] = useState(false);
 
   // Expand states
   const [expandedListIds, setExpandedListIds] = useState({});
@@ -447,469 +459,398 @@ export default function Checklists() {
       />
 
       {/* ========================================================
-          1. HERO HEADER CARD (Premium Redesign)
+          1. UNIFIED HEADER CARD (Sleek, Minimalist & Cohesive)
       ======================================================== */}
       <div style={{
-        background: 'linear-gradient(135deg, #ffffff 0%, #fff5f9 50%, #FDF2F8 100%)',
-        borderRadius: '20px',
-        border: '1.5px solid #F9BED8',
-        padding: '16px 18px',
-        marginBottom: '16px',
-        boxShadow: '0 8px 24px -4px rgba(215, 20, 122, 0.08)',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        {/* Subtle decorative glow */}
-        <div style={{
-          position: 'absolute',
-          top: '-30px',
-          right: '-20px',
-          width: '120px',
-          height: '120px',
-          borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(251, 146, 60, 0.15) 0%, transparent 70%)',
-          pointerEvents: 'none'
-        }} />
-
-        {/* Top Header Row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-          <div style={{
-            width: '44px',
-            height: '44px',
-            borderRadius: '14px',
-            background: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)',
-            border: '1.5px solid #F9BED8',
-            color: '#D7147A',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 10px rgba(215, 20, 122, 0.12)',
-            flexShrink: 0
-          }}>
-            <Luggage size={22} strokeWidth={2.3} />
-          </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <h1 style={{ fontSize: '16.5px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
-                Seyahat Checklist
-              </h1>
-              <span style={{ fontSize: '10px', fontWeight: '800', background: '#FCE7F3', color: '#B01064', padding: '1px 7px', borderRadius: '12px' }}>
-                Hazırlık
-              </span>
-            </div>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', lineHeight: '1.3' }}>
-              Valiz ve seyahat evraklarınızı eksiksiz tamamlayın
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Strip */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
-          gap: '8px',
-          background: '#ffffff',
-          borderRadius: '14px',
-          padding: '10px 12px',
-          border: '1px solid #F9BED8'
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '600' }}>Listelerim</div>
-            <div style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', marginTop: '1px' }}>
-              {checklists.length}
-            </div>
-          </div>
-          <div style={{ textAlign: 'center', borderLeft: '1px solid #f1f5f9', borderRight: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '600' }}>Hazır Eşyalar</div>
-            <div style={{ fontSize: '15px', fontWeight: '800', color: '#16a34a', marginTop: '1px' }}>
-              {stats.totalCompleted} <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '600' }}>/ {stats.totalItems}</span>
-            </div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '600' }}>Kalan Eşyalar</div>
-            <div style={{ fontSize: '15px', fontWeight: '800', color: stats.totalPending > 0 ? '#D7147A' : '#16a34a', marginTop: '1px' }}>
-              {stats.totalPending}
-            </div>
-          </div>
-        </div>
-
-        {/* Global Progress Bar (if items exist) */}
-        {stats.totalItems > 0 && (
-          <div style={{ marginTop: '10px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', fontWeight: '700', color: '#64748b', marginBottom: '3px' }}>
-              <span>Valiz Hazırlık Durumu</span>
-              <span style={{ color: stats.overallPct === 100 ? '#16a34a' : '#D7147A' }}>
-                %{stats.overallPct} {stats.overallPct === 100 && '🎉 Hazır!'}
-              </span>
-            </div>
-            <div style={{ width: '100%', height: '6px', background: '#FCE7F3', borderRadius: '4px', overflow: 'hidden' }}>
-              <div style={{
-                width: `${stats.overallPct}%`,
-                height: '100%',
-                background: stats.overallPct === 100 
-                  ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)' 
-                  : 'linear-gradient(90deg, #D7147A 0%, #B01064 100%)',
-                borderRadius: '4px',
-                transition: 'width 0.35s ease-out'
-              }} />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ========================================================
-          1.1 HIZLI İŞLEM BUTONLARI KARTI (AI Asistan & Yeni Liste)
-      ======================================================== */}
-      <div style={{
-        background: '#ffffff',
-        borderRadius: '14px',
-        border: '1px solid #F9BED8',
-        boxShadow: '0 2px 6px rgba(215, 20, 122, 0.04)',
-        padding: '7px 9px',
+        background: 'linear-gradient(135deg, #ffffff 0%, #fff5f9 100%)',
+        borderRadius: '18px',
+        border: '1.2px solid #F9BED8',
+        padding: '13px 16px',
         marginBottom: '12px',
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '8px'
+        boxShadow: '0 4px 16px -2px rgba(215, 20, 122, 0.05)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '10px'
       }}>
-        {/* AI Assistant button */}
-        <button
-          type="button"
-          onClick={() => navigate('/individual/checklists/ai' + (selectedTravelId ? `?travelId=${selectedTravelId}` : ''))}
-          title="Akıllı Valiz Asistanı"
-          style={{
-            height: '35px',
-            padding: '0 10px',
-            borderRadius: '10px',
-            border: '1px solid #F9BED8',
-            background: 'linear-gradient(135deg, #ffffff 0%, #FDF2F8 100%)',
-            color: '#B01064',
-            fontSize: '11.5px',
-            fontWeight: '700',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            cursor: 'pointer',
-            boxShadow: '0 1px 3px rgba(215, 20, 122, 0.05)',
-            transition: 'all 0.15s ease'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#FCE7F3';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #FDF2F8 100%)';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
-        >
-          <img 
-            src="/tintin-avatar.png" 
-            alt="Tintin" 
-            style={{ 
-              width: '18px', 
-              height: '18px', 
-              borderRadius: '50%', 
-              objectFit: 'cover',
-              border: '1px solid #F9BED8'
-            }} 
-          />
-          <span>Tintin Asistan</span>
-        </button>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <h1 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.2px' }}>
+            Seyahat Checklist
+          </h1>
+          <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '2px', lineHeight: '1.35' }}>
+            Valiz ve seyahat evraklarınızı eksiksiz tamamlayın
+          </div>
+        </div>
 
-        {/* + Yeni Liste Button */}
+        {/* + Yeni Liste Butonu (Kare Kutu) */}
         <button
           type="button"
           onClick={() => {
             navigate('/individual/checklists/new' + (selectedTravelId ? `?travelId=${selectedTravelId}` : ''));
           }}
           title="Yeni Liste Ekle"
+          aria-label="Yeni Liste Ekle"
           style={{
-            height: '35px',
-            padding: '0 10px',
-            borderRadius: '10px',
+            width: '36px',
+            height: '36px',
+            borderRadius: '11px',
             border: 'none',
             background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
             color: '#ffffff',
-            fontSize: '11.5px',
-            fontWeight: '700',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: '6px',
             cursor: 'pointer',
             boxShadow: '0 2px 8px rgba(215, 20, 122, 0.22)',
-            transition: 'all 0.15s ease'
+            transition: 'all 0.15s ease',
+            flexShrink: 0
           }}
           onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-1px)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(215, 20, 122, 0.3)';
+            e.currentTarget.style.transform = 'scale(1.05)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(215, 20, 122, 0.32)';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.transform = 'scale(1)';
             e.currentTarget.style.boxShadow = '0 2px 8px rgba(215, 20, 122, 0.22)';
           }}
         >
-          <Plus size={15} strokeWidth={2.6} />
-          <span>Yeni Liste</span>
+          <Plus size={18} strokeWidth={2.6} />
         </button>
       </div>
 
       {/* ========================================================
-          2. SEGMENTED TAB SWITCHER
-      ======================================================== */}
-      <div style={{
-        background: '#ffffff',
-        borderRadius: '14px',
-        border: '1px solid #F9BED8',
-        boxShadow: '0 2px 6px rgba(215, 20, 122, 0.04)',
-        padding: '7px 9px',
-        marginBottom: '14px',
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '8px'
-      }}>
-        {/* Checklistlerim Tab */}
-        <button
-          onClick={() => setActiveTab('my_lists')}
-          style={{
-            height: '35px',
-            padding: '0 10px',
-            borderRadius: '10px',
-            border: activeTab === 'my_lists' ? 'none' : '1px solid #F9BED8',
-            background: activeTab === 'my_lists' 
-              ? 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)' 
-              : 'linear-gradient(135deg, #ffffff 0%, #FDF2F8 100%)',
-            color: activeTab === 'my_lists' ? '#ffffff' : '#B01064',
-            fontSize: '11.5px',
-            fontWeight: '700',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            boxShadow: activeTab === 'my_lists' 
-              ? '0 2px 8px rgba(215, 20, 122, 0.22)' 
-              : '0 1px 3px rgba(215, 20, 122, 0.05)',
-            transition: 'all 0.15s ease'
-          }}
-          onMouseEnter={(e) => {
-            if (activeTab !== 'my_lists') e.currentTarget.style.background = '#FCE7F3';
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== 'my_lists') e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #FDF2F8 100%)';
-          }}
-        >
-          <CheckSquare size={14} color={activeTab === 'my_lists' ? '#ffffff' : '#D7147A'} />
-          <span>Checklistlerim</span>
-          <span style={{
-            fontSize: '10px',
-            padding: '1px 6px',
-            borderRadius: '10px',
-            background: activeTab === 'my_lists' ? 'rgba(255, 255, 255, 0.28)' : '#F9BED8',
-            color: activeTab === 'my_lists' ? '#ffffff' : '#B01064',
-            fontWeight: '800'
-          }}>
-            {checklists.length}
-          </span>
-        </button>
-
-        {/* Hazır Şablonlar Tab */}
-        <button
-          onClick={() => setActiveTab('templates')}
-          style={{
-            height: '35px',
-            padding: '0 10px',
-            borderRadius: '10px',
-            border: activeTab === 'templates' ? 'none' : '1px solid #F9BED8',
-            background: activeTab === 'templates' 
-              ? 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)' 
-              : 'linear-gradient(135deg, #ffffff 0%, #FDF2F8 100%)',
-            color: activeTab === 'templates' ? '#ffffff' : '#B01064',
-            fontSize: '11.5px',
-            fontWeight: '700',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            boxShadow: activeTab === 'templates' 
-              ? '0 2px 8px rgba(215, 20, 122, 0.22)' 
-              : '0 1px 3px rgba(215, 20, 122, 0.05)',
-            transition: 'all 0.15s ease'
-          }}
-          onMouseEnter={(e) => {
-            if (activeTab !== 'templates') e.currentTarget.style.background = '#FCE7F3';
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== 'templates') e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #FDF2F8 100%)';
-          }}
-        >
-          <Sparkles size={13} color={activeTab === 'templates' ? '#ffffff' : '#D7147A'} />
-          <span>Hazır Şablonlar</span>
-          <span style={{
-            fontSize: '10px',
-            padding: '1px 6px',
-            borderRadius: '10px',
-            background: activeTab === 'templates' ? 'rgba(255, 255, 255, 0.28)' : '#F9BED8',
-            color: activeTab === 'templates' ? '#ffffff' : '#B01064',
-            fontWeight: '800'
-          }}>
-            {DEFAULT_CHECKLIST_TEMPLATES.length}
-          </span>
-        </button>
-      </div>
-
-      {/* ========================================================
-          3. SEARCH & CATEGORY FILTERS BAR
+          2. SEGMENTED TAB SWITCHER (Inside Card)
       ======================================================== */}
       <div style={{
         background: '#ffffff',
         borderRadius: '16px',
         border: '1.2px solid #F9BED8',
-        padding: '10px 12px',
-        boxShadow: '0 2px 8px rgba(215, 20, 122, 0.04)',
-        marginBottom: '14px'
+        padding: '6px',
+        marginBottom: '12px',
+        boxShadow: '0 2px 8px rgba(215, 20, 122, 0.04)'
       }}>
-        {/* Search input */}
         <div style={{
-          position: 'relative',
           display: 'flex',
-          alignItems: 'center',
-          marginBottom: (activeTab === 'templates' || (activeTab === 'my_lists' && checklists.length > 0)) ? '8px' : '0'
+          background: '#f8fafc',
+          borderRadius: '11px',
+          padding: '3px',
+          gap: '4px'
         }}>
-          <Search size={15} color="#94a3b8" style={{ position: 'absolute', left: '12px', pointerEvents: 'none' }} />
+          {/* Checklistlerim Tab */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('my_lists')}
+            style={{
+              flex: 1,
+              height: '36px',
+              borderRadius: '9px',
+              border: activeTab === 'my_lists' ? '1px solid #F9BED8' : '1px solid transparent',
+              background: activeTab === 'my_lists' ? '#ffffff' : 'transparent',
+              color: activeTab === 'my_lists' ? '#D7147A' : '#64748b',
+              fontSize: '12px',
+              fontWeight: activeTab === 'my_lists' ? '800' : '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              boxShadow: activeTab === 'my_lists' ? '0 1px 4px rgba(215, 20, 122, 0.08)' : 'none',
+              outline: 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <CheckSquare size={13} color={activeTab === 'my_lists' ? '#D7147A' : '#64748b'} />
+            <span>Checklistlerim</span>
+            <span style={{
+              fontSize: '10px',
+              padding: '1px 6px',
+              borderRadius: '10px',
+              background: activeTab === 'my_lists' ? '#FDF2F8' : '#e2e8f0',
+              color: activeTab === 'my_lists' ? '#D7147A' : '#64748b',
+              fontWeight: '700'
+            }}>
+              {checklists.length}
+            </span>
+          </button>
+
+          {/* Hazır Şablonlar Tab */}
+          <button
+            type="button"
+            onClick={() => setActiveTab('templates')}
+            style={{
+              flex: 1,
+              height: '36px',
+              borderRadius: '9px',
+              border: activeTab === 'templates' ? '1px solid #F9BED8' : '1px solid transparent',
+              background: activeTab === 'templates' ? '#ffffff' : 'transparent',
+              color: activeTab === 'templates' ? '#D7147A' : '#64748b',
+              fontSize: '12px',
+              fontWeight: activeTab === 'templates' ? '800' : '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              boxShadow: activeTab === 'templates' ? '0 1px 4px rgba(215, 20, 122, 0.08)' : 'none',
+              outline: 'none',
+              transition: 'all 0.15s ease'
+            }}
+          >
+            <Sparkles size={13} color={activeTab === 'templates' ? '#D7147A' : '#64748b'} />
+            <span>Hazır Şablonlar</span>
+            <span style={{
+              fontSize: '10px',
+              padding: '1px 6px',
+              borderRadius: '10px',
+              background: activeTab === 'templates' ? '#FDF2F8' : '#e2e8f0',
+              color: activeTab === 'templates' ? '#D7147A' : '#64748b',
+              fontWeight: '700'
+            }}>
+              {DEFAULT_CHECKLIST_TEMPLATES.length}
+            </span>
+          </button>
+        </div>
+      </div>
+
+      {/* Global Progress Strip (Only shown when user has active items) */}
+      {checklists.length > 0 && stats.totalItems > 0 && (
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '14px',
+          border: '1px solid #F9BED8',
+          padding: '10px 14px',
+          marginBottom: '12px',
+          boxShadow: '0 2px 8px rgba(215, 20, 122, 0.04)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '11px', fontWeight: '700', color: '#0f172a' }}>
+              Valiz Hazırlık Durumu
+            </span>
+            <span style={{ fontSize: '11px', fontWeight: '800', color: stats.overallPct === 100 ? '#16a34a' : '#D7147A' }}>
+              {stats.totalCompleted} / {stats.totalItems} (%{stats.overallPct}) {stats.overallPct === 100 && '🎉'}
+            </span>
+          </div>
+          <div style={{ width: '100%', height: '6px', background: '#FCE7F3', borderRadius: '4px', overflow: 'hidden' }}>
+            <div style={{
+              width: `${stats.overallPct}%`,
+              height: '100%',
+              background: stats.overallPct === 100 
+                ? 'linear-gradient(90deg, #10b981 0%, #059669 100%)' 
+                : 'linear-gradient(90deg, #D7147A 0%, #B01064 100%)',
+              borderRadius: '4px',
+              transition: 'width 0.35s ease-out'
+            }} />
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          3. SEARCH & CATEGORY FILTERS BAR
+      ======================================================== */}
+      {(activeTab === 'templates' || (activeTab === 'my_lists' && checklists.length > 0)) && (
+      <div style={{
+        position: 'relative',
+        zIndex: 20,
+        background: '#ffffff',
+        borderRadius: '18px',
+        border: '1.2px solid #F9BED8',
+        padding: '14px 14px',
+        boxShadow: '0 3px 12px rgba(215, 20, 122, 0.05)',
+        marginBottom: '14px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px'
+      }}>
+        {/* Search input - Matching the ThemeSelect dropdown design */}
+        <div
+          onMouseEnter={() => setIsSearchHovered(true)}
+          onMouseLeave={() => setIsSearchHovered(false)}
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            width: '100%',
+            minHeight: '44px',
+            padding: '10px 14px',
+            borderRadius: '13px',
+            border: isSearchFocused
+              ? '1.8px solid #D7147A'
+              : (isSearchHovered ? '1.5px solid #E54B98' : '1.3px solid #F9BED8'),
+            background: isSearchFocused ? '#ffffff' : (isSearchHovered ? '#fff5f9' : '#ffffff'),
+            boxShadow: isSearchFocused
+              ? '0 0 0 3px rgba(215, 20, 122, 0.14), 0 4px 12px rgba(215, 20, 122, 0.08)'
+              : (isSearchHovered ? '0 2px 8px rgba(215, 20, 122, 0.08)' : '0 1px 3px rgba(0, 0, 0, 0.02)'),
+            boxSizing: 'border-box',
+            gap: '10px',
+            transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+        >
+          {/* Matching Left Icon Badge */}
+          <div style={{
+            width: '24px',
+            height: '24px',
+            borderRadius: '7px',
+            background: '#FDF2F8',
+            border: '1px solid #F9BED8',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <Search size={13} color="#D7147A" strokeWidth={2.4} />
+          </div>
+
+          {/* Search text input */}
           <input
             type="text"
             placeholder={activeTab === 'templates' ? "Şablon veya eşya ara (Örn: Pasaport, şarj, vize)..." : "Listelerinizde madde veya başlık arayın..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
             style={{
-              width: '100%',
-              padding: '9px 34px 9px 34px',
-              borderRadius: '10px',
-              border: '1.2px solid #F9BED8',
-              background: '#fff5f9',
-              fontSize: '12px',
+              flex: 1,
+              minWidth: 0,
+              border: 'none',
               outline: 'none',
-              boxSizing: 'border-box',
-              color: '#0f172a'
+              background: 'transparent',
+              fontSize: '12.5px',
+              fontWeight: '600',
+              color: '#0f172a',
+              padding: 0
             }}
           />
+
+          {/* Clear button */}
           {searchQuery && (
             <button
+              type="button"
               onClick={() => setSearchQuery('')}
               style={{
-                position: 'absolute',
-                right: '10px',
-                background: 'transparent',
-                border: 'none',
-                color: '#94a3b8',
+                width: '22px',
+                height: '22px',
+                borderRadius: '50%',
+                background: '#FDF2F8',
+                border: '1px solid #F9BED8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
-                padding: '2px'
+                color: '#D7147A',
+                padding: 0,
+                flexShrink: 0,
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#D7147A';
+                e.currentTarget.style.color = '#ffffff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#FDF2F8';
+                e.currentTarget.style.color = '#D7147A';
               }}
             >
-              <X size={14} />
+              <X size={12} strokeWidth={2.5} />
             </button>
           )}
         </div>
 
-        {/* Filter Pills for Templates */}
+        {/* Category Dropdown for Templates */}
         {activeTab === 'templates' && (
-          <div style={{
-            display: 'flex',
-            gap: '6px',
-            overflowX: 'auto',
-            paddingBottom: '2px',
-            scrollbarWidth: 'none'
-          }}>
-            {['Tümü', 'Genel', 'Tatil', 'İş', 'Hafta Sonu', 'Aile'].map((cat) => {
-              const isSelected = templateCategoryFilter === cat;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => setTemplateCategoryFilter(cat)}
-                  style={{
-                    padding: '5px 11px',
-                    borderRadius: '20px',
-                    border: isSelected ? '1px solid #D7147A' : '1px solid #F9BED8',
-                    background: isSelected ? '#FDF2F8' : '#ffffff',
-                    color: isSelected ? '#D7147A' : '#64748b',
-                    fontSize: '11px',
-                    fontWeight: isSelected ? '800' : '600',
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {cat === 'Tümü' && '🌟 Tümü'}
-                  {cat === 'Genel' && '✈️ Yurt Dışı'}
-                  {cat === 'Tatil' && '🏖️ Plaj & Tatil'}
-                  {cat === 'İş' && '💼 İş'}
-                  {cat === 'Hafta Sonu' && '🎒 Hafta Sonu'}
-                  {cat === 'Aile' && '👶 Çocuk & Aile'}
-                </button>
-              );
-            })}
+          <div>
+            <ThemeSelect
+              value={templateCategoryFilter}
+              onChange={(cat) => setTemplateCategoryFilter(cat)}
+              options={TEMPLATE_CATEGORY_OPTIONS}
+              placeholder="Kategori Seçin"
+              triggerStyle={{
+                minHeight: '44px',
+                padding: '10px 14px',
+                borderRadius: '13px',
+                border: '1.3px solid #F9BED8',
+                background: '#ffffff',
+                fontSize: '12.5px'
+              }}
+              menuStyle={{
+                borderRadius: '14px',
+                border: '1.5px solid #F9BED8',
+                boxShadow: '0 12px 30px rgba(215, 20, 122, 0.14), 0 4px 12px rgba(15, 23, 42, 0.08)'
+              }}
+            />
           </div>
         )}
 
         {/* Filter Pills for My Lists */}
         {activeTab === 'my_lists' && checklists.length > 0 && (
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+          <div style={{
+            display: 'flex',
+            background: '#f8fafc',
+            borderRadius: '10px',
+            padding: '2px',
+            gap: '3px',
+            border: '1px solid #F9BED8'
+          }}>
             <button
+              type="button"
               onClick={() => setMyListsFilter('all')}
               style={{
-                padding: '4px 10px',
-                borderRadius: '16px',
-                border: myListsFilter === 'all' ? '1px solid #D7147A' : '1px solid #F9BED8',
-                background: myListsFilter === 'all' ? '#FDF2F8' : '#ffffff',
+                flex: 1,
+                height: '28px',
+                borderRadius: '8px',
+                border: 'none',
+                background: myListsFilter === 'all' ? '#ffffff' : 'transparent',
                 color: myListsFilter === 'all' ? '#D7147A' : '#64748b',
                 fontSize: '11px',
                 fontWeight: myListsFilter === 'all' ? '800' : '600',
                 cursor: 'pointer',
+                boxShadow: myListsFilter === 'all' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 transition: 'all 0.15s ease'
               }}
             >
               Tümü ({checklists.length})
             </button>
             <button
+              type="button"
               onClick={() => setMyListsFilter('in_progress')}
               style={{
-                padding: '4px 10px',
-                borderRadius: '16px',
-                border: myListsFilter === 'in_progress' ? '1px solid #D7147A' : '1px solid #F9BED8',
-                background: myListsFilter === 'in_progress' ? '#FDF2F8' : '#ffffff',
+                flex: 1,
+                height: '28px',
+                borderRadius: '8px',
+                border: 'none',
+                background: myListsFilter === 'in_progress' ? '#ffffff' : 'transparent',
                 color: myListsFilter === 'in_progress' ? '#D7147A' : '#64748b',
                 fontSize: '11px',
                 fontWeight: myListsFilter === 'in_progress' ? '800' : '600',
                 cursor: 'pointer',
+                boxShadow: myListsFilter === 'in_progress' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 transition: 'all 0.15s ease'
               }}
             >
-              Devam Edenler
+              Devam Eden
             </button>
             <button
+              type="button"
               onClick={() => setMyListsFilter('completed')}
               style={{
-                padding: '4px 10px',
-                borderRadius: '16px',
-                border: myListsFilter === 'completed' ? '1px solid #16a34a' : '1px solid #F9BED8',
-                background: myListsFilter === 'completed' ? '#f0fdf4' : '#ffffff',
+                flex: 1,
+                height: '28px',
+                borderRadius: '8px',
+                border: 'none',
+                background: myListsFilter === 'completed' ? '#ffffff' : 'transparent',
                 color: myListsFilter === 'completed' ? '#16a34a' : '#64748b',
                 fontSize: '11px',
                 fontWeight: myListsFilter === 'completed' ? '800' : '600',
                 cursor: 'pointer',
+                boxShadow: myListsFilter === 'completed' ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
                 transition: 'all 0.15s ease'
               }}
             >
-              Tamamlananlar
+              Tamamlanan
             </button>
           </div>
         )}
       </div>
+      )}
 
       {/* ========================================================
           TAB 1: CHECKLISTLERİM (User Lists)
@@ -921,70 +862,64 @@ export default function Checklists() {
             <div style={{
               background: '#ffffff',
               borderRadius: '20px',
-              border: '1.5px dashed #cbd5e1',
-              padding: '40px 20px',
+              border: '1.2px dashed #F9BED8',
+              padding: '52px 20px',
               textAlign: 'center',
-              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.02)'
+              boxShadow: '0 2px 10px rgba(15, 23, 42, 0.02)'
             }}>
-              <div style={{
-                width: '60px',
-                height: '60px',
-                borderRadius: '20px',
-                background: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)',
-                border: '1.5px solid #F9BED8',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 14px',
-                color: '#D7147A'
-              }}>
-                <Luggage size={30} />
-              </div>
-              <h2 style={{ fontSize: '16px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px' }}>
+              <h2 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px', letterSpacing: '-0.2px' }}>
                 Henüz bir seyahat checklist'iniz yok
               </h2>
-              <p style={{ fontSize: '12px', color: '#64748b', margin: '0 auto 20px', maxWidth: '340px', lineHeight: '1.5' }}>
+              <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 auto 22px', maxWidth: '320px', lineHeight: '1.5' }}>
                 Hazır seyahat şablonlarımızdan tek tıkla başlayabilir veya seyahatiniz için tamamen özel bir liste hazırlayabilirsiniz.
               </p>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                   onClick={() => setActiveTab('templates')}
                   style={{
-                    padding: '9px 18px',
-                    borderRadius: '12px',
+                    padding: '8px 14px',
+                    borderRadius: '10px',
                     border: '1.2px solid #F9BED8',
                     background: '#FDF2F8',
                     color: '#D7147A',
-                    fontSize: '12px',
+                    fontSize: '11.5px',
                     fontWeight: '700',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    gap: '5px',
+                    outline: 'none',
+                    transition: 'all 0.15s ease'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#FCE7F3'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#FDF2F8'}
                 >
-                  <Sparkles size={14} /> Şablonları Keşfet
+                  <Sparkles size={13} /> Şablonları Keşfet
                 </button>
                 <button
                   onClick={() => {
                     navigate('/individual/checklists/new' + (selectedTravelId ? `?travelId=${selectedTravelId}` : ''));
                   }}
                   style={{
-                    padding: '9px 18px',
-                    borderRadius: '12px',
+                    padding: '8px 14px',
+                    borderRadius: '10px',
                     border: 'none',
                     background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
                     color: '#ffffff',
-                    fontSize: '12px',
+                    fontSize: '11.5px',
                     fontWeight: '700',
                     cursor: 'pointer',
-                    boxShadow: '0 3px 10px rgba(215, 20, 122, 0.25)',
+                    boxShadow: '0 2px 8px rgba(215, 20, 122, 0.22)',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    gap: '5px',
+                    outline: 'none',
+                    transition: 'all 0.15s ease'
                   }}
+                  onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                  onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
-                  <Plus size={15} strokeWidth={2.4} /> Özel Liste Oluştur
+                  <Plus size={14} strokeWidth={2.4} /> Özel Liste Oluştur
                 </button>
               </div>
             </div>
@@ -1495,10 +1430,13 @@ export default function Checklists() {
             </div>
           ) : (
             filteredTemplates.map((tmpl) => {
-              const theme = CATEGORY_THEMES[tmpl.category] || CATEGORY_THEMES['Genel'];
-              const CategoryIcon = theme.icon || CheckSquare;
               const isExpanded = Boolean(expandedTemplateIds[tmpl.id]);
               const itemCount = tmpl.items.length;
+              const categoryEmoji = tmpl.category === 'Genel' ? '✈️' :
+                tmpl.category === 'Tatil' ? '🏖️' :
+                tmpl.category === 'İş' ? '💼' :
+                tmpl.category === 'Hafta Sonu' ? '🎒' :
+                tmpl.category === 'Aile' ? '👶' : '📋';
 
               return (
                 <div
@@ -1508,170 +1446,219 @@ export default function Checklists() {
                     borderRadius: '18px',
                     border: '1.2px solid #F9BED8',
                     padding: '16px',
-                    boxShadow: '0 4px 16px -2px rgba(15, 23, 42, 0.04)',
-                    position: 'relative',
-                    transition: 'all 0.2s ease'
+                    boxShadow: '0 4px 16px -2px rgba(215, 20, 122, 0.05)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    transition: 'all 0.18s ease'
                   }}
                 >
-                  {/* Top Row: Item Count & Quick Add Button */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <span style={{ 
-                      fontSize: '11px', 
-                      fontWeight: '700', 
-                      color: '#D7147A',
-                      background: '#FDF2F8',
-                      padding: '3px 9px',
-                      borderRadius: '8px',
+                  {/* Top Section: Category Emoji & Titles */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                    {/* Category Icon Badge */}
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      background: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)',
                       border: '1px solid #F9BED8',
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
-                      gap: '5px'
+                      justifyContent: 'center',
+                      fontSize: '20px',
+                      flexShrink: 0
                     }}>
-                      <CheckCircle2 size={12} color="#D7147A" />
-                      <span>{itemCount} Kontrol Maddesi</span>
-                    </span>
+                      {categoryEmoji}
+                    </div>
 
-                    {/* Quick Add Button */}
+                    {/* Dikey Çizgi */}
+                    <div style={{
+                      width: '1.2px',
+                      height: '24px',
+                      background: '#F9BED8',
+                      borderRadius: '1px',
+                      flexShrink: 0
+                    }} />
+
+                    {/* Title & Description */}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <h3 style={{
+                        fontSize: '13.5px',
+                        fontWeight: '750',
+                        color: '#0f172a',
+                        margin: '0 0 2px',
+                        letterSpacing: '-0.2px',
+                        lineHeight: 1.25,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {tmpl.title}
+                      </h3>
+                      <div style={{
+                        fontSize: '11px',
+                        color: '#64748b',
+                        lineHeight: 1.3,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {tmpl.description}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Highlighted items preview pills */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
+                    {tmpl.items.slice(0, 3).map((item, idx) => (
+                      <span
+                        key={idx}
+                        style={{
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          color: '#475569',
+                          fontSize: '11px',
+                          fontWeight: '500',
+                          padding: '3px 9px',
+                          borderRadius: '8px',
+                          whiteSpace: 'nowrap',
+                          maxWidth: '190px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}
+                      >
+                        • {item}
+                      </span>
+                    ))}
+                    {tmpl.items.length > 3 && (
+                      <span style={{
+                        fontSize: '11px',
+                        color: '#B01064',
+                        fontWeight: '700',
+                        padding: '2px 4px'
+                      }}>
+                        +{tmpl.items.length - 3} madde daha
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Subtle Separator */}
+                  <div style={{ height: '1px', background: '#FCE7F3' }} />
+
+                  {/* Bottom Action Bar: Incele vs Kullan */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
                     <button
                       type="button"
-                      onClick={() => handleOpenTemplateModal(tmpl)}
+                      onClick={() => setExpandedTemplateIds(prev => ({
+                        ...prev,
+                        [tmpl.id]: !isExpanded
+                      }))}
                       style={{
-                        padding: '6px 12px',
-                        borderRadius: '10px',
-                        border: 'none',
-                        background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
-                        color: '#ffffff',
+                        background: isExpanded ? '#FDF2F8' : 'transparent',
+                        border: isExpanded ? '1px solid #F9BED8' : 'none',
+                        borderRadius: '8px',
+                        color: '#D7147A',
                         fontSize: '11.5px',
                         fontWeight: '700',
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
                         gap: '4px',
-                        boxShadow: '0 2px 8px rgba(215, 20, 122, 0.22)',
-                        transition: 'all 0.15s'
+                        padding: '5px 8px',
+                        outline: 'none',
+                        transition: 'all 0.15s ease'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                      onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                     >
-                      <Plus size={13} strokeWidth={2.6} /> Bu Şablonu Kullan
+                      <span>{isExpanded ? 'Listeyi Kapat' : 'Maddeleri İncele'}</span>
+                      {isExpanded ? <ChevronUp size={13} strokeWidth={2.4} /> : <ChevronDown size={13} strokeWidth={2.4} />}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenTemplateModal(tmpl)}
+                      style={{
+                        padding: '8px 14px',
+                        borderRadius: '11px',
+                        border: 'none',
+                        background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        boxShadow: '0 2px 8px rgba(215, 20, 122, 0.22)',
+                        outline: 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(215, 20, 122, 0.3)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.transform = 'scale(1)';
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(215, 20, 122, 0.22)';
+                      }}
+                    >
+                      <Plus size={14} strokeWidth={2.6} />
+                      <span>Şablonu Kullan</span>
                     </button>
                   </div>
 
-                  {/* Title & Description */}
-                  <div style={{ marginBottom: '12px' }}>
-                    <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: '0 0 3px' }}>
-                      {tmpl.title}
-                    </h3>
-                    <div style={{ fontSize: '11.5px', color: '#64748b', lineHeight: '1.4' }}>
-                      {tmpl.description}
-                    </div>
-                  </div>
-
-                  {/* Items Preview / Accordion */}
-                  <div style={{
-                    background: '#f8fafc',
-                    borderRadius: '12px',
-                    border: '1px solid #e2e8f0',
-                    padding: '10px 12px'
-                  }}>
+                  {/* Expanded Item Checklist */}
+                  {isExpanded && (
                     <div style={{
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      marginBottom: '8px'
+                      flexDirection: 'column',
+                      gap: '6px',
+                      background: '#fff8fa',
+                      padding: '12px',
+                      borderRadius: '12px',
+                      border: '1px solid #F9BED8',
+                      maxHeight: '260px',
+                      overflowY: 'auto',
+                      animation: 'fadeIn 0.2s ease-out'
                     }}>
-                      <span style={{ fontSize: '11px', fontWeight: '700', color: '#334155' }}>
-                        İçerik ({itemCount} Madde):
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setExpandedTemplateIds(prev => ({
-                          ...prev,
-                          [tmpl.id]: !isExpanded
-                        }))}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#D7147A',
-                          fontSize: '11px',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '2px',
-                          padding: 0
-                        }}
-                      >
-                        {isExpanded ? (
-                          <>Önizlemeyi Daralt <ChevronUp size={13} /></>
-                        ) : (
-                          <>Tüm Maddeleri Gör ({itemCount}) <ChevronDown size={13} /></>
-                        )}
-                      </button>
-                    </div>
-
-                    {/* Non-expanded preview (Top 6 pills) */}
-                    {!isExpanded ? (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {tmpl.items.slice(0, 5).map((item, idx) => (
-                          <span
-                            key={idx}
-                            style={{
-                              background: '#ffffff',
-                              padding: '3px 8px',
-                              borderRadius: '7px',
-                              border: '1px solid #e2e8f0',
-                              fontSize: '10.5px',
-                              color: '#334155',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px'
-                            }}
-                          >
-                            <Check size={11} color="#16a34a" strokeWidth={2.5} /> {item}
-                          </span>
-                        ))}
-                        {tmpl.items.length > 5 && (
-                          <span
-                            onClick={() => setExpandedTemplateIds(prev => ({ ...prev, [tmpl.id]: true }))}
-                            style={{
-                              color: '#D7147A',
-                              fontSize: '10.5px',
-                              fontWeight: '700',
-                              alignSelf: 'center',
-                              cursor: 'pointer',
-                              padding: '2px 4px'
-                            }}
-                          >
-                            +{tmpl.items.length - 5} madde daha...
-                          </span>
-                        )}
+                      <div style={{ fontSize: '11px', fontWeight: '700', color: '#B01064', marginBottom: '2px' }}>
+                        Şablon İçeriğindeki Tüm Maddeler ({itemCount}):
                       </div>
-                    ) : (
-                      /* Full expanded item checklist list */
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '260px', overflowY: 'auto' }}>
-                        {tmpl.items.map((item, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
-                              background: '#ffffff',
-                              padding: '6px 10px',
-                              borderRadius: '8px',
-                              border: '1px solid #e2e8f0',
-                              fontSize: '11.5px',
-                              color: '#1e293b'
-                            }}
-                          >
-                            <Check size={12} color="#16a34a" strokeWidth={3} style={{ flexShrink: 0 }} />
-                            <span>{item}</span>
+                      {tmpl.items.map((item, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            background: '#ffffff',
+                            padding: '6px 10px',
+                            borderRadius: '8px',
+                            border: '1px solid #FCE7F3',
+                            fontSize: '11.5px',
+                            color: '#1e293b'
+                          }}
+                        >
+                          <div style={{
+                            width: '16px',
+                            height: '16px',
+                            borderRadius: '50%',
+                            background: '#FDF2F8',
+                            border: '1px solid #F9BED8',
+                            color: '#D7147A',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '9px',
+                            fontWeight: '800',
+                            flexShrink: 0
+                          }}>
+                            ✓
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          <span style={{ lineHeight: 1.35 }}>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               );
             })

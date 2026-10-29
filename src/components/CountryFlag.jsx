@@ -47,7 +47,25 @@ const COUNTRY_NAME_TO_CODE = {
   'finlandiya': 'fi', 'finland': 'fi',
   'sırbistan': 'rs', 'serbia': 'rs',
   'romanya': 'ro', 'romania': 'ro',
-  'bulgaristan': 'bg', 'bulgaria': 'bg'
+  'bulgaristan': 'bg', 'bulgaria': 'bg',
+  // Popüler Şehirler & Rotalar
+  'tokyo': 'jp', 'kyoto': 'jp', 'osaka': 'jp',
+  'roma': 'it', 'rome': 'it', 'milano': 'it', 'milan': 'it', 'venedik': 'it', 'venice': 'it', 'floransa': 'it', 'florence': 'it',
+  'paris': 'fr', 'nice': 'fr', 'lyon': 'fr',
+  'londra': 'gb', 'london': 'gb', 'manchester': 'gb', 'edinburgh': 'gb',
+  'barcelona': 'es', 'barselona': 'es', 'madrid': 'es', 'sevilla': 'es',
+  'amsterdam': 'nl', 'rotterdam': 'nl',
+  'berlin': 'de', 'münih': 'de', 'munich': 'de', 'frankfurt': 'de',
+  'viyana': 'at', 'vienna': 'at', 'salzburg': 'at',
+  'prag': 'cz', 'prague': 'cz',
+  'atina': 'gr', 'athens': 'gr', 'selanik': 'gr', 'santorini': 'gr', 'mykonos': 'gr', 'mikonos': 'gr',
+  'budapeşte': 'hu', 'budapest': 'hu',
+  'seul': 'kr', 'seoul': 'kr',
+  'kahire': 'eg', 'cairo': 'eg', 'şarm el şeyh': 'eg',
+  'bangkok': 'th', 'phuket': 'th',
+  'istanbul': 'tr', 'ankara': 'tr', 'izmir': 'tr', 'antalya': 'tr', 'bodrum': 'tr', 'kapadokya': 'tr',
+  'new york': 'us', 'los angeles': 'us', 'miami': 'us', 'san francisco': 'us',
+  'abu dhabi': 'ae', 'abu dabi': 'ae', 'doha': 'qa'
 };
 
 export function getCountryCode(flagOrCountry) {

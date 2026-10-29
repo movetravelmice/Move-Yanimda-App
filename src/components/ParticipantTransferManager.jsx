@@ -4,6 +4,7 @@ import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore } from '../store/userStore';
 import { isUserChild, canUserReceiveEmail, isChildEmail } from '../utils/userUtils';
+import { getApiBaseUrl } from '../utils/apiConfig';
 import ConfirmModal from './ConfirmModal';
 
 export default function ParticipantTransferManager({ tourId, participant, onClose }) {
@@ -182,7 +183,7 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
           // Send Ticket Email (Çocuk kullanıcılar e-posta almaz)
           if (!isChild && canUserReceiveEmail(globalUser, users) && smtpConfig?.host && smtpConfig?.user) {
               try {
-                  const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                  const baseUrl = getApiBaseUrl();
                   const res = await fetch(`${baseUrl}/api/send-ticket-email`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -254,7 +255,7 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
         left: '50%', 
         transform: 'translateX(-50%)', 
         width: '100%', 
-        maxWidth: '480px', 
+        maxWidth: '420px', 
         height: '100dvh', 
         maxHeight: '100vh', 
         zIndex: 1200, 

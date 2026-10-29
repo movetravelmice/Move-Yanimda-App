@@ -21,30 +21,107 @@
   font-family: 'Quicksand', sans-serif;
 }
 
-body {
+/* Hide all scrollbars globally for a seamless native mobile app feel (matching astrablok) */
+*, *::before, *::after {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+}
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+html, body, #root {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
   background-color: var(--bg-color);
   color: var(--text-main);
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
 }
 
-/* Utilities */
-.container {
-  max-width: 480px; /* Mobile-first width */
-  margin: 0 auto;
+@media (min-width: 640px) {
+  html, body, #root {
+    background-color: #E2E8F0;
+  }
+}
+
+/* Outer wrapper: centers the phone mockup on desktop with a clean neutral background (matching astrablok) */
+.mobile-app-wrapper {
+  width: 100%;
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-color);
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  .mobile-app-wrapper {
+    background-color: #E2E8F0;
+    padding: 32px 16px;
+  }
+}
+
+/* Realistic mobile phone viewport (matching astrablok) */
+.mobile-app-container,
+.container {
+  width: 100%;
+  max-width: 420px;
+  min-height: 100dvh;
+  height: 100dvh;
   background-color: var(--bg-color);
   position: relative;
-  overflow-x: hidden;
-  padding-bottom: calc(80px + env(safe-area-inset-bottom)); /* Space for bottom nav */
-  box-shadow: 0 0 20px rgba(0,0,0,0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
+  .mobile-app-container,
   .container {
-    max-width: 100%;
-    padding-left: 28px;
-    padding-right: 28px;
+    height: 844px;
+    max-height: calc(100vh - 48px);
+    min-height: 700px;
+    border-radius: 40px;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.08);
   }
+}
+
+/* Scrollable mobile app content area */
+.mobile-app-content {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Shared Card */
@@ -116,7 +193,7 @@ body {
 .top-header {
     background: var(--primary);
     color: white;
-    padding: calc(19px + env(safe-area-inset-top, 0px)) 18px 19px 18px;
+    padding: calc(30px + env(safe-area-inset-top, 0px)) 18px 26px 18px;
     border-radius: 0;
     display: flex;
     justify-content: space-between;
@@ -150,26 +227,12 @@ body {
 .mt-4 { margin-top: 16px; }
 .mb-4 { margin-bottom: 16px; }
 
-/* Container */
-.container {
-  max-width: 480px; /* Mobile-first width */
-  margin: 0 auto;
-  min-height: 100vh;
-  background-color: var(--bg-color);
-  position: relative;
-  overflow-x: hidden;
-  padding-bottom: calc(95px + env(safe-area-inset-bottom, 0px)); /* Space for bottom nav */
-  box-shadow: 0 0 20px rgba(0,0,0,0.05);
-}
-
 /* Bilgebayraktar Signature Floating Bottom Nav */
 .bottom-nav {
-  position: fixed;
+  position: absolute;
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 24px);
-  max-width: 456px;
+  left: 12px;
+  right: 12px;
   height: 58px;
   background: var(--primary);
   border-radius: 29px;
@@ -181,6 +244,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.25);
   box-shadow: 0 8px 24px rgba(215, 20, 122, 0.35);
   z-index: 1000;
+  pointer-events: auto;
 }
 .nav-item {
   display: flex;
@@ -248,7 +312,7 @@ body {
 
 
 .login-preview-panel { display: none; }
-@media (min-width: 768px) { .login-preview-panel { display: block !important; } }
+
 
 /* Rich Text Content Styling */
 .rich-text-content {

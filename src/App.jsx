@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import Login from './pages/Login';
 import DashboardLayout from './components/DashboardLayout';
@@ -21,10 +21,21 @@ import TintinChat from './pages/Customer/TintinChat';
 import CityGuidePage from './pages/Public/CityGuidePage';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
 import NotificationBanner from './components/NotificationBanner';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useDeviceNotifications } from './hooks/useDeviceNotifications';
 
 function GlobalDeviceNotificationListener() {
   useDeviceNotifications();
+  return null;
+}
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const el = document.querySelector('.mobile-app-content');
+    if (el) el.scrollTo(0, 0);
+    window.scrollTo(0, 0);
+  }, [pathname]);
   return null;
 }
 
@@ -60,15 +71,17 @@ function App() {
     initFirestoreSettings();
   }, [corporateName, deleteTour, initFirestoreUsers, initFirestoreTours, initFirestoreChats, initFirestoreNotifications, initFirestoreSettings]);
 
-  // Synchronize authenticated session when Firestore user data updates
+  // Synchronize authenticated session when Firestore user data updates safely
   useEffect(() => {
     if (user?.id && users.length > 0) {
       const freshUser = users.find(u => u.id === user.id || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()));
       if (freshUser) {
-        if (freshUser.role !== user.role || freshUser.secondaryRole !== user.secondaryRole) {
+        const freshRole = freshUser.role || user.role || 'customer';
+        const freshSecRole = freshUser.secondaryRole || user.secondaryRole || null;
+        if (freshRole !== user.role || freshSecRole !== user.secondaryRole) {
           useAuthStore.getState().syncUserRecord({
-            role: freshUser.role,
-            secondaryRole: freshUser.secondaryRole
+            role: freshRole,
+            secondaryRole: freshSecRole
           });
         }
       }
@@ -106,9 +119,14 @@ function App() {
   };
 
   return (
-    <BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+      <ScrollToTop />
       <GlobalDeviceNotificationListener />
-      <div className="container">
+      <div className="mobile-app-wrapper">
+        <div className="mobile-app-container container">
+          <div className="mobile-app-content">
+
         <Routes>
           {/* Public & Landing Routes */}
           <Route path="/" element={getRootRedirect()} />
@@ -153,6 +171,8 @@ function App() {
           {/* Corporate Dashboard Routes (Strictly Isolated & Preserved) */}
           <Route path="/dashboard/*" element={<DashboardLayout />} />
         </Routes>
+          </div>
+
 
         {/* Global In-App / OS Notification Permission Prompt */}
         <NotificationBanner />
@@ -165,8 +185,11 @@ function App() {
 
         {/* Global Signature Floating Bottom Navigation (Corporate, Individual, Public) */}
         <AppBottomNav />
+      
+        </div>
       </div>
     </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 

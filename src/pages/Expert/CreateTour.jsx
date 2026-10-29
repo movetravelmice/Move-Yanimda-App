@@ -722,7 +722,7 @@ export default function CreateTour() {
             )}
 
             {/* Header */}
-            <div style={{ background: 'var(--primary)', color: 'white', padding: 'calc(14px + env(safe-area-inset-top, 0px)) 16px 14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+            <div style={{ background: 'var(--primary)', color: 'white', padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 20px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <div onClick={() => navigate(-1)} style={{ cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }} title="Geri">
                         <ChevronLeft size={22} />

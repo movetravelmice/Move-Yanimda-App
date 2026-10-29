@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { 
   Fuel, 
   Zap, 
@@ -18,9 +18,18 @@ import {
   Sparkles,
   ArrowRight,
   RefreshCw,
-  Search
+  Search,
+  Send,
+  X,
+  LocateFixed
 } from 'lucide-react';
 import { useSettingsStore } from '../../../store/settingsStore';
+import { 
+  fetchLiveFuelPrices, 
+  subscribeToFuelPrices, 
+  resolveCityPrices, 
+  DEFAULT_FUEL_PRICES 
+} from '../../../services/fuelPriceService';
 
 // Snazzy Maps: WY (https://snazzymaps.com/style/8097/wy) - Dashboard Gri Tonlamalı Harita Tasarımı
 const WY_MAP_STYLE = [
@@ -84,11 +93,11 @@ const loadGoogleMapsScript = (apiKey) => {
   });
 };
 
-// Yakıt Tipleri ve Güncel Ortalama Fiyatlar / Varsayılan Tüketimler
-const FUEL_TYPES = [
-  { id: 'gasoline', name: 'Benzin 95', price: 44.50, defaultConsumption: 7.2 },
-  { id: 'diesel', name: 'Motorin', price: 45.20, defaultConsumption: 5.8 },
-  { id: 'lpg', name: 'LPG', price: 25.40, defaultConsumption: 8.8 }
+// Yakıt Tipleri ve Güncel Ortalama Fiyatlar (Her Gece 00:00 Otomatik Güncellenir)
+const DEFAULT_FUEL_TYPES = [
+  { id: 'gasoline', name: 'Benzin 95', price: DEFAULT_FUEL_PRICES.gasoline, defaultConsumption: 7.2 },
+  { id: 'diesel', name: 'Motorin', price: DEFAULT_FUEL_PRICES.diesel, defaultConsumption: 5.8 },
+  { id: 'lpg', name: 'LPG', price: DEFAULT_FUEL_PRICES.lpg, defaultConsumption: 8.8 }
 ];
 
 // Elektrikli Araç Şarj Tipleri ve Tarifeler
@@ -99,7 +108,7 @@ const EV_CHARGING_TYPES = [
 ];
 
 // Kullanıcının Anlık Koordinatına Göre Dinamik İstasyon Üretici
-function generateDynamicStations(userLat, userLng, districtName, mode) {
+function generateDynamicStations(userLat, userLng, districtName, mode, fuelPrices = null) {
   if (mode === 'ev') {
     const raw = [
       {
@@ -174,7 +183,11 @@ function generateDynamicStations(userLat, userLng, districtName, mode) {
     }).sort((a, b) => a.distanceKm - b.distanceKm);
 
   } else {
-    // Yakıtlı Araç İstasyonları
+    // Yakıtlı Araç İstasyonları (Canlı 00:00 Güncel Fiyatlar ile Uyumlu)
+    const baseGas = fuelPrices?.gasoline || 76.25;
+    const baseDiesel = fuelPrices?.diesel || 96.80;
+    const baseLpg = fuelPrices?.lpg || 40.90;
+
     const raw = [
       {
         id: 'gas-1',
@@ -185,9 +198,9 @@ function generateDynamicStations(userLat, userLng, districtName, mode) {
         services: ['7/24 Market', 'Oto Yıkama', 'WC', 'Lastik Hava'],
         lat: userLat + 0.0032,
         lng: userLng + 0.0022,
-        gasPrice: '44.50 TL',
-        dieselPrice: '45.20 TL',
-        lpgPrice: '25.40 TL'
+        gasPrice: `${baseGas.toFixed(2)} TL`,
+        dieselPrice: `${baseDiesel.toFixed(2)} TL`,
+        lpgPrice: `${baseLpg.toFixed(2)} TL`
       },
       {
         id: 'gas-2',
@@ -198,9 +211,9 @@ function generateDynamicStations(userLat, userLng, districtName, mode) {
         services: ['Shell Select 7/24', 'Deli2Go Kahve', 'Oto Yıkama'],
         lat: userLat - 0.0038,
         lng: userLng + 0.0048,
-        gasPrice: '44.55 TL',
-        dieselPrice: '45.25 TL',
-        lpgPrice: '25.45 TL'
+        gasPrice: `${(baseGas + 0.05).toFixed(2)} TL`,
+        dieselPrice: `${(baseDiesel + 0.05).toFixed(2)} TL`,
+        lpgPrice: `${(baseLpg + 0.05).toFixed(2)} TL`
       },
       {
         id: 'gas-3',
@@ -211,9 +224,9 @@ function generateDynamicStations(userLat, userLng, districtName, mode) {
         services: ['7/24 Market', 'Otobil Servisi', 'WC'],
         lat: userLat + 0.0058,
         lng: userLng - 0.0052,
-        gasPrice: '44.48 TL',
-        dieselPrice: '45.18 TL',
-        lpgPrice: '25.35 TL'
+        gasPrice: `${(baseGas - 0.02).toFixed(2)} TL`,
+        dieselPrice: `${(baseDiesel - 0.02).toFixed(2)} TL`,
+        lpgPrice: `${(baseLpg - 0.05).toFixed(2)} TL`
       },
       {
         id: 'gas-4',
@@ -224,9 +237,9 @@ function generateDynamicStations(userLat, userLng, districtName, mode) {
         services: ['Wild Bean Cafe', '7/24 Market', 'Oto Yıkama'],
         lat: userLat - 0.0070,
         lng: userLng - 0.0072,
-        gasPrice: '44.52 TL',
-        dieselPrice: '45.22 TL',
-        lpgPrice: '25.40 TL'
+        gasPrice: `${(baseGas + 0.02).toFixed(2)} TL`,
+        dieselPrice: `${(baseDiesel + 0.02).toFixed(2)} TL`,
+        lpgPrice: `${baseLpg.toFixed(2)} TL`
       },
       {
         id: 'gas-5',
@@ -237,9 +250,9 @@ function generateDynamicStations(userLat, userLng, districtName, mode) {
         services: ['Bonjour Market', 'Kahve Köşesi', 'Yıkama'],
         lat: userLat + 0.0098,
         lng: userLng + 0.0085,
-        gasPrice: '44.49 TL',
-        dieselPrice: '45.19 TL',
-        lpgPrice: '25.38 TL'
+        gasPrice: `${(baseGas - 0.01).toFixed(2)} TL`,
+        dieselPrice: `${(baseDiesel - 0.01).toFixed(2)} TL`,
+        lpgPrice: `${(baseLpg - 0.02).toFixed(2)} TL`
       }
     ];
 
@@ -293,15 +306,77 @@ function getStationMarkerIcon(maps, isEv) {
   };
 }
 
-export default function FuelCalculator({ isEmbedded = false }) {
+// ================= ERROR BOUNDARY (BEYAZ EKRAN KORUMASI) =================
+class FuelErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.warn('FuelCalculator Error Boundary caught:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          background: '#ffffff',
+          borderRadius: '20px',
+          border: '1.2px solid #F9BED8',
+          padding: '24px',
+          textAlign: 'center',
+          boxShadow: '0 4px 14px rgba(215, 20, 122, 0.05)',
+          margin: '16px 0'
+        }}>
+          <h3 style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>
+            Yakıt & Şarj Hesaplayıcı
+          </h3>
+          <p style={{ fontSize: '12px', color: '#64748b', marginBottom: '16px' }}>
+            Görünüm güncellenirken geçici bir durum oluştu. Lütfen yeniden deneyin.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              this.setState({ hasError: false });
+              window.location.reload();
+            }}
+            style={{
+              padding: '8px 18px',
+              borderRadius: '12px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+              color: '#ffffff',
+              fontSize: '12px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }}
+          >
+            Yenile
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function FuelCalculatorContent({ isEmbedded = false }) {
   // Vehicle Mode: 'fuel' (Yakıtlı) or 'ev' (Elektrikli)
   const [vehicleMode, setVehicleMode] = useState('fuel');
 
   // ================= FUEL STATE =================
   const [selectedFuelType, setSelectedFuelType] = useState('gasoline');
+  const [fuelTypes, setFuelTypes] = useState(DEFAULT_FUEL_TYPES);
+  const [fuelPricesMeta, setFuelPricesMeta] = useState({
+    lastUpdated: null,
+    source: 'Petrol Ofisi / Opet Resmi Pompa Fiyatları',
+    allPrices: null
+  });
   const [fuelDistance, setFuelDistance] = useState(850);
   const [fuelConsumption, setFuelConsumption] = useState(7.2);
-  const [fuelPrice, setFuelPrice] = useState(44.50);
+  const [fuelPrice, setFuelPrice] = useState(DEFAULT_FUEL_PRICES.gasoline);
   const [fuelTankCapacity, setFuelTankCapacity] = useState(50);
 
   // ================= EV STATE =================
@@ -321,17 +396,81 @@ export default function FuelCalculator({ isEmbedded = false }) {
   const [locating, setLocating] = useState(false);
   const [selectedStation, setSelectedStation] = useState(null);
   const [mapError, setMapError] = useState(false);
-  const [dynamicStations, setDynamicStations] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
+  const mapClickListenerRef = useRef(null);
+
+  // Canlı akaryakıt fiyatlarını şehir ve bölgeye göre güncelle
+  const updatePricesWithData = useCallback((data) => {
+    if (!data) return;
+    const area = userLocation?.name ? userLocation.name.split('/')[0].trim() : 'İstanbul';
+    const cityPrices = resolveCityPrices(data, area);
+
+    const gPrice = cityPrices.gasoline || data.gasoline || DEFAULT_FUEL_PRICES.gasoline;
+    const dPrice = cityPrices.diesel || data.diesel || DEFAULT_FUEL_PRICES.diesel;
+    const lPrice = cityPrices.lpg || data.lpg || DEFAULT_FUEL_PRICES.lpg;
+
+    setFuelTypes([
+      { id: 'gasoline', name: 'Benzin 95', price: gPrice, defaultConsumption: 7.2 },
+      { id: 'diesel', name: 'Motorin', price: dPrice, defaultConsumption: 5.8 },
+      { id: 'lpg', name: 'LPG', price: lPrice, defaultConsumption: 8.8 }
+    ]);
+
+    setFuelPricesMeta({
+      lastUpdated: data.lastUpdated,
+      source: data.source || 'Petrol Ofisi / Opet Resmi Pompa Fiyatları',
+      allPrices: data
+    });
+
+    setFuelPrice(prev => {
+      if (selectedFuelType === 'gasoline') return gPrice;
+      if (selectedFuelType === 'diesel') return dPrice;
+      if (selectedFuelType === 'lpg') return lPrice;
+      return prev;
+    });
+  }, [selectedFuelType, userLocation?.name]);
+
+  // Her gece 00:00'da güncellenen akaryakıt fiyatlarını gerçek zamanlı dinle
+  useEffect(() => {
+    fetchLiveFuelPrices().then(data => {
+      if (data && data.gasoline > 0) {
+        updatePricesWithData(data);
+      }
+    });
+
+    const unsubscribe = subscribeToFuelPrices((data) => {
+      if (data && data.gasoline > 0) {
+        updatePricesWithData(data);
+      }
+    });
+
+    return () => unsubscribe && unsubscribe();
+  }, [updatePricesWithData]);
+
+  // Dinamik istasyonları araç türü veya konuma göre senkron ve anında hesapla (state gecikmesini ve beyaz ekranı engeller)
+  const dynamicStations = useMemo(() => {
+    const area = userLocation?.name ? userLocation.name.split('/')[0].trim() : 'İstanbul';
+    const currentPrices = {
+      gasoline: fuelTypes.find(f => f.id === 'gasoline')?.price || DEFAULT_FUEL_PRICES.gasoline,
+      diesel: fuelTypes.find(f => f.id === 'diesel')?.price || DEFAULT_FUEL_PRICES.diesel,
+      lpg: fuelTypes.find(f => f.id === 'lpg')?.price || DEFAULT_FUEL_PRICES.lpg
+    };
+    return generateDynamicStations(userLocation?.lat || 41.0082, userLocation?.lng || 28.9784, area, vehicleMode, currentPrices);
+  }, [vehicleMode, userLocation?.lat, userLocation?.lng, userLocation?.name, fuelTypes]);
+
+  // Araç modu değiştiğinde istasyonları ve seçili istasyonu güvenle güncelle
+  const handleModeSwitch = (mode) => {
+    setVehicleMode(mode);
+    setSelectedStation(null);
+  };
 
   // Yakıt türü değiştiğinde varsayılan fiyat ve tüketimi güncelle
   const handleFuelTypeChange = (typeId) => {
     setSelectedFuelType(typeId);
-    const item = FUEL_TYPES.find(f => f.id === typeId);
+    const item = fuelTypes.find(f => f.id === typeId);
     if (item) {
       setFuelPrice(item.price);
       setFuelConsumption(item.defaultConsumption);
@@ -414,15 +553,11 @@ export default function FuelCalculator({ isEmbedded = false }) {
     };
     setUserLocation(newLoc);
 
-    const district = cleanArea.split('/')[0].trim();
-    const newStations = generateDynamicStations(latitude, longitude, district, vehicleMode);
-    setDynamicStations(newStations);
-
     if (centerMap && mapInstanceRef.current && window.google?.maps) {
       mapInstanceRef.current.panTo(new window.google.maps.LatLng(latitude, longitude));
       mapInstanceRef.current.setZoom(14);
     }
-  }, [vehicleMode]);
+  }, []);
 
   // Manuel Arama ile Konum Belirleme (İlçe / Şehir / Semt)
   const handleSearchLocation = async (queryText) => {
@@ -525,8 +660,6 @@ export default function FuelCalculator({ isEmbedded = false }) {
               handleGeoErrorAlert(secondErr);
             }
             if (!userLocation.isLive) {
-              const fallbackStations = generateDynamicStations(userLocation.lat, userLocation.lng, 'İstanbul', vehicleMode);
-              setDynamicStations(fallbackStations);
               setUserLocation(prev => ({ ...prev, name: 'İstanbul' }));
             }
           },
@@ -535,20 +668,12 @@ export default function FuelCalculator({ isEmbedded = false }) {
       },
       { enableHighAccuracy: false, timeout: 5000, maximumAge: 180000 }
     );
-  }, [updateLocation, userLocation.isLive, userLocation.lat, userLocation.lng, vehicleMode]);
+  }, [updateLocation, userLocation.isLive]);
 
   // Sayfa açıldığında otomatik olarak gerçek konumu sorgula
   useEffect(() => {
     handleGetLocation(true);
-  }, []);
-
-  // Araç modu veya konum değiştikçe istasyonları yenile
-  useEffect(() => {
-    const area = userLocation.name ? userLocation.name.split('/')[0].trim() : 'Bölge';
-    const stations = generateDynamicStations(userLocation.lat, userLocation.lng, area, vehicleMode);
-    setDynamicStations(stations);
-    setSelectedStation(null);
-  }, [vehicleMode, userLocation.lat, userLocation.lng, userLocation.name]);
+  }, [handleGetLocation]);
 
   // ================= NUMERICAL PARSER (COMMA & DOT SAFE) =================
   const parseNum = (val) => {
@@ -582,8 +707,9 @@ export default function FuelCalculator({ isEmbedded = false }) {
   const costPerKmEv = distE > 0 ? totalEvCost / distE : 0;
   const chargesNeededEv = batCap > 0 ? (totalEnergyKwh / batCap) : 0;
 
-  // Benzinliye göre tasarruf hesabı
-  const equivalentFuelCost = ((distE * 7.2) / 100) * 44.50;
+  // Benzinliye göre tasarruf hesabı (Canlı güncel benzin fiyatı ile hesaplanır)
+  const currentGasPrice = fuelTypes.find(f => f.id === 'gasoline')?.price || DEFAULT_FUEL_PRICES.gasoline;
+  const equivalentFuelCost = ((distE * 7.2) / 100) * currentGasPrice;
   const evSavingsTL = Math.max(0, equivalentFuelCost - totalEvCost);
   const evSavingsPercent = equivalentFuelCost > 0 ? Math.round((evSavingsTL / equivalentFuelCost) * 100) : 0;
 
@@ -618,61 +744,98 @@ export default function FuelCalculator({ isEmbedded = false }) {
         const map = mapInstanceRef.current;
 
         // Eski marker'ları temizle
-        markersRef.current.forEach(m => m.setMap(null));
-        markersRef.current = [];
+        if (markersRef.current && markersRef.current.length > 0) {
+          markersRef.current.forEach(m => {
+            try {
+              if (m && typeof m.setMap === 'function') {
+                m.setMap(null);
+              }
+            } catch (e) {
+              console.warn('Marker cleanup error:', e);
+            }
+          });
+          markersRef.current = [];
+        }
 
         // 1. Kullanıcı Konum Markeri (Mavi Pulse - Sürüklenebilir)
-        const userMarker = new maps.Marker({
-          position: center,
-          map,
-          title: `Konumunuz: ${userLocation.name} (Sürükleyebilirsiniz)`,
-          zIndex: 999,
-          draggable: true,
-          cursor: 'grab',
-          icon: {
-            path: maps.SymbolPath.CIRCLE,
-            scale: 9.5,
-            fillColor: '#2563eb',
-            fillOpacity: 1,
-            strokeColor: '#ffffff',
-            strokeWeight: 3.5
+        try {
+          const userMarker = new maps.Marker({
+            position: center,
+            map,
+            title: `Konumunuz: ${userLocation.name} (Sürükleyebilirsiniz)`,
+            zIndex: 999,
+            draggable: true,
+            cursor: 'grab',
+            icon: {
+              path: maps.SymbolPath.CIRCLE,
+              scale: 9.5,
+              fillColor: '#2563eb',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 3.5
+            }
+          });
+          markersRef.current.push(userMarker);
+
+          userMarker.addListener('dragend', async (e) => {
+            try {
+              const lat = e.latLng.lat();
+              const lng = e.latLng.lng();
+              const areaName = await fetchDistrictName(lat, lng);
+              updateLocation(lat, lng, areaName, false);
+            } catch (err) {
+              console.warn('Dragend error:', err);
+            }
+          });
+        } catch (err) {
+          console.warn('User marker error:', err);
+        }
+
+        // Harita tıklama dinleyicisini tekil tut
+        try {
+          if (mapClickListenerRef.current && window.google?.maps?.event) {
+            window.google.maps.event.removeListener(mapClickListenerRef.current);
           }
-        });
-        markersRef.current.push(userMarker);
-
-        userMarker.addListener('dragend', async (e) => {
-          const lat = e.latLng.lat();
-          const lng = e.latLng.lng();
-          const areaName = await fetchDistrictName(lat, lng);
-          updateLocation(lat, lng, areaName, false);
-        });
-
-        // Haritaya tıklayarak konum değiştirme
-        const mapClickListener = map.addListener('click', async (e) => {
-          const lat = e.latLng.lat();
-          const lng = e.latLng.lng();
-          const areaName = await fetchDistrictName(lat, lng);
-          updateLocation(lat, lng, areaName, false);
-        });
+          mapClickListenerRef.current = map.addListener('click', async (e) => {
+            try {
+              const lat = e.latLng.lat();
+              const lng = e.latLng.lng();
+              const areaName = await fetchDistrictName(lat, lng);
+              updateLocation(lat, lng, areaName, false);
+            } catch (err) {
+              console.warn('Map click error:', err);
+            }
+          });
+        } catch (err) {
+          console.warn('Map listener error:', err);
+        }
 
         // 2. İstasyon Markerları (Elektrikli için Şarj İkonu, Yakıtlı için Benzin Pompası İkonu)
-        dynamicStations.forEach((st) => {
+        try {
           const isEv = vehicleMode === 'ev';
-          const marker = new maps.Marker({
-            position: { lat: st.lat, lng: st.lng },
-            map,
-            title: `${st.name} (${st.distance})`,
-            icon: getStationMarkerIcon(maps, isEv),
-            zIndex: 100
-          });
+          dynamicStations.forEach((st) => {
+            try {
+              const marker = new maps.Marker({
+                position: { lat: st.lat, lng: st.lng },
+                map,
+                title: `${st.name} (${st.distance})`,
+                icon: getStationMarkerIcon(maps, isEv),
+                zIndex: 100
+              });
 
-          marker.addListener('click', () => {
-            setSelectedStation(st);
-            map.panTo({ lat: st.lat, lng: st.lng });
-          });
+              marker.addListener('click', () => {
+                setSelectedStation(st);
+                map.panTo({ lat: st.lat, lng: st.lng });
+              });
 
-          markersRef.current.push(marker);
-        });
+              markersRef.current.push(marker);
+            } catch (stMarkerErr) {
+              console.warn('Station marker creation error:', stMarkerErr);
+            }
+          });
+        } catch (stErr) {
+          console.warn('Station markers loop error:', stErr);
+        }
       })
       .catch((err) => {
         console.warn('Google Maps load error:', err);
@@ -681,6 +844,11 @@ export default function FuelCalculator({ isEmbedded = false }) {
 
     return () => {
       isMounted = false;
+      if (mapClickListenerRef.current && window.google?.maps?.event) {
+        try {
+          window.google.maps.event.removeListener(mapClickListenerRef.current);
+        } catch (e) {}
+      }
     };
   }, [vehicleMode, userLocation.lat, userLocation.lng, dynamicStations]);
 
@@ -711,6 +879,13 @@ export default function FuelCalculator({ isEmbedded = false }) {
           }}>
             {vehicleMode === 'ev' ? <Zap size={18} /> : <Fuel size={18} />}
           </div>
+          <div style={{
+            width: '1.2px',
+            height: '24px',
+            background: '#F9BED8',
+            borderRadius: '1px',
+            flexShrink: 0
+          }} />
           <div>
             <h1 style={{ fontSize: '12.5px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.2px' }}>
               Yakıt & Şarj
@@ -722,65 +897,74 @@ export default function FuelCalculator({ isEmbedded = false }) {
         </div>
       </div>
 
-      {/* 2. VEHICLE MODE SEGMENTED TOGGLE (TEK SATIR, PARANTEZSİZ) */}
+      {/* 2. VEHICLE MODE SEGMENTED TOGGLE (Kart İçine Alınmış) */}
       <div style={{
-        background: '#f1f5f9',
-        borderRadius: '14px',
-        padding: '4px',
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '6px',
-        marginBottom: '14px'
+        background: '#ffffff',
+        borderRadius: '20px',
+        border: '1.2px solid #F9BED8',
+        padding: '10px 12px',
+        marginBottom: '14px',
+        boxShadow: '0 4px 14px rgba(215, 20, 122, 0.05)'
       }}>
-        <button
-          type="button"
-          onClick={() => { setVehicleMode('fuel'); setSelectedStation(null); }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '8.5px 12px',
-            borderRadius: '11px',
-            border: 'none',
-            cursor: 'pointer',
-            background: vehicleMode === 'fuel' ? '#ffffff' : 'transparent',
-            color: vehicleMode === 'fuel' ? '#16a34a' : '#64748b',
-            fontWeight: vehicleMode === 'fuel' ? '800' : '600',
-            fontSize: '11.5px',
-            whiteSpace: 'nowrap',
-            boxShadow: vehicleMode === 'fuel' ? '0 2px 8px rgba(15, 23, 42, 0.08)' : 'none',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <Fuel size={15} />
-          <span style={{ whiteSpace: 'nowrap' }}>Yakıtlı Araç</span>
-        </button>
+        <div style={{
+          background: '#f8fafc',
+          borderRadius: '14px',
+          border: '1px solid #e2e8f0',
+          padding: '4px',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '6px'
+        }}>
+          <button
+            type="button"
+            onClick={() => handleModeSwitch('fuel')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '8.5px 12px',
+              borderRadius: '11px',
+              border: vehicleMode === 'fuel' ? '1px solid #bbf7d0' : 'none',
+              cursor: 'pointer',
+              background: vehicleMode === 'fuel' ? '#ffffff' : 'transparent',
+              color: vehicleMode === 'fuel' ? '#16a34a' : '#64748b',
+              fontWeight: vehicleMode === 'fuel' ? '800' : '600',
+              fontSize: '11.5px',
+              whiteSpace: 'nowrap',
+              boxShadow: vehicleMode === 'fuel' ? '0 2px 8px rgba(22, 163, 74, 0.12)' : 'none',
+              transition: 'all 0.18s ease'
+            }}
+          >
+            <Fuel size={15} />
+            <span style={{ whiteSpace: 'nowrap' }}>Yakıtlı Araç</span>
+          </button>
 
-        <button
-          type="button"
-          onClick={() => { setVehicleMode('ev'); setSelectedStation(null); }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            padding: '8.5px 12px',
-            borderRadius: '11px',
-            border: 'none',
-            cursor: 'pointer',
-            background: vehicleMode === 'ev' ? '#ffffff' : 'transparent',
-            color: vehicleMode === 'ev' ? '#0284c7' : '#64748b',
-            fontWeight: vehicleMode === 'ev' ? '800' : '600',
-            fontSize: '11.5px',
-            whiteSpace: 'nowrap',
-            boxShadow: vehicleMode === 'ev' ? '0 2px 8px rgba(15, 23, 42, 0.08)' : 'none',
-            transition: 'all 0.15s ease'
-          }}
-        >
-          <Zap size={15} />
-          <span style={{ whiteSpace: 'nowrap' }}>Elektrikli Araç</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => handleModeSwitch('ev')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              padding: '8.5px 12px',
+              borderRadius: '11px',
+              border: vehicleMode === 'ev' ? '1px solid #bae6fd' : 'none',
+              cursor: 'pointer',
+              background: vehicleMode === 'ev' ? '#ffffff' : 'transparent',
+              color: vehicleMode === 'ev' ? '#0284c7' : '#64748b',
+              fontWeight: vehicleMode === 'ev' ? '800' : '600',
+              fontSize: '11.5px',
+              whiteSpace: 'nowrap',
+              boxShadow: vehicleMode === 'ev' ? '0 2px 8px rgba(2, 132, 199, 0.12)' : 'none',
+              transition: 'all 0.18s ease'
+            }}
+          >
+            <Zap size={15} />
+            <span style={{ whiteSpace: 'nowrap' }}>Elektrikli Araç</span>
+          </button>
+        </div>
       </div>
 
       {/* 3. CALCULATION INPUTS & SUMMARY GRID */}
@@ -803,13 +987,33 @@ export default function FuelCalculator({ isEmbedded = false }) {
           {/* A. FUEL MODE INPUTS */}
           {vehicleMode === 'fuel' && (
             <div>
-              {/* Yakıt Tipi Seçici (İkonsuz, Net Fiyatlar) */}
+              {/* Yakıt Tipi Seçici (İkonsuz, Net Fiyatlar & Gece 00:00 Canlı Güncelleme) */}
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ fontSize: '10.5px', fontWeight: '800', color: '#475569', display: 'block', marginBottom: '6px' }}>
-                  YAKIT TÜRÜNÜ SEÇİN:
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '10.5px', fontWeight: '800', color: '#475569' }}>
+                    YAKIT TÜRÜNÜ SEÇİN:
+                  </label>
+                  <span 
+                    title={fuelPricesMeta.lastUpdated ? `Son Fiyat Güncellemesi: ${new Date(fuelPricesMeta.lastUpdated).toLocaleDateString('tr-TR')} ${new Date(fuelPricesMeta.lastUpdated).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} • Kaynak: ${fuelPricesMeta.source}` : 'Resmi akaryakıt pompa fiyatları her gece 00:00\'da otomatik güncellenir'}
+                    style={{ 
+                      fontSize: '9px', 
+                      fontWeight: '750', 
+                      color: '#15803d', 
+                      background: '#f0fdf4',
+                      padding: '2px 7px',
+                      borderRadius: '6px',
+                      border: '1px solid #bbf7d0',
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: '4px' 
+                    }}
+                  >
+                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                    <span>00:00 Güncel Fiyatlar</span>
+                  </span>
+                </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-                  {FUEL_TYPES.map(f => {
+                  {fuelTypes.map(f => {
                     const isSelected = selectedFuelType === f.id;
                     return (
                       <button
@@ -832,7 +1036,7 @@ export default function FuelCalculator({ isEmbedded = false }) {
                           {f.name}
                         </div>
                         <div style={{ fontSize: '10px', fontWeight: isSelected ? '800' : '700', color: isSelected ? '#16a34a' : '#64748b', marginTop: '3px' }}>
-                          {f.price.toFixed(2).replace('.', ',')} TL
+                          {Number(f.price).toFixed(2).replace('.', ',')} TL
                         </div>
                       </button>
                     );
@@ -840,34 +1044,12 @@ export default function FuelCalculator({ isEmbedded = false }) {
                 </div>
               </div>
 
-              {/* Mesafe Girişi & Hızlı Butonlar */}
+              {/* Mesafe Girişi */}
               <div style={{ marginBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <label style={{ fontSize: '10.5px', fontWeight: '750', color: '#334155' }}>
+                <div style={{ marginBottom: '4px' }}>
+                  <label style={{ fontSize: '10.5px', fontWeight: '750', color: '#334155', display: 'block' }}>
                     Toplam Mesafe (km)
                   </label>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    {[100, 250, 500, 850].map(km => (
-                      <button
-                        key={km}
-                        type="button"
-                        onClick={() => setFuelDistance(km)}
-                        style={{
-                          fontSize: '9.5px',
-                          fontWeight: '700',
-                          padding: '3px 7px',
-                          borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
-                          background: Number(fuelDistance) === km ? '#0f172a' : '#f8fafc',
-                          color: Number(fuelDistance) === km ? '#ffffff' : '#64748b',
-                          cursor: 'pointer',
-                          transition: 'all 0.1s ease'
-                        }}
-                      >
-                        {km} km
-                      </button>
-                    ))}
-                  </div>
                 </div>
                 <input
                   type="text"
@@ -988,34 +1170,12 @@ export default function FuelCalculator({ isEmbedded = false }) {
                 </div>
               </div>
 
-              {/* Mesafe Girişi & Hızlı Butonlar */}
+              {/* Mesafe Girişi */}
               <div style={{ marginBottom: '12px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <label style={{ fontSize: '10.5px', fontWeight: '750', color: '#334155' }}>
+                <div style={{ marginBottom: '4px' }}>
+                  <label style={{ fontSize: '10.5px', fontWeight: '750', color: '#334155', display: 'block' }}>
                     Toplam Mesafe (km)
                   </label>
-                  <div style={{ display: 'flex', gap: '4px' }}>
-                    {[100, 250, 500, 850].map(km => (
-                      <button
-                        key={km}
-                        type="button"
-                        onClick={() => setEvDistance(km)}
-                        style={{
-                          fontSize: '9.5px',
-                          fontWeight: '700',
-                          padding: '3px 7px',
-                          borderRadius: '6px',
-                          border: '1px solid #cbd5e1',
-                          background: Number(evDistance) === km ? '#0f172a' : '#f8fafc',
-                          color: Number(evDistance) === km ? '#ffffff' : '#64748b',
-                          cursor: 'pointer',
-                          transition: 'all 0.1s ease'
-                        }}
-                      >
-                        {km} km
-                      </button>
-                    ))}
-                  </div>
                 </div>
                 <input
                   type="text"
@@ -1126,8 +1286,8 @@ export default function FuelCalculator({ isEmbedded = false }) {
                 Tahmini Seyahat Yakıt Maliyeti:
               </div>
 
-              <div style={{ fontSize: '28px', fontWeight: '900', letterSpacing: '-0.5px', marginBottom: '14px' }}>
-                {totalFuelCost.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '16px', fontWeight: '700' }}>TL</span>
+              <div style={{ fontSize: '19px', fontWeight: '800', letterSpacing: '-0.3px', marginBottom: '12px' }}>
+                {totalFuelCost.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '13px', fontWeight: '700' }}>TL</span>
               </div>
 
               <div style={{
@@ -1197,8 +1357,8 @@ export default function FuelCalculator({ isEmbedded = false }) {
                 </span>
               </div>
 
-              <div style={{ fontSize: '28px', fontWeight: '900', letterSpacing: '-0.5px', marginBottom: '14px' }}>
-                {totalEvCost.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '16px', fontWeight: '700' }}>TL</span>
+              <div style={{ fontSize: '19px', fontWeight: '800', letterSpacing: '-0.3px', marginBottom: '12px' }}>
+                {totalEvCost.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span style={{ fontSize: '13px', fontWeight: '700' }}>TL</span>
               </div>
 
               <div style={{
@@ -1260,7 +1420,167 @@ export default function FuelCalculator({ isEmbedded = false }) {
 
       </div>
 
-      {/* 4. HARİTA & EN YAKIN İSTASYONLAR BÖLÜMÜ */}
+      {/* 4. KONUM & ARAMA KARTI (AYRI KART) */}
+      <div style={{
+        background: '#ffffff',
+        borderRadius: '20px',
+        border: '1.2px solid #e2e8f0',
+        padding: '16px',
+        boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)',
+        marginBottom: '14px'
+      }}>
+        {/* Header of Search Card */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+          <div style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '9px',
+            background: vehicleMode === 'ev' ? '#e0f2fe' : '#f0fdf4',
+            color: vehicleMode === 'ev' ? '#0284c7' : '#16a34a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0
+          }}>
+            <MapPin size={16} />
+          </div>
+          <div style={{
+            width: '1.2px',
+            height: '24px',
+            background: '#F9BED8',
+            borderRadius: '1px',
+            flexShrink: 0
+          }} />
+          <div>
+            <div style={{ fontSize: '12.5px', fontWeight: '800', color: '#0f172a' }}>
+              {vehicleMode === 'ev' ? 'Konumuma En Yakın Şarj Noktaları' : 'Konumuma En Yakın Benzin & Yakıt İstasyonları'}
+            </div>
+            <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px' }}>
+              {userLocation.name} çevresindeki {dynamicStations.length} istasyon listeleniyor
+            </div>
+          </div>
+        </div>
+
+        {/* Arama & Konum Belirleme Çubuğu */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Arama Barı */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSearchLocation(searchQuery);
+              }}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                background: '#ffffff',
+                borderRadius: '26px',
+                border: '1.5px solid #F9BED8',
+                padding: '4px 6px 4px 14px',
+                boxShadow: '0 2px 8px rgba(215, 20, 122, 0.05)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Search size={15} color="#D7147A" style={{ flexShrink: 0, marginRight: '8px' }} />
+              <input 
+                type="text" 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="İlçe veya şehir ara (örn. Kadıköy, İzmir...)" 
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  flex: 1,
+                  minWidth: 0,
+                  paddingRight: '6px',
+                  fontSize: '11.5px',
+                  fontWeight: '600',
+                  color: '#1e293b'
+                }}
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  style={{
+                    background: '#f1f5f9',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '18px',
+                    height: '18px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    color: '#64748b',
+                    marginRight: '6px',
+                    flexShrink: 0
+                  }}
+                >
+                  <X size={10} />
+                </button>
+              )}
+              <button 
+                type="submit"
+                title="Ara"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+                  color: 'white',
+                  border: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  boxShadow: '0 2px 8px rgba(215, 20, 122, 0.25)',
+                  transition: 'transform 0.15s ease'
+                }}
+                onMouseDown={e => e.currentTarget.style.transform = 'scale(0.92)'}
+                onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <ArrowRight size={14} />
+              </button>
+            </form>
+
+            {/* Konumumu Bul İkon Butonu - Karışıklığı önlemek için LocateFixed GPS hedef ikonu */}
+            <button
+              type="button"
+              onClick={() => handleGetLocation(false)}
+              disabled={locating}
+              title="Mevcut GPS Konumumu Bul"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+                color: 'white',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: locating ? 'not-allowed' : 'pointer',
+                flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(215, 20, 122, 0.25)',
+                transition: 'transform 0.15s ease'
+              }}
+              onMouseDown={e => !locating && (e.currentTarget.style.transform = 'scale(0.92)')}
+              onMouseUp={e => !locating && (e.currentTarget.style.transform = 'scale(1)')}
+            >
+              <LocateFixed size={18} className={locating ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          <div style={{ fontSize: '9.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span>💡 Haritada istediğiniz bir yere dokunarak veya mavi pini sürükleyerek de konumunuzu anında belirleyebilirsiniz.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. HARİTA & EN YAKIN İSTASYONLAR KARTI (AYRI KART) */}
       <div style={{
         background: '#ffffff',
         borderRadius: '20px',
@@ -1268,102 +1588,6 @@ export default function FuelCalculator({ isEmbedded = false }) {
         padding: '16px',
         boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)'
       }}>
-        
-        {/* Header of Map Card */}
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-            <div style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '8px',
-              background: vehicleMode === 'ev' ? '#e0f2fe' : '#f0fdf4',
-              color: vehicleMode === 'ev' ? '#0284c7' : '#16a34a',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <MapPin size={15} />
-            </div>
-            <div>
-              <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a' }}>
-                {vehicleMode === 'ev' ? 'Konumuma En Yakın Şarj Noktaları' : 'Konumuma En Yakın Benzin & Yakıt İstasyonları'}
-              </div>
-              <div style={{ fontSize: '9.5px', color: '#64748b' }}>
-                {userLocation.name} çevresindeki {dynamicStations.length} istasyon listeleniyor
-              </div>
-            </div>
-          </div>
-
-          {/* Arama & Konum Belirleme Çubuğu */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                <input 
-                  type="text" 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSearchLocation(searchQuery); }}
-                  placeholder="İlçe veya şehir ara (örn. Kadıköy, Çankaya, İzmir...)" 
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px 8px 30px',
-                    borderRadius: '10px',
-                    border: '1px solid #cbd5e1',
-                    fontSize: '11px',
-                    background: '#ffffff',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-              <button 
-                type="button"
-                onClick={() => handleSearchLocation(searchQuery)}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '10px',
-                  background: 'var(--primary)',
-                  color: 'white',
-                  border: 'none',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                Ara
-              </button>
-              <button
-                type="button"
-                onClick={() => handleGetLocation(false)}
-                disabled={locating}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid #cbd5e1',
-                  background: '#f8fafc',
-                  color: '#334155',
-                  fontSize: '11px',
-                  fontWeight: '700',
-                  cursor: locating ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  whiteSpace: 'nowrap',
-                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)'
-                }}
-                title="Cihaz GPS Konumunu Al"
-              >
-                <Navigation size={13} className={locating ? 'animate-spin' : ''} />
-                <span>{locating ? 'Alınıyor...' : 'Konumumu Bul'}</span>
-              </button>
-            </div>
-            <div style={{ fontSize: '9.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <span>💡 Haritada istediğiniz bir yere dokunarak veya mavi pini sürükleyerek de konumunuzu anında belirleyebilirsiniz.</span>
-            </div>
-          </div>
-        </div>
 
         {/* Canlı Google Maps (Snazzy Maps WY Dashboard Stili) */}
         <div style={{
@@ -1487,42 +1711,13 @@ export default function FuelCalculator({ isEmbedded = false }) {
                     color: '#64748b',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    marginBottom: '4px'
+                    textOverflow: 'ellipsis'
                   }}>
                     {st.address}
                   </div>
-
-                  {/* Rozetler / Özellikler */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                    {isEv ? (
-                      <>
-                        <span style={{ fontSize: '8.5px', color: '#475569', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>
-                          ⚡ {st.power}
-                        </span>
-                        <span style={{ fontSize: '8.5px', color: '#475569', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>
-                          🔌 {st.sockets}
-                        </span>
-                        <span style={{ fontSize: '8.5px', color: '#047857', background: '#ecfdf5', padding: '1px 5px', borderRadius: '4px', fontWeight: '700' }}>
-                          ✓ {st.status}
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        {st.fuels.map(f => (
-                          <span key={f} style={{ fontSize: '8.5px', color: '#334155', background: '#f1f5f9', padding: '1px 5px', borderRadius: '4px' }}>
-                            ⛽ {f}
-                          </span>
-                        ))}
-                        <span style={{ fontSize: '8.5px', color: '#0369a1', background: '#f0f9ff', padding: '1px 5px', borderRadius: '4px' }}>
-                          🏪 {st.services[0]}
-                        </span>
-                      </>
-                    )}
-                  </div>
                 </div>
 
-                {/* Sağ Yol Tarifi Butonu */}
+                {/* Sağ Yol Tarifi İkon Butonu (Soldaki İkon Gibi & Yazısız) */}
                 <a
                   href={mapsDirUrl}
                   target="_blank"
@@ -1530,23 +1725,29 @@ export default function FuelCalculator({ isEmbedded = false }) {
                   onClick={e => e.stopPropagation()}
                   title="Google Maps ile Yol Tarifi Al"
                   style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '9px',
+                    background: isEv ? '#e0f2fe' : '#f0fdf4',
+                    color: isEv ? '#0284c7' : '#16a34a',
+                    border: isEv ? '1px solid #bae6fd' : '1px solid #bbf7d0',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '4px',
-                    padding: '6px 10px',
-                    borderRadius: '8px',
-                    background: isEv ? '#0284c7' : '#16a34a',
-                    color: '#ffffff',
                     textDecoration: 'none',
-                    fontSize: '10px',
-                    fontWeight: '800',
                     flexShrink: 0,
-                    boxShadow: '0 2px 6px rgba(15, 23, 42, 0.1)'
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = isEv ? '#0284c7' : '#16a34a';
+                    e.currentTarget.style.color = '#ffffff';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = isEv ? '#e0f2fe' : '#f0fdf4';
+                    e.currentTarget.style.color = isEv ? '#0284c7' : '#16a34a';
                   }}
                 >
-                  <Navigation size={11} />
-                  <span>Yol Tarifi</span>
+                  <Navigation size={15} />
                 </a>
               </div>
             );
@@ -1556,5 +1757,13 @@ export default function FuelCalculator({ isEmbedded = false }) {
       </div>
 
     </div>
+  );
+}
+
+export default function FuelCalculator(props) {
+  return (
+    <FuelErrorBoundary>
+      <FuelCalculatorContent {...props} />
+    </FuelErrorBoundary>
   );
 }

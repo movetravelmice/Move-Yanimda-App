@@ -68,7 +68,7 @@ export default function AppBottomNav() {
     myUnreadNotificationsCount = notifications
       .filter(n => !n.tourId || myTourIds.includes(n.tourId))
       .filter(n => !(n.deletedBy || []).includes(user?.email || 'mock_user'))
-      .filter(n => !n.readBy.includes(user?.email || 'mock_user'))
+      .filter(n => !(n.readBy || []).includes(user?.email || 'mock_user'))
       .length;
 
     const isExpiredArchivedTour = (datesString) => {

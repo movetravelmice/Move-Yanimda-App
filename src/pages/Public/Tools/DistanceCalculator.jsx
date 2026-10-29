@@ -350,6 +350,13 @@ export default function DistanceCalculator({ isEmbedded = false }) {
         }}>
           <Navigation size={17} color="#ffffff" strokeWidth={2.4} />
         </div>
+        <div style={{
+          width: '1.2px',
+          height: '24px',
+          background: '#F9BED8',
+          borderRadius: '1px',
+          flexShrink: 0
+        }} />
         <div>
           <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', letterSpacing: '-0.2px' }}>
             Mesafe & Rota Planlayıcı

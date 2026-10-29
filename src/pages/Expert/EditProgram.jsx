@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ChevronLeft, 
@@ -12,11 +12,13 @@ import {
   Trash2,
   CheckCircle2,
   Paperclip,
-  Download
+  Download,
+  Loader2
 } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
 import ConfirmModal from '../../components/ConfirmModal';
+import Header from '../../components/Header';
 
 const RichTextEditor = ({ value, onChange, placeholder }) => {
     const editorRef = React.useRef(null);
@@ -274,7 +276,7 @@ const RichTextEditor = ({ value, onChange, placeholder }) => {
 export default function EditProgram() {
   const navigate = useNavigate();
   const { tourId } = useParams();
-  const { tours, updateTourProgram } = useTourStore();
+  const { tours, updateTourProgram, isFirebaseInitialized } = useTourStore();
   
   const tour = tours.find(t => t.id === tourId);
   const { user } = useAuthStore();
@@ -299,10 +301,18 @@ export default function EditProgram() {
   };
 
   const [programText, setProgramText] = useState(getInitialProgramText());
+  const [hasUserEdited, setHasUserEdited] = useState(false);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [fileToDelete, setFileToDelete] = useState(null);
   const [isDeletingFile, setIsDeletingFile] = useState(false);
+
+  // Firestore'dan tur bilgisi geldikçe içeriği otomatik yükle (kullanıcı henüz elle yazmadıysa)
+  useEffect(() => {
+    if (tour && !hasUserEdited) {
+      setProgramText(getInitialProgramText());
+    }
+  }, [tour?.id, tour?.program, hasUserEdited]);
 
   const formatFileSize = (bytes) => {
       if (bytes === 0) return '0 Bytes';
@@ -403,7 +413,7 @@ export default function EditProgram() {
       };
 
       return (
-          <div style={{ marginTop: '24px', background: 'white', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', marginBottom: '32px' }}>
+          <div style={{ marginTop: '16px', background: 'white', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', marginBottom: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                   <Paperclip size={18} color="var(--primary)" />
                   <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-main)' }}>Ekli Belgeler ve Dosyalar</span>
@@ -502,26 +512,46 @@ export default function EditProgram() {
       }, 2000);
   };
 
-  if (!tour) return <div style={{padding:'20px'}}>Tur bulunamadı</div>;
+  if (!tour) {
+    if (!isFirebaseInitialized || tours.length === 0) {
+      return (
+        <div style={{ minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
+          <Header title="Tur Programını Düzenle" showBack marginBottom={0} />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', gap: '12px' }}>
+            <Loader2 size={32} color="var(--primary)" style={{ animation: 'spin 1s linear infinite' }} />
+            <span style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: '600' }}>Tur bilgileri yükleniyor...</span>
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
+        <Header title="Tur Programını Düzenle" showBack marginBottom={0} />
+        <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+          <div className="card" style={{ padding: '32px 20px' }}>
+            <p style={{ fontSize: '15px', color: 'var(--text-main)', fontWeight: '700', marginBottom: '8px' }}>
+              Tur Bulunamadı
+            </p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Düzenlemek istediğiniz tur bulunamadı veya silinmiş olabilir.
+            </p>
+            <button 
+              className="btn-primary" 
+              onClick={() => navigate(-1)}
+              style={{ maxWidth: '200px', margin: '0 auto', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            >
+              Geri Dön
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ paddingBottom: '180px', minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
       
-      {/* Header */}
-      <div className="top-header" style={{ padding: 'calc(16px + env(safe-area-inset-top, 0px)) 16px 16px 16px', display: 'flex', alignItems: 'center', gap: '12px', borderBottomLeftRadius: '0px', borderBottomRightRadius: '0px', borderRadius: '0px', boxShadow: 'var(--shadow-md)', background: 'var(--primary)', color: 'white', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div 
-          style={{ width: '34px', height: '34px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }} 
-          onClick={() => navigate(-1)}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
-        >
-          <ChevronLeft size={19} color="#fff" />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-           <h2 style={{ fontSize: '15px', fontWeight: '700', margin: 0, letterSpacing: '-0.2px', lineHeight: 1.2 }}>{isReadOnly ? 'Tur Programı' : 'Programı Düzenle'}</h2>
-           <p style={{ fontSize: '11px', opacity: 0.9, marginTop: '2px', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{tour.name}</p>
-        </div>
-      </div>
+      <Header title="Tur Programını Düzenle" subtitle={tour.name} showBack marginBottom={0} />
 
       <div style={{ padding: '0 16px', marginTop: '16px' }}>
           {isReadOnly ? (
@@ -549,33 +579,53 @@ export default function EditProgram() {
                       <p style={{ fontSize: '11.5px', color: '#64748b', marginBottom: '14px', lineHeight: '1.45', margin: '0 0 14px 0' }}>
                           Tur programını dilediğiniz gibi yazın, kalınlaştırın, boyutunu ayarlayın veya Word'den kopyalayıp yapıştırın. Değişiklikler bittikten sonra aşağıdaki butona tıklayın.
                       </p>
-                      <RichTextEditor value={programText} onChange={setProgramText} placeholder="Tüm tur programını buraya yazın veya yapıştırın..." />
+                      <RichTextEditor 
+                        value={programText} 
+                        onChange={(val) => {
+                          setHasUserEdited(true);
+                          setProgramText(val);
+                        }} 
+                        placeholder="Tüm tur programını buraya yazın veya yapıştırın..." 
+                      />
                   </div>
                   {renderAttachments(true)}
+
+                  {/* Kart içinde Değişiklikleri Yayınla butonu */}
+                  <div style={{ 
+                    background: '#ffffff', 
+                    borderRadius: '16px', 
+                    border: '1px solid #edf2f7', 
+                    boxShadow: '0 4px 18px rgba(0,0,0,0.04)', 
+                    padding: '16px', 
+                    marginTop: '16px', 
+                    marginBottom: '16px' 
+                  }}>
+                     <button 
+                       className="btn-primary" 
+                       onClick={saveGlobalProgram} 
+                       style={{ 
+                         width: '100%', 
+                         padding: '14px', 
+                         borderRadius: '14px', 
+                         fontSize: '15px', 
+                         fontWeight: '700', 
+                         display: 'flex', 
+                         alignItems: 'center', 
+                         justifyContent: 'center', 
+                         gap: '8px', 
+                         boxShadow: '0 4px 14px rgba(215, 20, 122, 0.25)',
+                         cursor: 'pointer'
+                       }}
+                     >
+                         <Save size={19} /> Değişiklikleri Yayınla
+                     </button>
+                  </div>
               </div>
           )}
       </div>
 
-      {/* Save Global Changes Bottom Bar */}
-      {!isReadOnly && (
-      <div style={{ 
-        position: 'fixed', 
-        bottom: 0, 
-        left: '50%', 
-        transform: 'translateX(-50%)', 
-        width: '100%', 
-        maxWidth: '480px', 
-        background: '#ffffff', 
-        padding: '12px 16px calc(84px + env(safe-area-inset-bottom, 12px)) 16px', 
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.06)', 
-        borderTop: '1px solid #f1f5f9',
-        zIndex: 90 
-      }}>
-         <button className="btn-primary" onClick={saveGlobalProgram} style={{ width: '100%', padding: '13px', borderRadius: '14px', fontSize: '15px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(215, 20, 122, 0.25)' }}>
-             <Save size={19} /> Değişiklikleri Yayınla
-         </button>
-      </div>
-      )}
+      {/* Alt menü ve buton boşluğu */}
+      <div style={{ height: '140px', minHeight: '140px', width: '100%' }} aria-hidden="true" />
 
       {/* Custom Success Popup */}
       {showSuccessPopup && (

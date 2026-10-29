@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, X, ChevronDown } from 'lucide-react';
 
 const MONTH_NAMES = [
   'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
@@ -43,7 +43,8 @@ export default function CustomDatePicker({
   required = false,
   align = 'left', // 'left' | 'right'
   companionDate = null, // e.g. Start date when this is End date, or vice versa
-  isEndDate = false
+  isEndDate = false,
+  triggerStyle = {}
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef(null);
@@ -74,7 +75,7 @@ export default function CustomDatePicker({
     }
   }, [value]);
 
-  // Click outside to close
+  // Click outside to close (supporting mouse and touch)
   useEffect(() => {
     const handleOutsideClick = (e) => {
       if (containerRef.current && !containerRef.current.contains(e.target)) {
@@ -83,8 +84,12 @@ export default function CustomDatePicker({
     };
     if (isOpen) {
       document.addEventListener('mousedown', handleOutsideClick);
+      document.addEventListener('touchstart', handleOutsideClick);
     }
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
   }, [isOpen]);
 
   // Navigate months
@@ -167,7 +172,7 @@ export default function CustomDatePicker({
   };
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '100%', zIndex: isOpen ? 60 : 1 }}>
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', zIndex: isOpen ? 70 : 1 }}>
       {label && (
         <label style={{
           display: 'flex',
@@ -175,10 +180,9 @@ export default function CustomDatePicker({
           gap: '5px',
           fontSize: '11px',
           fontWeight: '700',
-          color: '#1e293b',
-          marginBottom: '5px'
+          color: '#334155',
+          marginBottom: '4px'
         }}>
-          <Calendar size={13} color="#D7147A" />
           <span>{label} {required && <span style={{ color: '#ef4444' }}>*</span>}</span>
         </label>
       )}
@@ -191,25 +195,39 @@ export default function CustomDatePicker({
           alignItems: 'center',
           justifyContent: 'space-between',
           background: '#ffffff',
-          border: isOpen ? '1.5px solid #D7147A' : '1.2px solid #cbd5e1',
-          borderRadius: '11px',
+          border: isOpen ? '1.5px solid #D7147A' : '1.5px solid #e2e8f0',
+          borderRadius: '10px',
           padding: '0 10px',
           height: '38px',
           cursor: 'pointer',
-          boxShadow: isOpen ? '0 0 0 3px rgba(215, 20, 122, 0.12)' : '0 1px 3px rgba(0,0,0,0.02)',
+          boxShadow: isOpen ? '0 0 0 3px rgba(215, 20, 122, 0.08)' : 'none',
           transition: 'all 0.15s ease',
-          userSelect: 'none'
+          userSelect: 'none',
+          boxSizing: 'border-box',
+          ...triggerStyle
+        }}
+        onMouseEnter={e => {
+          if (!isOpen) e.currentTarget.style.borderColor = '#F9BED8';
+        }}
+        onMouseLeave={e => {
+          if (!isOpen) e.currentTarget.style.borderColor = '#e2e8f0';
         }}
       >
-        <span style={{
-          fontSize: '11.5px',
-          fontWeight: value ? '700' : '500',
-          color: value ? '#0f172a' : '#94a3b8'
-        }}>
-          {value ? formatDisplayDate(value) : placeholder}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0, flex: 1 }}>
+          <Calendar size={14} color="#D7147A" strokeWidth={2.2} style={{ flexShrink: 0 }} />
+          <span style={{
+            fontSize: '12px',
+            fontWeight: value ? '700' : '500',
+            color: value ? '#0f172a' : '#94a3b8',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}>
+            {value ? formatDisplayDate(value) : placeholder}
+          </span>
+        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
           {value && (
             <button
               type="button"
@@ -225,14 +243,31 @@ export default function CustomDatePicker({
                 justifyContent: 'center',
                 cursor: 'pointer',
                 color: '#64748b',
-                padding: 0
+                padding: 0,
+                transition: 'background 0.15s ease, color 0.15s ease'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#fee2e2';
+                e.currentTarget.style.color = '#ef4444';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = '#f1f5f9';
+                e.currentTarget.style.color = '#64748b';
               }}
               title="Tarihi Temizle"
             >
-              <X size={11} />
+              <X size={11} strokeWidth={2.5} />
             </button>
           )}
-          <Calendar size={14} color={isOpen ? '#D7147A' : '#D7147A'} />
+          <ChevronDown 
+            size={14} 
+            color={isOpen ? '#D7147A' : '#94a3b8'} 
+            strokeWidth={2.3} 
+            style={{ 
+              transition: 'transform 0.2s ease, color 0.15s ease', 
+              transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' 
+            }} 
+          />
         </div>
       </div>
 
@@ -242,14 +277,15 @@ export default function CustomDatePicker({
           position: 'absolute',
           top: 'calc(100% + 6px)',
           [align === 'right' ? 'right' : 'left']: 0,
-          width: '265px',
+          width: '272px',
+          maxWidth: 'calc(100vw - 36px)',
           background: '#ffffff',
           borderRadius: '16px',
           border: '1.2px solid #F9BED8',
-          boxShadow: '0 16px 36px -6px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(215, 20, 122, 0.08)',
+          boxShadow: '0 16px 36px -6px rgba(15, 23, 42, 0.2), 0 2px 10px rgba(215, 20, 122, 0.08)',
           zIndex: 1050,
           padding: '12px',
-          animation: 'scaleIn 0.15s ease-out'
+          animation: 'dropdownFadeIn 0.16s ease-out'
         }}>
           {/* Header Month / Year & Arrows */}
           <div style={{
@@ -262,34 +298,32 @@ export default function CustomDatePicker({
               type="button"
               onClick={handlePrevMonth}
               style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: '#FDF2F8',
+                border: '1px solid #F9BED8',
                 borderRadius: '8px',
-                width: '26px',
-                height: '26px',
+                width: '28px',
+                height: '28px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: '#475569',
+                color: '#D7147A',
                 transition: 'all 0.15s ease'
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.background = '#FDF2F8';
-                e.currentTarget.style.borderColor = '#F9BED8';
-                e.currentTarget.style.color = '#D7147A';
+                e.currentTarget.style.background = '#FCE7F3';
+                e.currentTarget.style.transform = 'scale(1.05)';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = '#f8fafc';
-                e.currentTarget.style.borderColor = '#e2e8f0';
-                e.currentTarget.style.color = '#475569';
+                e.currentTarget.style.background = '#FDF2F8';
+                e.currentTarget.style.transform = 'scale(1)';
               }}
             >
-              <ChevronLeft size={15} />
+              <ChevronLeft size={16} strokeWidth={2.4} />
             </button>
 
             <span style={{
-              fontSize: '12.5px',
+              fontSize: '13px',
               fontWeight: '800',
               color: '#0f172a',
               letterSpacing: '-0.2px'
@@ -301,30 +335,28 @@ export default function CustomDatePicker({
               type="button"
               onClick={handleNextMonth}
               style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
+                background: '#FDF2F8',
+                border: '1px solid #F9BED8',
                 borderRadius: '8px',
-                width: '26px',
-                height: '26px',
+                width: '28px',
+                height: '28px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: '#475569',
+                color: '#D7147A',
                 transition: 'all 0.15s ease'
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.background = '#FDF2F8';
-                e.currentTarget.style.borderColor = '#F9BED8';
-                e.currentTarget.style.color = '#D7147A';
+                e.currentTarget.style.background = '#FCE7F3';
+                e.currentTarget.style.transform = 'scale(1.05)';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.background = '#f8fafc';
-                e.currentTarget.style.borderColor = '#e2e8f0';
-                e.currentTarget.style.color = '#475569';
+                e.currentTarget.style.background = '#FDF2F8';
+                e.currentTarget.style.transform = 'scale(1)';
               }}
             >
-              <ChevronRight size={15} />
+              <ChevronRight size={16} strokeWidth={2.4} />
             </button>
           </div>
 
@@ -333,7 +365,7 @@ export default function CustomDatePicker({
             display: 'grid',
             gridTemplateColumns: 'repeat(7, 1fr)',
             gap: '2px',
-            marginBottom: '4px',
+            marginBottom: '5px',
             textAlign: 'center'
           }}>
             {WEEKDAY_NAMES.map((name, idx) => (
@@ -356,7 +388,7 @@ export default function CustomDatePicker({
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(7, 1fr)',
-            gap: '2px',
+            gap: '3px',
             textAlign: 'center'
           }}>
             {daysList.map(({ dayNumber, isCurrentMonth, dateStr }, idx) => {
@@ -380,14 +412,14 @@ export default function CustomDatePicker({
                   disabled={isDisabled}
                   onClick={() => handleSelectDate(dateStr)}
                   style={{
-                    height: '29px',
+                    height: '30px',
                     width: '100%',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    border: 'none',
-                    borderRadius: isSelected ? '9px' : '7px',
+                    border: isToday && !isSelected ? '1px solid #F9BED8' : 'none',
+                    borderRadius: isSelected ? '9px' : '8px',
                     fontSize: '11px',
                     fontWeight: isSelected ? '800' : (isCurrentMonth ? '600' : '400'),
                     cursor: isDisabled ? 'not-allowed' : 'pointer',
@@ -395,7 +427,9 @@ export default function CustomDatePicker({
                       ? 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)'
                       : isInRange
                         ? '#FDF2F8'
-                        : 'transparent',
+                        : isToday
+                          ? '#fff5f9'
+                          : 'transparent',
                     color: isSelected
                       ? '#ffffff'
                       : isDisabled
@@ -403,8 +437,8 @@ export default function CustomDatePicker({
                         : isCurrentMonth
                           ? '#1e293b'
                           : '#94a3b8',
-                    boxShadow: isSelected ? '0 2px 8px rgba(215, 20, 122, 0.35)' : 'none',
-                    transition: 'all 0.1s ease',
+                    boxShadow: isSelected ? '0 2px 8px rgba(215, 20, 122, 0.32)' : 'none',
+                    transition: 'all 0.12s ease',
                     position: 'relative',
                     padding: 0
                   }}
@@ -416,7 +450,7 @@ export default function CustomDatePicker({
                   }}
                   onMouseLeave={e => {
                     if (!isSelected && !isDisabled) {
-                      e.currentTarget.style.background = isInRange ? '#FDF2F8' : 'transparent';
+                      e.currentTarget.style.background = isInRange ? '#FDF2F8' : (isToday ? '#fff5f9' : 'transparent');
                       e.currentTarget.style.color = isCurrentMonth ? '#1e293b' : '#94a3b8';
                     }
                   }}
@@ -452,12 +486,13 @@ export default function CustomDatePicker({
               style={{
                 background: 'transparent',
                 border: 'none',
-                padding: '2px 6px',
-                fontSize: '10px',
+                padding: '3px 8px',
+                fontSize: '10.5px',
                 fontWeight: '700',
                 color: '#94a3b8',
                 cursor: 'pointer',
-                borderRadius: '5px'
+                borderRadius: '6px',
+                transition: 'color 0.15s ease'
               }}
               onMouseEnter={e => e.currentTarget.style.color = '#ef4444'}
               onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
@@ -471,15 +506,22 @@ export default function CustomDatePicker({
               style={{
                 background: '#FDF2F8',
                 border: '1px solid #F9BED8',
-                padding: '3px 8px',
-                fontSize: '10px',
+                padding: '4px 10px',
+                fontSize: '10.5px',
                 fontWeight: '800',
                 color: '#D7147A',
                 cursor: 'pointer',
-                borderRadius: '6px'
+                borderRadius: '7px',
+                transition: 'all 0.15s ease'
               }}
-              onMouseEnter={e => e.currentTarget.style.background = '#FCE7F3'}
-              onMouseLeave={e => e.currentTarget.style.background = '#FDF2F8'}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = '#FCE7F3';
+                e.currentTarget.style.transform = 'scale(1.03)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = '#FDF2F8';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
             >
               Bugün
             </button>

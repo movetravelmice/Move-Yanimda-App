@@ -453,8 +453,9 @@ export default function CityGuideModal({ city, onClose }) {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '12px', border: '1px solid #f1f5f9', textAlign: 'center' }}>
-                <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>
-                  🇹🇷 Türkiye
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '10px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>
+                  <CountryFlag country="tr" size="sm" />
+                  <span>TÜRKİYE</span>
                 </div>
                 <div style={{ fontSize: '17px', fontWeight: '900', color: '#0f172a' }}>
                   {currentTime.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' })}
@@ -462,8 +463,9 @@ export default function CityGuideModal({ city, onClose }) {
               </div>
 
               <div style={{ background: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)', padding: '10px 12px', borderRadius: '12px', border: '1px solid #F9BED8', textAlign: 'center' }}>
-                <div style={{ fontSize: '10px', color: '#B01064', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>
-                  📍 {cityName} Yerel
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '10px', color: '#B01064', fontWeight: '700', textTransform: 'uppercase', marginBottom: '2px' }}>
+                  <CountryFlag flag={flag} country={countryName || cityName} size="sm" />
+                  <span>{(countryName || cityName).replace(/\s*yerel\b/gi, '').trim().toLocaleUpperCase('tr-TR')}</span>
                 </div>
                 <div style={{ fontSize: '17px', fontWeight: '900', color: '#D7147A' }}>
                   {currentTime.toLocaleTimeString('tr-TR', { timeZone: localTimezone, hour: '2-digit', minute: '2-digit' })}

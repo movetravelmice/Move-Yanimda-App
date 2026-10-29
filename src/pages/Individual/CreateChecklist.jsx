@@ -191,34 +191,34 @@ export default function CreateChecklist() {
       {/* Hero Card */}
       <div style={{
         background: 'linear-gradient(135deg, #ffffff 0%, #fff5f9 100%)',
-        borderRadius: '20px',
+        borderRadius: '18px',
         border: '1.5px solid #F9BED8',
-        padding: '18px 16px',
-        marginBottom: '16px',
+        padding: '14px 14px',
+        marginBottom: '14px',
         boxShadow: '0 4px 18px rgba(215, 20, 122, 0.07)',
         position: 'relative',
         overflow: 'hidden'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <div style={{
-            width: '46px',
-            height: '46px',
-            borderRadius: '14px',
+            width: '36px',
+            height: '36px',
+            borderRadius: '11px',
             background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(215, 20, 122, 0.28)',
+            boxShadow: '0 3px 10px rgba(215, 20, 122, 0.22)',
             flexShrink: 0
           }}>
-            <Plus size={24} strokeWidth={2.6} />
+            <Plus size={18} strokeWidth={2.4} />
           </div>
           <div>
-            <h1 style={{ fontSize: '17px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.3px' }}>
+            <h1 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.2px' }}>
               Yeni Özel Checklist
             </h1>
-            <div style={{ fontSize: '11.5px', color: '#64748b', marginTop: '3px', lineHeight: 1.35 }}>
+            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', lineHeight: 1.3 }}>
               Listenize isim verin, seyahatinizle ilişkilendirin ve valiz hazırlığınızı yönetmeye başlayın.
             </div>
           </div>

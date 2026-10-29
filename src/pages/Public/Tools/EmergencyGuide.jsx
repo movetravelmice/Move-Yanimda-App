@@ -23,7 +23,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
-  Mail
+  Mail,
+  Send
 } from 'lucide-react';
 import CountryFlag from '../../../components/CountryFlag';
 import { useSettingsStore } from '../../../store/settingsStore';
@@ -1418,6 +1419,13 @@ export default function EmergencyGuide({ isEmbedded = false, onNavigateTab }) {
           }}>
             <ShieldAlert size={17} strokeWidth={2.4} />
           </div>
+          <div style={{
+            width: '1.2px',
+            height: '24px',
+            background: '#F9BED8',
+            borderRadius: '1px',
+            flexShrink: 0
+          }} />
           <div>
             <h1 style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.2px' }}>
               Acil Durum & Konsolosluk Rehberi
@@ -1429,22 +1437,40 @@ export default function EmergencyGuide({ isEmbedded = false, onNavigateTab }) {
         </div>
       </div>
 
-      {/* 2. SEARCH BAR */}
+      {/* 2. SEARCH BAR (Görsel 2 Tasarımına Uygun Pembe Pill & Send Butonu) */}
       <div style={{
-        background: '#ffffff',
+        background: 'linear-gradient(135deg, #ffffff 0%, #fff5f9 100%)',
         borderRadius: '20px',
-        border: '1px solid #e2e8f0',
-        padding: '14px 16px',
+        border: '1.5px solid #F9BED8',
+        padding: '12px 14px',
         marginBottom: '14px',
-        boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)',
+        boxShadow: '0 4px 14px rgba(215, 20, 122, 0.06)',
         position: 'relative'
       }}>
         {/* Search Input Box */}
-        <div style={{ position: 'relative' }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (searchResults.length > 0) {
+              handleSelectCountry(searchResults[0]);
+            }
+          }}
+          style={{
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            background: '#ffffff',
+            borderRadius: '24px',
+            border: isSearchFocused ? '1.5px solid #D7147A' : '1.5px solid #F9BED8',
+            padding: '4px 6px 4px 14px',
+            boxShadow: isSearchFocused ? '0 0 0 3px rgba(215, 20, 122, 0.12)' : '0 2px 8px rgba(215, 20, 122, 0.05)',
+            transition: 'all 0.2s ease'
+          }}
+        >
           <Search 
-            size={14} 
-            color="#94a3b8" 
-            style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)' }} 
+            size={16} 
+            color="#D7147A" 
+            style={{ flexShrink: 0, marginRight: '8px' }} 
           />
           <input
             ref={searchInputRef}
@@ -1453,18 +1479,17 @@ export default function EmergencyGuide({ isEmbedded = false, onNavigateTab }) {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
             style={{
-              width: '100%',
-              padding: '8.5px 32px 8.5px 32px',
-              borderRadius: '11px',
-              border: isSearchFocused ? '1.5px solid #dc2626' : '1px solid #cbd5e1',
-              background: '#f8fafc',
-              fontSize: '11px',
-              fontWeight: '550',
-              color: '#0f172a',
+              border: 'none',
               outline: 'none',
-              boxSizing: 'border-box',
-              transition: 'border-color 0.15s ease'
+              background: 'transparent',
+              flex: 1,
+              minWidth: 0,
+              paddingRight: '8px',
+              fontSize: '11.5px',
+              fontWeight: '600',
+              color: '#1e293b'
             }}
           />
           {searchQuery && (
@@ -1472,39 +1497,60 @@ export default function EmergencyGuide({ isEmbedded = false, onNavigateTab }) {
               type="button"
               onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
               style={{
-                position: 'absolute',
-                right: '8px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                background: '#e2e8f0',
+                background: '#f1f5f9',
                 border: 'none',
                 borderRadius: '50%',
-                width: '18px',
-                height: '18px',
+                width: '20px',
+                height: '20px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                color: '#475569'
+                color: '#64748b',
+                marginRight: '6px',
+                flexShrink: 0
               }}
             >
               <X size={11} />
             </button>
           )}
-        </div>
+          <button
+            type="submit"
+            title="Ara"
+            style={{
+              background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+              color: 'white',
+              border: 'none',
+              borderRadius: '50%',
+              width: '32px',
+              height: '32px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: '0 2px 8px rgba(215, 20, 122, 0.28)',
+              transition: 'transform 0.15s ease'
+            }}
+            onMouseDown={e => e.currentTarget.style.transform = 'scale(0.92)'}
+            onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            <Send size={14} style={{ marginLeft: '-1px' }} />
+          </button>
+        </form>
 
         {/* Autocomplete Dropdown when typing */}
         {searchQuery.trim().length > 0 && (
           <div style={{
             position: 'absolute',
-            top: '58px',
-            left: '16px',
-            right: '16px',
+            top: 'calc(100% + 6px)',
+            left: '14px',
+            right: '14px',
             background: '#ffffff',
-            borderRadius: '14px',
-            border: '1.5px solid #fecaca',
-            boxShadow: '0 12px 28px rgba(15, 23, 42, 0.15)',
-            zIndex: 30,
+            borderRadius: '16px',
+            border: '1.2px solid #F9BED8',
+            boxShadow: '0 12px 28px rgba(215, 20, 122, 0.15)',
+            zIndex: 40,
             maxHeight: '260px',
             overflowY: 'auto'
           }}>

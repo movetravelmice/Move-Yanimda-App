@@ -73,10 +73,10 @@ export default function PwaInstallPrompt() {
     <>
       {/* Floating Install Notification Card */}
       <div style={{
-        position: 'fixed',
+        position: 'absolute',
         top: 'calc(12px + env(safe-area-inset-top, 0px))',
-        left: '50%',
-        transform: 'translateX(-50%)',
+        left: '12px',
+        right: '12px',
         width: 'calc(100% - 24px)',
         maxWidth: '440px',
         backgroundColor: '#ffffff',

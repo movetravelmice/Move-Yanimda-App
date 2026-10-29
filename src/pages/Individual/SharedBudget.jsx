@@ -38,6 +38,7 @@ import {
   parseTurkishNumber 
 } from './Budget';
 import GuestNoticeBanner from '../../components/GuestNoticeBanner';
+import CustomDatePicker from '../../components/CustomDatePicker';
 import CountryFlag from '../../components/CountryFlag';
 import ConfirmModal from '../../components/ConfirmModal';
 import ThemeSelect from '../../components/ThemeSelect';
@@ -1079,19 +1080,11 @@ export default function SharedBudget() {
                 <label style={{ fontSize: '11px', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
                   Tarih
                 </label>
-                <input
-                  type="date"
+                <CustomDatePicker
                   value={sharedExpenseForm.date}
-                  onChange={e => setSharedExpenseForm({ ...sharedExpenseForm, date: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '8.5px 10px',
-                    borderRadius: '10px',
-                    border: '1.2px solid #F9BED8',
-                    fontSize: '12px',
-                    outline: 'none',
-                    boxSizing: 'border-box'
-                  }}
+                  onChange={(dateStr) => setSharedExpenseForm({ ...sharedExpenseForm, date: dateStr })}
+                  placeholder="Tarih seçin"
+                  align="left"
                 />
               </div>
               <div>

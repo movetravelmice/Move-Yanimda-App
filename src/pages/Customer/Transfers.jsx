@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, FileText, Download, Eye, Bus, CalendarClock, MapPin, CheckCircle2, AlertCircle, PlaneTakeoff, Sparkles } from 'lucide-react';
+import Header from '../../components/Header';
 import { useTourStore, isTourActive } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
@@ -74,33 +75,7 @@ export default function Transfers() {
 
   return (
     <div style={{ paddingBottom: '80px', minHeight: '100vh', background: '#f8fafc' }}>
-      {/* Top Header */}
-      <div style={{ 
-        padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 20px 16px', 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'flex-start',
-        gap: '12px', 
-        boxShadow: '0 2px 10px rgba(0,0,0,0.1)', 
-        background: 'var(--primary)', 
-        color: 'white',
-        position: 'sticky',
-        top: 0,
-        zIndex: 50
-      }}>
-        <div 
-          style={{ width: '36px', height: '36px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }} 
-          onClick={() => navigate(-1)}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
-        >
-          <ChevronLeft size={20} color="#fff" />
-        </div>
-        <div style={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 2px', lineHeight: 1.2 }}>Uçuş ve Transfer Biletlerim</h2>
-          <div style={{ fontSize: '11px', opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeTour?.name || 'Seyahat Operasyonu'}</div>
-        </div>
-      </div>
+      <Header title="Uçuş ve Transfer Biletlerim" subtitle={activeTour?.name || "Seyahat Operasyonu"} showBack marginBottom={0} />
 
       <div style={{ padding: '0 16px', marginTop: '20px' }}>
         

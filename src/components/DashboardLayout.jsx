@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore, isUserAdmin } from '../store/authStore';
 import { useTourStore } from '../store/tourStore';
 import CustomerDashboard from '../pages/Customer/Dashboard';
 import { useChatStore } from '../store/chatStore';
@@ -37,7 +37,6 @@ import { useDeviceNotifications } from '../hooks/useDeviceNotifications';
 import { Home, MessageCircle, Banknote, User, Bell } from 'lucide-react';
 
 export default function DashboardLayout() {
-  useDeviceNotifications(); // Invoke background device notifications hook
   
   const user = useAuthStore(state => state.user);
   const activeMode = useAuthStore(state => state.activeMode);
@@ -56,27 +55,28 @@ export default function DashboardLayout() {
   const messages = useChatStore(state => state.messages);
 
   if (!user) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" replace />;
   }
 
   const renderDashboard = () => {
-    const isAdmin = user.role === 'admin' || user.secondaryRole === 'admin';
-    const secondaryRole = user.role === 'admin' ? user.secondaryRole : (user.secondaryRole === 'admin' ? user.role : null);
+    const isAdmin = isUserAdmin(user) || user?.role === 'admin' || user?.secondaryRole === 'admin';
 
-    if (isAdmin && secondaryRole) {
+    if (isAdmin) {
       const currentRole = activeStaffRole || 'admin';
       if (currentRole === 'expert') return <ExpertDashboard />;
       if (currentRole === 'ticketing') return <TicketingDashboard />;
       return <AdminDashboard />;
     }
 
-    switch (user.role) {
+    switch (user?.role) {
       case 'customer': return <CustomerDashboard />;
       case 'expert': return <ExpertDashboard />;
       case 'ticketing': return <TicketingDashboard />;
-      case 'admin': 
-        return <AdminDashboard />;
-      default: return <Navigate to="/login" />;
+      default:
+        if (user?.userType === 'individual') {
+          return <Navigate to="/individual/dashboard" replace />;
+        }
+        return <CustomerDashboard />;
     }
   };
 

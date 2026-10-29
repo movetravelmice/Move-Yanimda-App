@@ -35,7 +35,15 @@ export const useNotificationStore = create((set, get) => ({
           
           onSnapshot(notificationsRef, (snapshot) => {
               const fetched = [];
-              snapshot.forEach(docSnap => fetched.push({ dbId: docSnap.id, ...docSnap.data() }));
+              snapshot.forEach(docSnap => {
+                  const data = docSnap.data() || {};
+                  fetched.push({ 
+                      dbId: docSnap.id, 
+                      ...data, 
+                      readBy: Array.isArray(data.readBy) ? data.readBy : [],
+                      deletedBy: Array.isArray(data.deletedBy) ? data.deletedBy : []
+                  });
+              });
               
               set({ notifications: fetched.sort((a,b) => new Date(b.date) - new Date(a.date)) });
           });

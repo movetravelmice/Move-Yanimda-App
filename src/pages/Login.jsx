@@ -29,6 +29,7 @@ export default function Login() {
   const [isSending, setIsSending] = useState(false);
   const [showKvkkModal, setShowKvkkModal] = useState(false);
 
+
   const [emailFocused, setEmailFocused] = useState(false);
   const [passFocused, setPassFocused] = useState(false);
 
@@ -39,7 +40,7 @@ export default function Login() {
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      navigate(user.userType === 'individual' ? '/individual/dashboard' : '/dashboard', { replace: true });
     }
   }, [user, navigate]);
 
@@ -75,7 +76,22 @@ export default function Login() {
           return;
       }
       
-      const userRecord = useUserStore.getState().findUserByEmail(cleanEmail);
+      let userRecord = useUserStore.getState().findUserByEmail(cleanEmail);
+      if (!userRecord) {
+          // Doğrudan Firestore Fallback (mobil açılış gecikmelerine karşı)
+          try {
+              const { collection, query, where, getDocs } = await import('firebase/firestore');
+              const { db } = await import('../lib/firebase');
+              const q = query(collection(db, 'users'), where('email', '==', cleanEmail.toLowerCase()));
+              const snap = await getDocs(q);
+              if (!snap.empty) {
+                  userRecord = { id: snap.docs[0].id, ...snap.docs[0].data() };
+              }
+          } catch (e) {
+              console.error("Firestore user query error:", e);
+          }
+      }
+
       if (!userRecord) {
           setError('Sistemde bu e-postaya ait hesap bulunamadı.');
           return;
@@ -94,6 +110,21 @@ export default function Login() {
 
       setIsSending(true);
       try {
+          // Eğer kullanıcının şifresi veritabanında boş/tanımsız ise otomatik geçici parola ata ve veritabanına kaydet
+          let activePassword = (userRecord.password || '').trim();
+          if (!activePassword) {
+              activePassword = '123456';
+              try {
+                  const { doc, updateDoc } = await import('firebase/firestore');
+                  const { db } = await import('../lib/firebase');
+                  await updateDoc(doc(db, 'users', userRecord.id), { password: activePassword });
+                  userRecord.password = activePassword;
+                  useUserStore.getState().updateUser(userRecord.id, { password: activePassword });
+              } catch (updateErr) {
+                  console.warn("Could not save fallback password:", updateErr);
+              }
+          }
+
           let customSubject = null;
           let customHtml = null;
           try {
@@ -115,7 +146,7 @@ export default function Login() {
               body: JSON.stringify({
                   host: smtp.host, port: smtp.port, user: smtp.user, pass: smtp.pass,
                   to: email, corporateName: corporateName,
-                  accountName: userRecord.name, accountPassword: userRecord.password,
+                  accountName: userRecord.name, accountPassword: activePassword,
                   customSubject, customHtml
               })
           });
@@ -128,7 +159,7 @@ export default function Login() {
                   useSettingsStore.getState().sendWhatsAppNotification(
                       userRecord.phone,
                       'passwordResetTemplate',
-                      [String(userRecord.password || '123456')]
+                      [String(activePassword)]
                   );
               }
           }
@@ -139,19 +170,25 @@ export default function Login() {
       }
   };
 
+  // If user is already logged in, show spinner while redirecting
+  if (user) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc' }}>
+        <Loader2 className="animate-spin text-pink-600" size={36} />
+      </div>
+    );
+  }
+
   return (
     <div style={{
-        height: 'calc(100dvh - 95px - env(safe-area-inset-bottom, 0px))',
-        minHeight: 'calc(100dvh - 95px - env(safe-area-inset-bottom, 0px))',
-        maxHeight: 'calc(100dvh - 95px - env(safe-area-inset-bottom, 0px))',
+        minHeight: '100%',
         backgroundColor: '#f8fafc',
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
         display: 'flex',
         flexDirection: 'column',
         position: 'relative',
-        overflowY: 'auto',
-        overscrollBehavior: 'none',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        paddingBottom: 'calc(95px + env(safe-area-inset-bottom, 0px))'
     }}>
         {/* Top Hero Banner */}
         <div style={{

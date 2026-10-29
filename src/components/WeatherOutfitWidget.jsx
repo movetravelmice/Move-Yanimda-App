@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PinterestWeatherCard from './PinterestWeatherCard';
 import { 
   Sun, 
   Moon,
@@ -19,7 +20,8 @@ import {
   X,
   MapPin,
   Loader2,
-  LocateFixed
+  LocateFixed,
+  Send
 } from 'lucide-react';
 
 const POPULAR_DESTINATIONS = [
@@ -77,229 +79,320 @@ function getWeatherMeta(code, isDay = true) {
   // 1. Dolu & Donan Yağmur (Hail)
   if ([66, 67, 87, 88].includes(code) || code === 96 || code === 99) {
     return {
-      text: code === 96 || code === 99 ? 'Dolu & Şiddetli Fırtına' : 'Dolu Yağışlı',
+      text: 'Dolu Yağışlı',
       icon: CloudHail,
-      iconColor: '#0891b2',
-      badge: '🧊 Dolu Uyarısı',
-      badgeBg: '#ecfeff',
-      badgeBorder: '#a5f3fc',
-      badgeColor: '#0e7490',
-      accentColor: '#0891b2',
       theme: 'hail',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #f0fdfa 55%, #ecfeff 100%)',
-      borderColor: '#a5f3fc',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #ecfeff 100%)',
-      iconStageBorder: '#a5f3fc',
-      halo: 'rgba(6, 182, 212, 0.15)',
-      cardShadow: '0 3px 12px rgba(8, 145, 178, 0.06)'
+      art: 'hail',
+      bg: 'linear-gradient(135deg, #243247 0%, #192334 100%)',
+      footerBg: 'rgba(0, 0, 0, 0.28)',
+      shadow: '0 10px 25px rgba(25, 35, 52, 0.35)'
     };
   }
 
-  // 2. Kar Yağışı (Snow)
+  // 2. Kar Yağışı (Snow / Heavy Snow)
   if ([71, 73, 75, 77, 85, 86].includes(code)) {
+    const isHeavy = [75, 86].includes(code);
     return {
-      text: [75, 86].includes(code) ? 'Yoğun Kar Yağışı' : 'Kar Yağışlı',
+      text: isHeavy ? 'Yoğun Kar' : 'Kar Yağışlı',
       icon: CloudSnow,
-      iconColor: '#0284c7',
-      badge: '❄️ Kar Yağışlı',
-      badgeBg: '#f0f9ff',
-      badgeBorder: '#bae6fd',
-      badgeColor: '#0369a1',
-      accentColor: '#0284c7',
-      theme: 'snow',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 55%, #e0f2fe 100%)',
-      borderColor: '#bae6fd',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%)',
-      iconStageBorder: '#bae6fd',
-      halo: 'rgba(14, 165, 233, 0.15)',
-      cardShadow: '0 3px 12px rgba(2, 132, 199, 0.06)'
+      theme: isHeavy ? 'heavy_snow' : 'snow',
+      art: isHeavy ? 'heavy_snow' : 'snow',
+      bg: isHeavy 
+        ? 'linear-gradient(135deg, #1978d3 0%, #125596 100%)' 
+        : 'linear-gradient(135deg, #0ba3e8 0%, #0681b9 100%)',
+      footerBg: isHeavy ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.20)',
+      shadow: isHeavy ? '0 10px 25px rgba(25, 120, 211, 0.35)' : '0 10px 25px rgba(11, 163, 232, 0.35)'
     };
   }
 
   // 3. Gök Gürültülü Fırtına (Thunderstorm)
   if (code === 95) {
     return {
-      text: 'Gök Gürültülü Fırtına',
+      text: 'Fırtına',
       icon: CloudLightning,
-      iconColor: '#9333ea',
-      badge: '⚡ Fırtına Uyarısı',
-      badgeBg: '#faf5ff',
-      badgeBorder: '#e9d5ff',
-      badgeColor: '#7e22ce',
-      accentColor: '#9333ea',
       theme: 'storm',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #faf5ff 55%, #f3e8ff 100%)',
-      borderColor: '#e9d5ff',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #faf5ff 100%)',
-      iconStageBorder: '#e9d5ff',
-      halo: 'rgba(147, 51, 234, 0.15)',
-      cardShadow: '0 3px 12px rgba(147, 51, 234, 0.06)'
+      art: 'storm',
+      bg: 'linear-gradient(135deg, #2b3048 0%, #1c2033 100%)',
+      footerBg: 'rgba(0, 0, 0, 0.30)',
+      shadow: '0 10px 25px rgba(28, 32, 51, 0.40)'
     };
   }
 
-  // 4. Yağmur & Sağanak (Rain & Showers)
+  // 4. Yağmur & Kuvvetli Sağanak (Rain / Heavy Rain)
   if ([61, 63, 65, 80, 81, 82].includes(code)) {
+    const isHeavy = [65, 81, 82].includes(code);
     return {
-      text: [65, 82].includes(code) ? 'Kuvvetli Sağanak' : 'Yağmurlu',
+      text: isHeavy ? 'Kuvvetli Yağış' : 'Yağmurlu',
       icon: CloudRain,
-      iconColor: '#0284c7',
-      badge: '🌧️ Yağmurlu',
-      badgeBg: '#f0f9ff',
-      badgeBorder: '#bae6fd',
-      badgeColor: '#0369a1',
-      accentColor: '#0284c7',
-      theme: 'rain',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 55%, #e0f2fe 100%)',
-      borderColor: '#bae6fd',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%)',
-      iconStageBorder: '#bae6fd',
-      halo: 'rgba(2, 132, 199, 0.15)',
-      cardShadow: '0 3px 12px rgba(2, 132, 199, 0.06)'
+      theme: isHeavy ? 'heavy_rain' : 'rain',
+      art: isHeavy ? 'heavy_rain' : 'rain',
+      bg: isHeavy 
+        ? 'linear-gradient(135deg, #323850 0%, #22263a 100%)' 
+        : 'linear-gradient(135deg, #4b4376 0%, #3a3261 100%)',
+      footerBg: isHeavy ? 'rgba(0, 0, 0, 0.28)' : 'rgba(0, 0, 0, 0.22)',
+      shadow: isHeavy ? '0 10px 25px rgba(34, 38, 58, 0.35)' : '0 10px 25px rgba(75, 67, 118, 0.35)'
     };
   }
 
   // 5. Hafif Çisenti (Drizzle)
   if ([51, 53, 55].includes(code)) {
     return {
-      text: 'Hafif Çisenti',
+      text: 'Çisenti',
       icon: Droplets,
-      iconColor: '#0284c7',
-      badge: '🌦️ Çisenti',
-      badgeBg: '#f0f9ff',
-      badgeBorder: '#bae6fd',
-      badgeColor: '#0369a1',
-      accentColor: '#0284c7',
       theme: 'drizzle',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 55%, #e0f2fe 100%)',
-      borderColor: '#bae6fd',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%)',
-      iconStageBorder: '#bae6fd',
-      halo: 'rgba(2, 132, 199, 0.15)',
-      cardShadow: '0 3px 12px rgba(2, 132, 199, 0.06)'
+      art: 'rain',
+      bg: 'linear-gradient(135deg, #4b4376 0%, #3a3261 100%)',
+      footerBg: 'rgba(0, 0, 0, 0.22)',
+      shadow: '0 10px 25px rgba(75, 67, 118, 0.35)'
     };
   }
 
-  // 6. Sisli & Puslu (Fog & Mist)
+  // 6. Sisli & Puslu (Fog & Mist / Hazy)
   if (code === 45 || code === 48) {
     return {
       text: 'Sisli & Puslu',
       icon: CloudFog,
-      iconColor: '#64748b',
-      badge: '🌫️ Sisli & Puslu',
-      badgeBg: '#f8fafc',
-      badgeBorder: '#e2e8f0',
-      badgeColor: '#475569',
-      accentColor: '#64748b',
-      theme: 'fog',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%)',
-      borderColor: '#e2e8f0',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-      iconStageBorder: '#e2e8f0',
-      halo: 'rgba(100, 116, 139, 0.12)',
-      cardShadow: '0 3px 12px rgba(100, 116, 139, 0.05)'
+      theme: 'hazy',
+      art: 'hazy',
+      bg: 'linear-gradient(135deg, #e48b52 0%, #ee9e68 100%)',
+      footerBg: 'rgba(0, 0, 0, 0.20)',
+      shadow: '0 10px 25px rgba(228, 139, 82, 0.35)'
     };
   }
 
-  // 7. Çok Bulutlu / Kapalı (Overcast)
+  // 7. Çok Bulutlu / Kapalı (Overcast / Cloudy)
   if (code === 3) {
     return {
       text: 'Çok Bulutlu',
       icon: Cloud,
-      iconColor: '#64748b',
-      badge: '☁️ Çok Bulutlu',
-      badgeBg: '#f8fafc',
-      badgeBorder: '#e2e8f0',
-      badgeColor: '#475569',
-      accentColor: '#64748b',
-      theme: 'overcast',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 55%, #f1f5f9 100%)',
-      borderColor: '#e2e8f0',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
-      iconStageBorder: '#e2e8f0',
-      halo: 'rgba(100, 116, 139, 0.12)',
-      cardShadow: '0 3px 12px rgba(100, 116, 139, 0.05)'
+      theme: 'cloudy',
+      art: 'cloudy',
+      bg: 'linear-gradient(135deg, #3695f2 0%, #2a7dd0 100%)',
+      footerBg: 'rgba(0, 0, 0, 0.20)',
+      shadow: '0 10px 25px rgba(42, 125, 208, 0.35)'
     };
   }
 
-  // 8. Parçalı Bulutlu (Partly Cloudy)
+  // 8. Parçalı Bulutlu (Partly Cloudy / Mostly Cloudy)
   if (code === 1 || code === 2) {
     if (!isDay) {
       return {
         text: 'Parçalı Bulutlu',
         icon: CloudMoon,
-        iconColor: '#6366f1',
-        badge: '🌙 Gece Bulutlu',
-        badgeBg: '#f5f3ff',
-        badgeBorder: '#ddd6fe',
-        badgeColor: '#4f46e5',
-        accentColor: '#4f46e5',
         theme: 'night_cloudy',
-        bg: 'linear-gradient(135deg, #ffffff 0%, #f5f3ff 55%, #ede9fe 100%)',
-        borderColor: '#ddd6fe',
-        iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%)',
-        iconStageBorder: '#ddd6fe',
-        halo: 'rgba(99, 102, 241, 0.14)',
-        cardShadow: '0 3px 12px rgba(99, 102, 241, 0.06)'
+        art: 'night',
+        bg: 'linear-gradient(135deg, #1b335a 0%, #22467d 100%)',
+        footerBg: 'rgba(0, 0, 0, 0.26)',
+        shadow: '0 10px 25px rgba(27, 51, 90, 0.35)'
       };
     }
     return {
       text: 'Parçalı Bulutlu',
       icon: CloudSun,
-      iconColor: '#D7147A',
-      badge: '🌤️ Parçalı Bulutlu',
-      badgeBg: '#FDF2F8',
-      badgeBorder: '#F9BED8',
-      badgeColor: '#B01064',
-      accentColor: '#D7147A',
-      theme: 'day_cloudy',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #fff5f9 55%, #FDF2F8 100%)',
-      borderColor: '#F9BED8',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #FDF2F8 100%)',
-      iconStageBorder: '#F9BED8',
-      halo: 'rgba(215, 20, 122, 0.15)',
-      cardShadow: '0 3px 12px rgba(215, 20, 122, 0.06)'
+      theme: 'mostly_cloudy',
+      art: 'mostly_cloudy',
+      bg: 'linear-gradient(135deg, #2b77be 0%, #1f5d96 100%)',
+      footerBg: 'rgba(0, 0, 0, 0.22)',
+      shadow: '0 10px 25px rgba(31, 93, 150, 0.35)'
     };
   }
 
   // 9. Açık Gece (Clear Sky - Night)
   if (!isDay) {
     return {
-      text: 'Açık & Gece',
+      text: 'Açık Gece',
       icon: Moon,
-      iconColor: '#6366f1',
-      badge: '🌙 Açık Gece',
-      badgeBg: '#f5f3ff',
-      badgeBorder: '#ddd6fe',
-      badgeColor: '#4f46e5',
-      accentColor: '#4f46e5',
       theme: 'night_clear',
-      bg: 'linear-gradient(135deg, #ffffff 0%, #f5f3ff 55%, #ede9fe 100%)',
-      borderColor: '#ddd6fe',
-      iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #f5f3ff 100%)',
-      iconStageBorder: '#ddd6fe',
-      halo: 'rgba(99, 102, 241, 0.16)',
-      cardShadow: '0 3px 12px rgba(99, 102, 241, 0.06)'
+      art: 'night',
+      bg: 'linear-gradient(135deg, #1b3866 0%, #234d8d 100%)',
+      footerBg: 'rgba(0, 0, 0, 0.28)',
+      shadow: '0 10px 25px rgba(27, 56, 102, 0.35)'
     };
   }
 
-  // 10. Açık Güneşli (Clear Sky - Day)
+  // 10. Açık Güneşli (Clear Sky - Day / Sunny)
   return {
-    text: 'Açık & Güneşli',
+    text: 'Güneşli',
     icon: Sun,
-    iconColor: '#D7147A',
-    badge: '☀️ Güneşli Gündüz',
-    badgeBg: '#FDF2F8',
-    badgeBorder: '#F9BED8',
-    badgeColor: '#B01064',
-    accentColor: '#D7147A',
-    theme: 'day_clear',
-    bg: 'linear-gradient(135deg, #ffffff 0%, #fff5f9 55%, #FDF2F8 100%)',
-    borderColor: '#F9BED8',
-    iconStageBg: 'linear-gradient(135deg, #ffffff 0%, #FDF2F8 100%)',
-    iconStageBorder: '#F9BED8',
-    halo: 'rgba(215, 20, 122, 0.16)',
-    cardShadow: '0 3px 12px rgba(215, 20, 122, 0.06)'
+    theme: 'sunny',
+    art: 'sunny',
+    bg: 'linear-gradient(135deg, #f86e51 0%, #f6883d 48%, #ffb13b 100%)',
+    footerBg: 'rgba(0, 0, 0, 0.18)',
+    shadow: '0 10px 25px rgba(248, 110, 81, 0.35)'
   };
+}
+
+function renderWeatherArtwork(artType) {
+  switch (artType) {
+    case 'sunny':
+      return (
+        <svg 
+          style={{ position: 'absolute', top: 0, right: 0, width: '220px', height: '100%', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 220 145" 
+          fill="none"
+        >
+          <circle cx="190" cy="10" r="110" fill="rgba(255, 255, 255, 0.07)" />
+          <circle cx="190" cy="10" r="75" fill="rgba(255, 255, 255, 0.11)" />
+          <circle cx="190" cy="10" r="45" fill="rgba(255, 240, 160, 0.35)" />
+          <path d="M 0 145 C 70 115 140 135 220 100 L 220 145 Z" fill="rgba(255, 255, 255, 0.08)" />
+        </svg>
+      );
+    case 'night':
+      return (
+        <svg 
+          style={{ position: 'absolute', top: 0, right: 0, width: '220px', height: '100%', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 220 145" 
+          fill="none"
+        >
+          <circle cx="185" cy="18" r="95" fill="rgba(255, 255, 255, 0.05)" />
+          <circle cx="185" cy="18" r="60" fill="rgba(255, 255, 255, 0.09)" />
+          <circle cx="185" cy="18" r="26" fill="rgba(254, 240, 138, 0.90)" />
+          <circle cx="177" cy="13" r="23" fill="#20457c" />
+          <path d="M 0 145 C 60 125 130 140 220 115 L 220 145 Z" fill="rgba(255, 255, 255, 0.05)" />
+        </svg>
+      );
+    case 'rain':
+      return (
+        <svg 
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 350 145" 
+          preserveAspectRatio="none" 
+          fill="none"
+        >
+          <line x1="140" y1="12" x2="115" y2="62" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="180" y1="22" x2="155" y2="72" stroke="rgba(255,255,255,0.20)" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="225" y1="8" x2="200" y2="58" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="265" y1="28" x2="240" y2="78" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="305" y1="14" x2="280" y2="64" stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="195" y1="68" x2="170" y2="118" stroke="rgba(255,255,255,0.20)" strokeWidth="1.5" strokeLinecap="round" />
+          <line x1="245" y1="72" x2="220" y2="122" stroke="rgba(255,255,255,0.18)" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+      );
+    case 'heavy_rain':
+    case 'storm':
+      return (
+        <svg 
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 350 145" 
+          preserveAspectRatio="none" 
+          fill="none"
+        >
+          <line x1="110" y1="5" x2="82" y2="70" stroke="rgba(255,255,255,0.28)" strokeWidth="1.8" strokeLinecap="round" />
+          <line x1="160" y1="18" x2="132" y2="83" stroke="rgba(255,255,255,0.22)" strokeWidth="1.8" strokeLinecap="round" />
+          <line x1="210" y1="8" x2="182" y2="73" stroke="rgba(255,255,255,0.30)" strokeWidth="2" strokeLinecap="round" />
+          <line x1="260" y1="22" x2="232" y2="87" stroke="rgba(255,255,255,0.22)" strokeWidth="1.8" strokeLinecap="round" />
+          <line x1="300" y1="10" x2="272" y2="75" stroke="rgba(255,255,255,0.28)" strokeWidth="2" strokeLinecap="round" />
+          <line x1="175" y1="72" x2="147" y2="132" stroke="rgba(255,255,255,0.24)" strokeWidth="1.8" strokeLinecap="round" />
+          <line x1="225" y1="78" x2="197" y2="138" stroke="rgba(255,255,255,0.26)" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    case 'cloudy':
+      return (
+        <svg 
+          style={{ position: 'absolute', top: 0, right: 0, width: '220px', height: '100%', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 220 145" 
+          fill="none"
+        >
+          <path d="M 40 0 C 80 40 150 18 220 45 L 220 0 Z" fill="rgba(255, 255, 255, 0.14)" />
+          <path d="M 0 38 C 70 75 140 48 220 72 L 220 0 L 0 0 Z" fill="rgba(255, 255, 255, 0.08)" />
+          <path d="M 60 145 C 100 110 160 130 220 105 L 220 145 Z" fill="rgba(255, 255, 255, 0.06)" />
+        </svg>
+      );
+    case 'mostly_cloudy':
+      return (
+        <svg 
+          style={{ position: 'absolute', top: 0, right: 0, width: '220px', height: '100%', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 220 145" 
+          fill="none"
+        >
+          <path d="M 25 0 C 85 45 150 22 220 48 L 220 0 Z" fill="rgba(255, 255, 255, 0.16)" />
+          <path d="M 0 32 C 75 68 145 52 220 78 L 220 0 L 0 0 Z" fill="rgba(255, 255, 255, 0.09)" />
+        </svg>
+      );
+    case 'snow':
+    case 'heavy_snow':
+      return (
+        <svg 
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 350 145" 
+          preserveAspectRatio="none" 
+          fill="none"
+        >
+          <circle cx="110" cy="28" r="4" fill="rgba(255,255,255,0.85)" />
+          <circle cx="160" cy="62" r="2.5" fill="rgba(255,255,255,0.6)" />
+          <circle cx="195" cy="24" r="5" fill="rgba(255,255,255,0.88)" />
+          <circle cx="238" cy="72" r="3.5" fill="rgba(255,255,255,0.7)" />
+          <circle cx="275" cy="32" r="5.5" fill="rgba(255,255,255,0.85)" />
+          <circle cx="310" cy="80" r="3" fill="rgba(255,255,255,0.55)" />
+          <circle cx="145" cy="105" r="4.5" fill="rgba(255,255,255,0.75)" />
+          <circle cx="200" cy="120" r="2.8" fill="rgba(255,255,255,0.6)" />
+        </svg>
+      );
+    case 'hazy':
+      return (
+        <svg 
+          style={{ position: 'absolute', bottom: 0, right: 0, width: '240px', height: '115px', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 240 115" 
+          fill="none"
+        >
+          <path d="M 0 85 C 80 45 160 95 240 60 L 240 115 L 0 115 Z" fill="rgba(255, 255, 255, 0.12)" />
+          <path d="M 0 105 C 60 75 140 110 240 90 L 240 115 L 0 115 Z" fill="rgba(255, 255, 255, 0.16)" />
+        </svg>
+      );
+    case 'hail':
+    default:
+      return (
+        <svg 
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 0 }} 
+          viewBox="0 0 350 145" 
+          preserveAspectRatio="none" 
+          fill="none"
+        >
+          <circle cx="120" cy="22" r="3" fill="rgba(255,255,255,0.85)" />
+          <circle cx="160" cy="48" r="4" fill="rgba(255,255,255,0.9)" />
+          <circle cx="195" cy="20" r="2.5" fill="rgba(255,255,255,0.7)" />
+          <circle cx="235" cy="54" r="5" fill="rgba(255,255,255,0.9)" />
+          <circle cx="265" cy="28" r="3.5" fill="rgba(255,255,255,0.85)" />
+          <circle cx="295" cy="68" r="4.5" fill="rgba(255,255,255,0.9)" />
+          <circle cx="140" cy="88" r="3" fill="rgba(255,255,255,0.8)" />
+          <circle cx="180" cy="105" r="4" fill="rgba(255,255,255,0.85)" />
+        </svg>
+      );
+  }
+}
+
+function renderMiniDayIcon(code) {
+  if (code === 0) return <Sun size={13} color="#ffffff" strokeWidth={2.2} />;
+  if (code === 1 || code === 2) return <CloudSun size={13} color="#ffffff" strokeWidth={2.2} />;
+  if (code === 3) return <Cloud size={13} color="#ffffff" strokeWidth={2.2} />;
+  if (code === 45 || code === 48) return <CloudFog size={13} color="#ffffff" strokeWidth={2.2} />;
+  if ([51, 53, 55, 61, 63, 65, 80, 81, 82].includes(code)) return <CloudRain size={13} color="#ffffff" strokeWidth={2.2} />;
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return <CloudSnow size={13} color="#ffffff" strokeWidth={2.2} />;
+  if ([95, 96, 99].includes(code)) return <CloudLightning size={13} color="#ffffff" strokeWidth={2.2} />;
+  return <CloudSun size={13} color="#ffffff" strokeWidth={2.2} />;
+}
+
+function getFormattedDate() {
+  const d = new Date();
+  const days = ['PAZ', 'PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CTS'];
+  const dayName = days[d.getDay()];
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${dayName} ${month}-${day}`;
+}
+
+function getNextFourDays() {
+  const daysMap = ['PAZ', 'PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CTS'];
+  const todayIdx = new Date().getDay();
+  const res = [];
+  const sampleCodes = [1, 61, 3, 0];
+  for (let i = 1; i <= 4; i++) {
+    res.push({
+      day: daysMap[(todayIdx + i) % 7],
+      code: sampleCodes[(i - 1) % sampleCodes.length]
+    });
+  }
+  return res;
 }
 
 function getOutfitAdvice(temp, code) {
@@ -463,13 +556,34 @@ export default function WeatherOutfitWidget() {
   const fetchWeather = async (city) => {
     setLoading(true);
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current=temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,wind_speed_10m,is_day&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current=temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,wind_speed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto`;
       const res = await fetch(url);
       const data = await res.json();
       if (data && data.current) {
         const isDayVal = data.current.is_day !== undefined
           ? data.current.is_day === 1
           : (new Date().getHours() >= 6 && new Date().getHours() < 20);
+
+        let localTime = '';
+        if (data.current.time && data.current.time.includes('T')) {
+          localTime = data.current.time.split('T')[1].slice(0, 5);
+        }
+
+        const daysMap = ['PAZ', 'PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CTS'];
+        const dailyForecast = [];
+        if (data.daily && Array.isArray(data.daily.time)) {
+          for (let i = 1; i <= 4; i++) {
+            if (data.daily.time[i]) {
+              const d = new Date(data.daily.time[i] + 'T12:00:00');
+              dailyForecast.push({
+                day: daysMap[d.getDay()],
+                code: data.daily.weather_code?.[i] ?? 1,
+                max: Math.round(data.daily.temperature_2m_max?.[i] ?? 20),
+                min: Math.round(data.daily.temperature_2m_min?.[i] ?? 12)
+              });
+            }
+          }
+        }
 
         setWeatherData({
           temp: Math.round(data.current.temperature_2m),
@@ -479,7 +593,9 @@ export default function WeatherOutfitWidget() {
           wind: Math.round(data.current.wind_speed_10m),
           isDay: isDayVal,
           tempMax: Math.round(data.daily?.temperature_2m_max?.[0] ?? data.current.temperature_2m + 2),
-          tempMin: Math.round(data.daily?.temperature_2m_min?.[0] ?? data.current.temperature_2m - 4)
+          tempMin: Math.round(data.daily?.temperature_2m_min?.[0] ?? data.current.temperature_2m - 4),
+          localTime: localTime,
+          dailyForecast: dailyForecast.length === 4 ? dailyForecast : null
         });
       }
     } catch (e) {
@@ -493,7 +609,9 @@ export default function WeatherOutfitWidget() {
         wind: 12,
         isDay: currentHour >= 6 && currentHour < 20,
         tempMax: 24,
-        tempMin: 16
+        tempMin: 16,
+        localTime: `${String(currentHour).padStart(2, '0')}:00`,
+        dailyForecast: getNextFourDays()
       });
     } finally {
       setLoading(false);
@@ -648,11 +766,48 @@ export default function WeatherOutfitWidget() {
     setShowDropdown(false);
   };
 
+  const handleSearchSubmit = async (e) => {
+    if (e) e.preventDefault();
+    const q = searchQuery.trim();
+    if (!q) return;
+
+    if (geoResults && geoResults.length > 0) {
+      handleSelectCity(geoResults[0]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=tr&format=json`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data && data.results && data.results.length > 0) {
+        const r = data.results[0];
+        handleSelectCity({
+          id: `${r.id}`,
+          name: r.name,
+          country: r.country || '',
+          countryCode: r.country_code || '',
+          flag: getFlagEmoji(r.country_code),
+          lat: r.latitude,
+          lon: r.longitude
+        });
+      }
+    } catch (err) {
+      console.warn('Geocoding submit error:', err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const currentTemp = weatherData?.temp ?? 22;
   const currentCode = weatherData?.code ?? 1;
   const isDay = weatherData?.isDay ?? (new Date().getHours() >= 6 && new Date().getHours() < 20);
   const weatherMeta = getWeatherMeta(currentCode, isDay);
   const WeatherIcon = weatherMeta.icon;
+  const forecastList = (weatherData?.dailyForecast && weatherData.dailyForecast.length === 4)
+    ? weatherData.dailyForecast
+    : getNextFourDays();
 
   return (
     <div 
@@ -669,84 +824,42 @@ export default function WeatherOutfitWidget() {
       }}
     >
       {/* Başlık Alanı */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-          <div>
-            <h2 style={{
-              fontSize: '13px',
-              fontWeight: '750',
-              color: '#0f172a',
-              margin: 0,
-              letterSpacing: '-0.2px'
-            }}>
-              Hava Durumu & Ne Giyilir?
-            </h2>
-            <div style={{
-              fontSize: '10.5px',
-              color: '#64748b',
-              marginTop: '2px'
-            }}>
-              Gideceğiniz şehrin hava durumuna göre hazırlanalım
-            </div>
-          </div>
-
-          <button
-            onClick={handleDetectLocation}
-            onMouseEnter={() => setIsGpsHovered(true)}
-            onMouseLeave={() => setIsGpsHovered(false)}
-            title="Mevcut Konumumu Bul ve Havayı Getir"
-            style={{
-              width: '30px',
-              height: '30px',
-              borderRadius: '10px',
-              border: isGpsHovered ? '1.2px solid #D7147A' : '1.2px solid #F9BED8',
-              background: isGpsHovered 
-                ? 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)' 
-                : (isLocating ? '#FDF2F8' : '#ffffff'),
-              color: isGpsHovered ? '#ffffff' : '#D7147A',
-              cursor: isLocating ? 'wait' : 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              padding: 0,
-              transform: isGpsHovered ? 'scale(1.06)' : 'scale(1)',
-              boxShadow: isGpsHovered ? '0 3px 10px rgba(215, 20, 122, 0.25)' : '0 1px 3px rgba(215, 20, 122, 0.08)',
-              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
-            }}
-          >
-            {isLocating ? (
-              <Loader2 
-                size={14} 
-                color={isGpsHovered ? '#ffffff' : '#D7147A'} 
-                style={{ animation: 'spin 1s linear infinite' }} 
-              />
-            ) : (
-              <LocateFixed 
-                size={15} 
-                color={isGpsHovered ? '#ffffff' : '#D7147A'} 
-                strokeWidth={2.3} 
-              />
-            )}
-          </button>
+      <div style={{ marginBottom: '14px' }}>
+        <h2 style={{
+          fontSize: '13px',
+          fontWeight: '750',
+          color: '#0f172a',
+          margin: 0,
+          letterSpacing: '-0.2px'
+        }}>
+          Hava Durumu & Ne Giyilir?
+        </h2>
+        <div style={{
+          fontSize: '10.5px',
+          color: '#64748b',
+          marginTop: '2px'
+        }}>
+          Gideceğiniz şehrin hava durumuna göre hazırlanalım
         </div>
+      </div>
 
         {/* Ülke veya Şehir Arama Motoru Inputu */}
         <div style={{ position: 'relative', marginBottom: '12px' }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            background: '#ffffff',
-            borderRadius: '16px',
-            border: showDropdown ? '1.5px solid #D7147A' : '1.5px solid #F9BED8',
-            padding: '5px 6px 5px 12px',
-            boxShadow: showDropdown ? '0 0 0 3px rgba(215, 20, 122, 0.08)' : '0 4px 12px rgba(215, 20, 122, 0.08)',
-            transition: 'all 0.2s ease'
-          }}>
-            {isSearching ? (
-              <Loader2 size={15} color="#D7147A" style={{ animation: 'spin 1s linear infinite', flexShrink: 0, marginRight: '8px' }} />
-            ) : (
-              <Search size={15} color="#D7147A" style={{ flexShrink: 0, marginRight: '8px' }} />
-            )}
+          <form
+            onSubmit={handleSearchSubmit}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: '#ffffff',
+              borderRadius: '16px',
+              border: showDropdown ? '1.5px solid #D7147A' : '1.5px solid #F9BED8',
+              padding: '5px 6px 5px 12px',
+              boxShadow: showDropdown ? '0 0 0 3px rgba(215, 20, 122, 0.08)' : '0 4px 12px rgba(215, 20, 122, 0.08)',
+              transition: 'all 0.2s ease',
+              marginBottom: 0
+            }}
+          >
+            <Search size={15} color="#D7147A" style={{ flexShrink: 0, marginRight: '8px' }} />
 
             <input
               type="text"
@@ -768,9 +881,9 @@ export default function WeatherOutfitWidget() {
                 background: 'transparent',
                 flex: 1,
                 minWidth: 0,
-                paddingRight: '8px',
-                fontSize: '11px',
-                fontWeight: '500',
+                paddingRight: '10px',
+                fontSize: '11.5px',
+                fontWeight: '600',
                 color: '#1e293b',
                 textOverflow: 'ellipsis'
               }}
@@ -789,32 +902,42 @@ export default function WeatherOutfitWidget() {
                   border: 'none',
                   cursor: 'pointer',
                   color: '#94a3b8',
-                  padding: '2px',
+                  padding: '4px',
+                  marginRight: '4px',
                   display: 'flex',
-                  alignItems: 'center'
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
                 <X size={14} />
               </button>
-            ) : (
-              <div style={{
-                display: 'inline-flex',
+            ) : null}
+
+            <button
+              type="submit"
+              title="Şehir Ara"
+              style={{
+                background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                width: '32px',
+                height: '32px',
+                cursor: 'pointer',
+                display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                background: '#FDF2F8',
-                border: '1px solid #F9BED8',
-                padding: '2.5px 7px',
-                borderRadius: '7px',
-                fontSize: '10px',
-                fontWeight: '700',
-                color: '#D7147A',
-                whiteSpace: 'nowrap',
-                flexShrink: 0
-              }}>
-                <MapPin size={10} color="#D7147A" /> {selectedCity.name}
-              </div>
-            )}
-          </div>
+                justifyContent: 'center',
+                flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(215, 20, 122, 0.3)'
+              }}
+            >
+              {isSearching ? (
+                <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+              ) : (
+                <Send size={13} style={{ marginLeft: '-1px' }} />
+              )}
+            </button>
+          </form>
 
           {/* Autocomplete / Arama Sonuçları Dropdown - En az 2 harf yazıldığında görünür */}
           {showDropdown && searchQuery.trim().length >= 2 && (
@@ -879,231 +1002,12 @@ export default function WeatherOutfitWidget() {
           )}
         </div>
 
-        {/* Seçili Şehir Anlık Hava Durumu Kartı (Move Travel Temasıyla %100 Uyumlu, Dinamik Görsel Kart) */}
-        <div style={{
-          position: 'relative',
-          overflow: 'hidden',
-          background: weatherMeta.bg,
-          borderRadius: '18px',
-          padding: '14px 16px',
-          border: `1.5px solid ${weatherMeta.borderColor}`,
-          marginBottom: '14px',
-          boxShadow: weatherMeta.cardShadow,
-          transition: 'all 0.3s ease'
-        }}>
-          {/* Arka Plan Yumuşak Pastel Atmosfer Halesi */}
-          <div style={{
-            position: 'absolute',
-            top: '-25px',
-            right: '-25px',
-            width: '120px',
-            height: '120px',
-            borderRadius: '50%',
-            background: weatherMeta.halo,
-            filter: 'blur(28px)',
-            pointerEvents: 'none',
-            zIndex: 0
-          }} />
-
-          {/* Kart İçerik Katmanı */}
-          <div style={{ position: 'relative', zIndex: 1 }}>
-            {/* Üst Satır: Şehir Lokasyonu */}
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '6px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <MapPin size={11} color="#D7147A" />
-                <span style={{ fontSize: '11px', fontWeight: '700', color: '#334155' }}>
-                  {selectedCity.name}
-                </span>
-              </div>
-            </div>
-
-            {/* Orta Satır: Sıcaklık & Durum ile İkon Sahnesi */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                  <span style={{
-                    fontSize: '20px',
-                    fontWeight: '800',
-                    color: '#0f172a',
-                    letterSpacing: '-0.4px',
-                    lineHeight: 1
-                  }}>
-                    {currentTemp}°C
-                  </span>
-                </div>
-
-                <div style={{
-                  fontSize: '10.5px',
-                  fontWeight: '600',
-                  color: '#475569',
-                  marginTop: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}>
-                  <span style={{ fontWeight: '700', color: weatherMeta.accentColor }}>{weatherMeta.text}</span>
-                  <span style={{ color: '#cbd5e1' }}>•</span>
-                  <span style={{ fontSize: '9.5px', color: '#64748b', fontWeight: '500' }}>
-                    Y: {weatherData?.tempMax ?? currentTemp + 2}° / D: {weatherData?.tempMin ?? currentTemp - 3}°
-                  </span>
-                </div>
-              </div>
-
-              {/* Temaya Uygun Kare Şık İkon Sahnesi */}
-              <div style={{
-                width: '42px',
-                height: '42px',
-                borderRadius: '13px',
-                background: weatherMeta.iconStageBg,
-                border: `1.2px solid ${weatherMeta.iconStageBorder}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: `0 3px 10px ${weatherMeta.halo}`,
-                flexShrink: 0
-              }}>
-                <WeatherIcon size={22} color={weatherMeta.iconColor} strokeWidth={2} />
-              </div>
-            </div>
-
-            {/* Alt İstatistik Çipleri (Hissedilen, Nem, Rüzgar) */}
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '6px',
-              paddingTop: '8px',
-              borderTop: `1px solid ${weatherMeta.badgeBorder}50`
-            }}>
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '8px',
-                padding: '5px 3px',
-                textAlign: 'center',
-                border: '1px solid #f1f5f9',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <div style={{ fontSize: '7.5px', color: '#64748b', fontWeight: '700', letterSpacing: '0.2px' }}>HİSSEDİLEN</div>
-                <div style={{ fontSize: '10.5px', color: '#0f172a', fontWeight: '800', marginTop: '2px' }}>{weatherData?.feelsLike ?? currentTemp}°C</div>
-              </div>
-
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '8px',
-                padding: '5px 3px',
-                textAlign: 'center',
-                border: '1px solid #f1f5f9',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <div style={{ fontSize: '7.5px', color: '#64748b', fontWeight: '700', letterSpacing: '0.2px' }}>NEM</div>
-                <div style={{ fontSize: '10.5px', color: '#0f172a', fontWeight: '800', marginTop: '2px' }}>%{weatherData?.humidity ?? 60}</div>
-              </div>
-
-              <div style={{
-                background: '#ffffff',
-                borderRadius: '8px',
-                padding: '5px 3px',
-                textAlign: 'center',
-                border: '1px solid #f1f5f9',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <div style={{ fontSize: '7.5px', color: '#64748b', fontWeight: '700', letterSpacing: '0.2px' }}>RÜZGAR</div>
-                <div style={{ fontSize: '10.5px', color: '#0f172a', fontWeight: '800', marginTop: '2px' }}>{weatherData?.wind ?? 12} km/s</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Aksiyon Butonları: Ne Giyilir? & Checkliste Ekle */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: '8px',
-          width: '100%',
-          boxSizing: 'border-box'
-        }}>
-          {/* Ne Giyilir Butonu (Tıklanınca Ne Giyilir Sayfasına Gider) */}
-          <div 
-            onClick={() => navigate(`/travel-tools?tab=outfit&city=${encodeURIComponent(selectedCity?.name || '')}`)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '5px',
-              background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
-              color: '#ffffff',
-              borderRadius: '12px',
-              padding: '9px 8px',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontWeight: '700',
-              letterSpacing: '-0.1px',
-              boxShadow: '0 2px 8px rgba(215, 20, 122, 0.20)',
-              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-              boxSizing: 'border-box',
-              userSelect: 'none'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(215, 20, 122, 0.28)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 2px 8px rgba(215, 20, 122, 0.20)';
-            }}
-          >
-            <span>Ne Giyilir ?</span>
-            <ChevronRight size={13} strokeWidth={2.6} />
-          </div>
-
-          {/* Checkliste Ekle Butonu */}
-          <div 
-            onClick={() => navigate('/individual/checklists')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '5px',
-              background: '#ffffff',
-              color: '#B01064',
-              border: '1.2px solid #F9BED8',
-              borderRadius: '12px',
-              padding: '9px 8px',
-              cursor: 'pointer',
-              fontSize: '11px',
-              fontWeight: '700',
-              letterSpacing: '-0.1px',
-              boxShadow: '0 1px 4px rgba(215, 20, 122, 0.04)',
-              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-              boxSizing: 'border-box',
-              userSelect: 'none'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-1px)';
-              e.currentTarget.style.borderColor = '#D7147A';
-              e.currentTarget.style.boxShadow = '0 3px 10px rgba(215, 20, 122, 0.10)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.borderColor = '#F9BED8';
-              e.currentTarget.style.boxShadow = '0 1px 4px rgba(215, 20, 122, 0.04)';
-            }}
-          >
-            <span>Checkliste Ekle</span>
-            <ChevronRight size={13} strokeWidth={2.6} />
-          </div>
-        </div>
+        {/* Pinterest Stili Hava Durumu Kartı (Image 1 Referansı) */}
+        <PinterestWeatherCard
+          weatherData={weatherData}
+          cityName={selectedCity.name}
+          loading={loading}
+        />
       </div>
   );
 }

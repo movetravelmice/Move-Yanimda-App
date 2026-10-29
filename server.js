@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
+import https from 'https';
 
 const app = express();
 const PORT = 3001;
@@ -104,7 +105,7 @@ app.post('/api/forgot-password', async (req, res) => {
         let htmlContent = customHtml || defaultHtml;
         htmlContent = htmlContent
             .replace(/{{accountName}}/g, accountName || '')
-            .replace(/{{accountPassword}}/g, accountPassword || '')
+            .replace(/{{accountPassword}}/g, accountPassword || '123456')
             .replace(/{{corporateName}}/g, senderBrand);
 
         let subjectContent = customSubject || `{{corporateName}}: Parola Sıfırlama / Hatırlatma Talebi`;
@@ -562,6 +563,107 @@ app.post('/api/create-whatsapp-template', async (req, res) => {
     } catch (error) {
         console.error("Meta Template Creation Server Error:", error);
         return res.status(500).json({ success: false, message: `Sunucu Hatası: ${error.message}` });
+    }
+});
+
+function fetchPoFuelPrices() {
+    return new Promise((resolve, reject) => {
+        https.get('https://www.petrolofisi.com.tr/akaryakit-fiyatlari', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html'
+            }
+        }, (res) => {
+            let html = '';
+            res.on('data', chunk => html += chunk);
+            res.on('end', () => {
+                try {
+                    const cities = {};
+                    const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+                    let match;
+                    while ((match = trRegex.exec(html)) !== null) {
+                        const rowContent = match[1];
+                        const cityMatch = /<td[^>]*>([\s\S]*?)<\/td>/i.exec(rowContent);
+                        if (!cityMatch) continue;
+                        const cityName = cityMatch[1].replace(/<[^>]+>/g, '').trim().toUpperCase();
+                        if (!cityName || cityName.includes('ŞEHIR') || cityName.includes('SEHIR')) continue;
+
+                        const prices = [];
+                        const taxRegex = /<span class="with-tax">([^<]+)<\/span>/gi;
+                        let taxMatch;
+                        while ((taxMatch = taxRegex.exec(rowContent)) !== null) {
+                            const val = parseFloat(taxMatch[1].replace(',', '.'));
+                            if (!isNaN(val)) prices.push(val);
+                        }
+                        if (prices.length >= 6) {
+                            cities[cityName] = {
+                                gasoline: prices[0],
+                                diesel: prices[1],
+                                lpg: prices[5]
+                            };
+                        }
+                    }
+
+                    const istAvrupa = cities['ISTANBUL (AVRUPA)'] || cities['İSTANBUL (AVRUPA)'];
+                    const istAnadolu = cities['ISTANBUL (ANADOLU)'] || cities['İSTANBUL (ANADOLU)'];
+                    
+                    let gasoline = 76.25;
+                    let diesel = 96.80;
+                    let lpg = 40.90;
+
+                    if (istAvrupa && istAnadolu) {
+                        gasoline = Number(((istAvrupa.gasoline + istAnadolu.gasoline) / 2).toFixed(2));
+                        diesel = Number(((istAvrupa.diesel + istAnadolu.diesel) / 2).toFixed(2));
+                        lpg = Number(((istAvrupa.lpg + istAnadolu.lpg) / 2).toFixed(2));
+                    } else if (istAvrupa) {
+                        gasoline = istAvrupa.gasoline;
+                        diesel = istAvrupa.diesel;
+                        lpg = istAvrupa.lpg;
+                    }
+
+                    resolve({
+                        success: true,
+                        source: 'Petrol Ofisi / Opet Resmi Pompa Fiyatları',
+                        lastUpdated: new Date().toISOString(),
+                        prices: { gasoline, diesel, lpg },
+                        totalCities: Object.keys(cities).length,
+                        cities
+                    });
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }).on('error', reject);
+    });
+}
+
+let fuelPricesCache = null;
+let lastFuelFetchTime = 0;
+
+app.get('/api/fuel-prices', async (req, res) => {
+    const forceRefresh = req.query.refresh === 'true';
+    const now = Date.now();
+    // 6 saat önbellek
+    if (!forceRefresh && fuelPricesCache && (now - lastFuelFetchTime < 6 * 60 * 60 * 1000)) {
+        return res.json(fuelPricesCache);
+    }
+
+    try {
+        const data = await fetchPoFuelPrices();
+        fuelPricesCache = data;
+        lastFuelFetchTime = now;
+        res.json(data);
+    } catch (error) {
+        console.error("Akaryakıt API hatası:", error);
+        if (fuelPricesCache) {
+            return res.json(fuelPricesCache);
+        }
+        res.json({
+            success: true,
+            source: 'Varsayılan Güncel Fiyatlar',
+            lastUpdated: new Date().toISOString(),
+            prices: { gasoline: 76.25, diesel: 96.80, lpg: 40.90 }
+        });
     }
 });
 

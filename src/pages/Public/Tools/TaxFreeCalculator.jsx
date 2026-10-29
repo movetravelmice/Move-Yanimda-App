@@ -555,6 +555,16 @@ export default function TaxFreeCalculator({ isEmbedded = false }) {
         }}>
           <Receipt size={16} />
         </div>
+
+        {/* Dikey ayırıcı çizgi */}
+        <div style={{
+          width: '1.2px',
+          height: '24px',
+          background: '#F9BED8',
+          borderRadius: '1px',
+          flexShrink: 0
+        }} />
+
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '12.5px', fontWeight: '700', color: '#0f172a' }}>
             Tax-Free Hesaplayıcı

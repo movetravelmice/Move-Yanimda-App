@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import Header from '../../components/Header';
 import { ChevronLeft, Map, Clock, Camera, Coffee, Bed, Bus, PlaneLanding, Activity, Paperclip, Download } from 'lucide-react';
 import { useTourStore, isTourActive } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
@@ -31,24 +32,10 @@ export default function TourProgram() {
   );
 
   return (
-    <div style={{ paddingBottom: '80px', minHeight: '100vh', background: 'var(--bg-color)' }}>
-      {/* App-like Top Header fixed for easy scrolling */}
-      <div className="top-header" style={{ padding: 'calc(19px + env(safe-area-inset-top, 0px)) 18px 19px 18px', display: 'flex', alignItems: 'center', gap: '12px', borderBottomLeftRadius: '0px', borderBottomRightRadius: '0px', borderRadius: '0px', boxShadow: 'var(--shadow-md)', background: 'var(--primary)', color: 'white', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div 
-          style={{ width: '36px', height: '36px', backgroundColor: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', cursor: 'pointer', transition: 'background 0.2s', flexShrink: 0 }} 
-          onClick={() => navigate(-1)}
-          onMouseEnter={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.3)'}
-          onMouseLeave={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.2)'}
-        >
-          <ChevronLeft size={20} color="#fff" />
-        </div>
-        <div style={{ flex: 1 }}>
-           <h2 style={{ fontSize: '15px', fontWeight: 'bold', margin: 0 }}>Tur Programı</h2>
-           <p style={{ fontSize: '11px', opacity: 0.9, marginTop: '1px' }}>{activeTour?.name || 'Program Detayı'}</p>
-        </div>
-      </div>
+    <div style={{ paddingBottom: '96px', minHeight: '100dvh', background: 'var(--bg-color)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+      <Header title="Tur Programı" subtitle={activeTour?.name || "Program Detayı"} showBack marginBottom={0} />
 
-      <div style={{ padding: '0 16px', marginTop: '20px' }}>
+      <div style={{ padding: '16px 16px 0 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
           {hasProgram ? (
               typeof activeTour.program === 'string' ? (
                   <div className="card rich-text-content customer-program-content" style={{ padding: '20px 16px', borderRadius: '16px', boxShadow: '0 4px 14px rgba(0,0,0,0.04)', background: 'white', border: '1px solid #e2e8f0' }} dangerouslySetInnerHTML={{ __html: activeTour.program }} />
@@ -87,11 +74,56 @@ export default function TourProgram() {
                   </div>
               ) : null
           ) : (
-             <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                 <Map size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-                 <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-main)' }}>Program Henüz Hazır Değil</h3>
-                 <p style={{ fontSize: '13px', lineHeight: '1.5' }}>Seyahat uzmanınız bu tur için program detaylarını yakında yayınlayacaktır.</p>
-             </div>
+            <div style={{
+              width: '100%',
+              flex: 1,
+              minHeight: '360px',
+              background: '#ffffff',
+              borderRadius: '24px',
+              border: '2px dashed #cbd5e1',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.02)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              padding: '36px 24px',
+              boxSizing: 'border-box',
+              marginBottom: '16px'
+            }}>
+              <div style={{
+                width: '68px',
+                height: '68px',
+                borderRadius: '50%',
+                background: '#FDF2F8',
+                border: '1.5px solid #FCE7F3',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '18px',
+                boxShadow: '0 6px 16px rgba(215, 20, 122, 0.08)'
+              }}>
+                <Map size={32} color="#D7147A" strokeWidth={2.1} />
+              </div>
+              <h3 style={{
+                fontSize: '17px',
+                fontWeight: '750',
+                marginBottom: '8px',
+                color: '#0f172a',
+                letterSpacing: '-0.3px'
+              }}>
+                Program Henüz Hazır Değil
+              </h3>
+              <p style={{
+                fontSize: '13.5px',
+                color: '#64748b',
+                lineHeight: '1.6',
+                margin: 0,
+                maxWidth: '300px'
+              }}>
+                Seyahat uzmanınız bu tur için program detaylarını yakında yayınlayacaktır.
+              </p>
+            </div>
           )}
 
           {activeTour?.programFiles && activeTour.programFiles.length > 0 && (

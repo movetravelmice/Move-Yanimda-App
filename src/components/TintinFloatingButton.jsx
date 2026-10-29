@@ -43,9 +43,9 @@ export default function TintinFloatingButton() {
   return (
     <div
       style={{
-        position: 'fixed',
+        position: 'absolute',
         bottom: 'calc(86px + env(safe-area-inset-bottom, 0px))',
-        right: 'max(16px, calc(50% - 224px))',
+        right: '16px',
         zIndex: 990,
         display: 'flex',
         flexDirection: 'column',

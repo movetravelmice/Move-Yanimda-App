@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { doc, setDoc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
 export const DEFAULT_POPULAR_ROUTES = [
   {
@@ -248,8 +249,7 @@ export const useSettingsStore = create((set, get) => ({
       }
 
       try {
-          const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-          const baseUrl = isDev ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+          const baseUrl = getApiBaseUrl();
           const res = await fetch(`${baseUrl}/api/send-whatsapp`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },

@@ -16,11 +16,12 @@ import {
   Pencil,
   PlaneTakeoff,
   Sparkles,
-  Receipt,
+  ReceiptText,
   ArrowLeft,
   Check,
   ChevronDown,
   Camera,
+  Upload,
   FileUp,
   User,
   FileCheck,
@@ -31,6 +32,7 @@ import { useIndividualStore } from '../../store/individualStore';
 import GuestNoticeBanner from '../../components/GuestNoticeBanner';
 import ConfirmModal from '../../components/ConfirmModal';
 import CountryFlag from '../../components/CountryFlag';
+import CustomDatePicker from '../../components/CustomDatePicker';
 import { formatTravelDates } from '../../services/destinationImageService';
 
 export const getCurrencySymbol = (currency) => {
@@ -1405,12 +1407,11 @@ export default function Budget() {
   return (
     <div style={{ padding: '16px 14px', maxWidth: '640px', margin: '0 auto', paddingBottom: '90px' }}>
 
-      {/* Guest Notice Banners */}
+      {/* Guest Notice Banner */}
       <GuestNoticeBanner 
         customTitle="İşlemlerin Kaydedilmesi İçin Giriş Gerekli" 
         customMessage="Seyahat bütçenizi planlamak ve masraflarınızı kaydetmek için lütfen giriş yapın." 
       />
-      <GuestNoticeBanner feature="shared_budget" />
 
       {/* 1. GÖRÜNÜM: Bütçe Limitini Belirle Sayfası */}
       {viewMode === 'set-limit' && activeBudget ? (
@@ -1786,19 +1787,11 @@ export default function Budget() {
                   <label style={{ fontSize: '11px', fontWeight: '700', color: '#334155', display: 'block', marginBottom: '4px' }}>
                     Tarih
                   </label>
-                  <input
-                    type="date"
+                  <CustomDatePicker
                     value={expenseForm.date}
-                    onChange={e => setExpenseForm({ ...expenseForm, date: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '8.5px 10px',
-                      borderRadius: '10px',
-                      border: '1.5px solid #e2e8f0',
-                      fontSize: '12px',
-                      outline: 'none',
-                      boxSizing: 'border-box'
-                    }}
+                    onChange={(dateStr) => setExpenseForm({ ...expenseForm, date: dateStr })}
+                    placeholder="Tarih seçin"
+                    align="left"
                   />
                 </div>
                 <div>
@@ -1813,16 +1806,26 @@ export default function Budget() {
                 </div>
               </div>
 
-              {/* Fiş / Fatura Görseli Ekleme Alanı */}
-              <div>
-                <label style={{ fontSize: '11px', fontWeight: '700', color: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <span>Fiş / Fatura Görseli</span>
-                  {expenseForm.receiptImage ? (
-                    <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: '800' }}>✓ Fiş Eklendi</span>
-                  ) : (
-                    <span style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '500' }}>Opsiyonel</span>
-                  )}
-                </label>
+              {/* Fiş / Fatura Görseli Ekleme Alanı (2. Görseldeki Tasarım) */}
+              <div style={{
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '16px',
+                padding: '12px 14px',
+                marginBottom: '10px'
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  marginBottom: '10px',
+                  color: '#0284c7',
+                  fontSize: '12px',
+                  fontWeight: '700'
+                }}>
+                  <Camera size={15} color="#0284c7" strokeWidth={2.4} />
+                  <span style={{ color: '#0f172a' }}>Fotoğraf Ekle</span>
+                </div>
 
                 {/* Gizli Dosya Girişleri (Kamera ve Dosya) */}
                 <input
@@ -1872,7 +1875,7 @@ export default function Budget() {
                       />
                       <div style={{ minWidth: 0 }}>
                         <div style={{ fontSize: '11.5px', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          Fiş Görseli Eklendi
+                          Fotoğraf Eklendi
                         </div>
                         <div style={{ fontSize: '10px', color: '#D7147A', fontWeight: '700' }}>
                           Büyütmek için tıklayın
@@ -1897,82 +1900,54 @@ export default function Budget() {
                         gap: '3px',
                         flexShrink: 0
                       }}
-                      title="Fişi Kaldır"
+                      title="Fotoğrafı Kaldır"
                     >
                       <X size={12} strokeWidth={2.4} /> <span>Kaldır</span>
                     </button>
                   </div>
                 ) : (
-                  /* Henüz Fiş Eklenmediğinde Kamera ve Dosya Seçim Butonları */
-                  <div style={{
-                    border: '1.5px dashed #F9BED8',
-                    borderRadius: '12px',
-                    padding: '11px 12px',
-                    background: '#fffbf7',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: 'center' }}>
-                      <button
-                        type="button"
-                        onClick={() => receiptCameraInputRef.current?.click()}
-                        disabled={isProcessingReceipt}
-                        style={{
-                          flex: 1,
-                          maxWidth: '145px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          padding: '7.5px 10px',
-                          borderRadius: '10px',
-                          border: '1.2px solid #F9BED8',
-                          background: '#ffffff',
-                          color: '#D7147A',
-                          fontSize: '11.5px',
-                          fontWeight: '800',
-                          cursor: 'pointer',
-                          boxShadow: '0 1px 4px rgba(215, 20, 122, 0.08)',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <Camera size={14} strokeWidth={2.4} />
-                        <span>Kamera ile Çek</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => receiptFileInputRef.current?.click()}
-                        disabled={isProcessingReceipt}
-                        style={{
-                          flex: 1,
-                          maxWidth: '145px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                          padding: '7.5px 10px',
-                          borderRadius: '10px',
-                          border: '1.2px solid #e2e8f0',
-                          background: '#ffffff',
-                          color: '#475569',
-                          fontSize: '11.5px',
-                          fontWeight: '700',
-                          cursor: 'pointer',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <FileUp size={14} strokeWidth={2.2} />
-                        <span>Dosya / Galeri</span>
-                      </button>
+                  /* 2. Görseldeki Gibi Kamera veya Galeriden Seç Kutusu */
+                  <div
+                    onClick={() => receiptFileInputRef.current?.click()}
+                    style={{
+                      border: '1.2px dashed #cbd5e1',
+                      borderRadius: '12px',
+                      padding: '11px 13px',
+                      background: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      cursor: isProcessingReceipt ? 'not-allowed' : 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.borderColor = '#0284c7'}
+                    onMouseLeave={(e) => e.currentTarget.style.borderColor = '#cbd5e1'}
+                  >
+                    <div style={{
+                      width: '42px',
+                      height: '42px',
+                      borderRadius: '12px',
+                      background: '#f0f9ff',
+                      border: '1px solid #e0f2fe',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      {isProcessingReceipt ? (
+                        <Loader2 size={18} color="#0284c7" className="animate-spin" />
+                      ) : (
+                        <Upload size={20} color="#0284c7" strokeWidth={2.2} />
+                      )}
                     </div>
 
-                    <div style={{ fontSize: '10px', color: '#94a3b8', textAlign: 'center' }}>
-                      {isProcessingReceipt ? 'Görsel işleniyor...' : 'Kamera ile çekin veya galeriden dosya yükleyin'}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '12px', fontWeight: '750', color: '#0f172a', lineHeight: 1.3 }}>
+                        Kamera veya Galeriden Fotoğraf Seç
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px', lineHeight: 1.3 }}>
+                        {isProcessingReceipt ? 'Görsel işleniyor...' : 'Hızlı tespit ve çözüm için fotoğraf ekleyin'}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2064,23 +2039,10 @@ export default function Budget() {
           background: 'white',
           borderRadius: '18px',
           border: '1.5px dashed #F9BED8',
-          padding: '38px 20px',
+          padding: '24px 18px',
           textAlign: 'center'
         }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '14px',
-            background: '#FDF2F8',
-            color: '#D7147A',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 12px'
-          }}>
-            <Wallet size={24} />
-          </div>
-          <h2 style={{ fontSize: '15px', fontWeight: '800', color: '#0f172a', margin: '0 0 6px' }}>
+          <h2 style={{ fontSize: '13.5px', fontWeight: '750', color: '#0f172a', margin: '0 0 6px' }}>
             Henüz Kayıtlı Seyahat Bütçeniz Yok
           </h2>
           <p style={{ fontSize: '11.5px', color: '#64748b', margin: '0 0 18px', maxWidth: '340px', marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.45 }}>
@@ -2671,7 +2633,7 @@ export default function Budget() {
                   justifyContent: 'center',
                   flexShrink: 0
                 }}>
-                  <Receipt size={17} strokeWidth={2.4} />
+                  <Wallet size={17} strokeWidth={2.4} />
                 </div>
                 <div>
                   <h3 style={{ fontSize: '13.5px', fontWeight: '800', color: '#0f172a', margin: 0, letterSpacing: '-0.2px' }}>
@@ -2706,19 +2668,6 @@ export default function Budget() {
                 background: '#fffbf7',
                 border: '1.2px dashed #F9BED8'
               }}>
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '12px',
-                  background: '#FDF2F8',
-                  color: '#D7147A',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  margin: '0 auto 8px'
-                }}>
-                  <Receipt size={20} />
-                </div>
                 <div style={{ fontSize: '12.5px', fontWeight: '800', color: '#0f172a', marginBottom: '3px' }}>
                   Henüz Harcama Kaydı Yok
                 </div>
@@ -2906,7 +2855,7 @@ export default function Budget() {
               background: '#f8fafc'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Receipt size={16} style={{ color: '#D7147A' }} />
+                <ReceiptText size={16} style={{ color: '#D7147A' }} />
                 <span style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a' }}>
                   Fiş / Fatura Görseli
                 </span>

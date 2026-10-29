@@ -7,7 +7,6 @@ import {
   MessageSquare,
   Compass,
   PlusCircle,
-  Banknote,
   Bell,
   UserCheck,
   CheckCircle2,
@@ -19,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
+import ModeSwitchBanner from '../../components/ModeSwitchBanner';
 import { useTourStore, isTourActive, isTourPast } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 import { useAuthStore, getUserSecondaryRole } from '../../store/authStore';
@@ -132,15 +132,6 @@ export default function AdminDashboard() {
       path: '/dashboard/admin-whatsapp-templates'
     },
     {
-      id: 'currency',
-      title: 'Döviz & Kurlar',
-      icon: Banknote,
-      color: '#D7147A',
-      bg: '#FDF2F8',
-      border: '#FCE7F3',
-      path: '/dashboard/currency'
-    },
-    {
       id: 'notifications',
       title: 'Bildirim Merkezi',
       icon: Bell,
@@ -153,9 +144,10 @@ export default function AdminDashboard() {
 
   return (
     <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
-      <Header title="Sistem Komuta Merkezi" />
+      <Header title="Sistem Komuta Merkezi" marginBottom={0} />
 
-      <div style={{ padding: '16px' }}>
+      <div style={{ padding: '16px', paddingTop: '14px' }}>
+        <ModeSwitchBanner currentMode="admin" />
 
 
         {/* 1. ÜST YÖNETİCİ METRİK KARTLARI (Tek Kart İçinde) */}
@@ -491,6 +483,9 @@ export default function AdminDashboard() {
             })}
           </div>
         </div>
+
+        {/* Bottom Nav & Tintin Clearance Spacer */}
+        <div style={{ height: '140px', minHeight: '140px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
 
       </div>
     </div>

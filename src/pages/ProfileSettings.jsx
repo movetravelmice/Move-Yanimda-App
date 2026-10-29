@@ -470,7 +470,7 @@ export default function ProfileSettings({ hideHeader = false }) {
   const roleBadge = getRoleBadge();
 
   return (
-    <div style={{ paddingBottom: '110px', minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
+    <div style={{ paddingBottom: 'calc(20px + env(safe-area-inset-bottom, 0px))', minHeight: '100vh', background: 'var(--bg-color)', position: 'relative' }}>
       
       {/* Toast Notification Pop-up */}
       {toastPopup && (
@@ -1789,6 +1789,9 @@ export default function ProfileSettings({ hideHeader = false }) {
               )}
               </>
           )}
+
+          {/* Bottom clearance spacer to guarantee Kaydet and Çıkış buttons scroll completely clear of bottom-nav & Tintin */}
+          <div style={{ height: '70px', minHeight: '70px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
       </div>
       {/* In-App Logout Confirmation Modal */}
       <ConfirmModal

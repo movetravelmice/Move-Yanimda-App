@@ -20,13 +20,11 @@ import {
   Receipt,
   ShieldAlert,
   Siren,
-  LayoutGrid,
+  Send,
   X,
   ArrowRight,
   Sparkles,
-  Search,
-  List,
-  Filter
+  Search
 } from 'lucide-react';
 import { calculateDistance, calculateFuelCost } from '../../services/travelToolsService';
 import PublicTranslator from './PublicTranslator';
@@ -53,8 +51,7 @@ export default function PublicTools({ isEmbedded = false }) {
   }, [searchParams]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
 
   const handleTabChange = (tabKey) => {
     if (!tabKey) {
@@ -211,7 +208,7 @@ export default function PublicTools({ isEmbedded = false }) {
       key: 'timezone', 
       label: 'Saat Farkı', 
       title: 'Saat Farkı Hesaplayıcı', 
-      tag: 'Dünya Saati',
+      tag: '',
       desc: 'Dünya şehirleri arasındaki canlı saat farkı ve yerel saatler',
       category: 'travel',
       categoryLabel: 'Ulaşım',
@@ -269,24 +266,15 @@ export default function PublicTools({ isEmbedded = false }) {
     }
   ];
 
-  const categories = [
-    { key: 'all', label: 'Tümü' },
-    { key: 'finance', label: 'Finans & Alışveriş' },
-    { key: 'guide', label: 'Rehber & Dil' },
-    { key: 'travel', label: 'Ulaşım & Yol' },
-    { key: 'safety', label: 'Güvenlik & Acil' }
-  ];
-
   const filteredTools = toolTabs.filter(tool => {
-    const matchesCategory = selectedCategory === 'all' || tool.category === selectedCategory;
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return matchesCategory;
-    const matchesSearch = 
+    if (!q) return true;
+    return (
       tool.title.toLowerCase().includes(q) ||
       tool.desc.toLowerCase().includes(q) ||
       tool.tag.toLowerCase().includes(q) ||
-      (tool.keywords && tool.keywords.toLowerCase().includes(q));
-    return matchesCategory && matchesSearch;
+      (tool.keywords && tool.keywords.toLowerCase().includes(q))
+    );
   });
 
   const getHeaderInfo = () => {
@@ -371,11 +359,11 @@ export default function PublicTools({ isEmbedded = false }) {
               navigate(-1);
             }
           }}
-          marginBottom="16px"
+          marginBottom="18px"
         />
       )}
 
-      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '0 16px 24px 16px' }}>
+      <div style={{ maxWidth: '640px', margin: '0 auto', padding: '16px 14px 24px 14px' }}>
 
         {/* CSS for Hub Cards & Animations */}
         <style>{`
@@ -419,204 +407,88 @@ export default function PublicTools({ isEmbedded = false }) {
         ========================================== */}
         {!activeTab && (
           <div>
-            {/* Welcome Hero Assistant Banner */}
-            <div style={{
-              background: 'linear-gradient(135deg, #ffffff 0%, #fffbf5 100%)',
-              borderRadius: '18px',
-              border: '1px solid #F9BED8',
-              padding: '16px 16px',
-              marginBottom: '14px',
-              boxShadow: '0 4px 20px -2px rgba(215, 20, 122, 0.06)',
-              position: 'relative',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                position: 'absolute',
-                top: '-30px',
-                right: '-30px',
-                width: '120px',
-                height: '120px',
-                borderRadius: '50%',
-                background: 'radial-gradient(circle, rgba(215, 20, 122, 0.12) 0%, rgba(215, 20, 122, 0) 70%)',
-                pointerEvents: 'none'
-              }} />
-
-              <h2 style={{
-                fontSize: '15px',
-                fontWeight: '800',
-                color: '#0f172a',
-                margin: '0 0 5px 0',
-                letterSpacing: '-0.2px'
-              }}>
-                Akıllı Seyahat Asistanı
-              </h2>
-
-              <p style={{
-                fontSize: '11.5px',
-                color: '#64748b',
-                margin: 0,
-                lineHeight: 1.45
-              }}>
-                Dövizden anlık çeviriye, priz uyumundan valiz rehberi ve acil durumlara kadar tüm seyahat yardımcılarınız tek dokunuşla elinizin altında.
-              </p>
-            </div>
-
-            {/* KART 1: Arama ve Görünüm Kontrolleri Kartı */}
-            <div style={{
-              background: '#ffffff',
-              borderRadius: '16px',
-              border: '1px solid #e2e8f0',
-              padding: '9px 10px',
-              marginBottom: '10px',
-              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              <div style={{
-                flex: 1,
+            {/* Arama Barı (Görsel 1 Tasarımı) */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.currentTarget.querySelector('input')?.blur();
+              }}
+              style={{
                 display: 'flex',
                 alignItems: 'center',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                padding: '0 10px',
-                height: '36px'
-              }}>
-                <Search size={15} color="#94a3b8" style={{ marginRight: '8px', flexShrink: 0 }} />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Araç ara... (döviz, priz, çevirmen, acil...)"
+                background: '#ffffff',
+                borderRadius: '16px',
+                border: isSearchFocused ? '1.5px solid #D7147A' : '1.5px solid #F9BED8',
+                padding: '5px 6px 5px 12px',
+                boxShadow: isSearchFocused ? '0 0 0 3px rgba(215, 20, 122, 0.08)' : '0 4px 12px rgba(215, 20, 122, 0.08)',
+                transition: 'all 0.2s ease',
+                marginBottom: '12px'
+              }}
+            >
+              <Search size={15} color="#D7147A" style={{ flexShrink: 0, marginRight: '8px' }} />
+
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                placeholder="Araç ara... (döviz, priz, çevirmen, acil...)"
+                style={{
+                  border: 'none',
+                  outline: 'none',
+                  background: 'transparent',
+                  flex: 1,
+                  minWidth: 0,
+                  paddingRight: '10px',
+                  fontSize: '11.5px',
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  textOverflow: 'ellipsis'
+                }}
+              />
+
+              {searchQuery ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
                   style={{
-                    border: 'none',
-                    outline: 'none',
                     background: 'transparent',
-                    fontSize: '11.5px',
-                    color: '#0f172a',
-                    width: '100%',
-                    fontWeight: '500'
-                  }}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    style={{
-                      border: 'none',
-                      background: '#e2e8f0',
-                      color: '#64748b',
-                      borderRadius: '50%',
-                      width: '18px',
-                      height: '18px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      padding: 0
-                    }}
-                  >
-                    <X size={11} />
-                  </button>
-                )}
-              </div>
-
-              {/* View Mode Toggle: Grid vs List */}
-              <div style={{
-                display: 'flex',
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderRadius: '10px',
-                padding: '2px',
-                height: '36px',
-                boxSizing: 'border-box'
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('grid')}
-                  title="Izgara Görünümü"
-                  style={{
                     border: 'none',
-                    borderRadius: '7px',
-                    background: viewMode === 'grid' ? '#D7147A' : 'transparent',
-                    color: viewMode === 'grid' ? '#ffffff' : '#64748b',
-                    width: '30px',
+                    cursor: 'pointer',
+                    color: '#94a3b8',
+                    padding: '4px',
+                    marginRight: '4px',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
+                    justifyContent: 'center'
                   }}
                 >
-                  <LayoutGrid size={14} />
+                  <X size={14} />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode('list')}
-                  title="Liste Görünümü"
-                  style={{
-                    border: 'none',
-                    borderRadius: '7px',
-                    background: viewMode === 'list' ? '#D7147A' : 'transparent',
-                    color: viewMode === 'list' ? '#ffffff' : '#64748b',
-                    width: '30px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <List size={14} />
-                </button>
-              </div>
-            </div>
+              ) : null}
 
-            {/* KART 2: Kategori Filtreleme Kartı */}
-            <div style={{
-              background: '#ffffff',
-              borderRadius: '16px',
-              border: '1px solid #e2e8f0',
-              padding: '9px 10px',
-              marginBottom: '12px',
-              boxShadow: '0 2px 8px rgba(15, 23, 42, 0.03)'
-            }}>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                msOverflowStyle: 'none'
-              }}>
-                {categories.map(cat => {
-                  const isSelected = selectedCategory === cat.key;
-                  return (
-                    <button
-                      key={cat.key}
-                      type="button"
-                      onClick={() => setSelectedCategory(cat.key)}
-                      style={{
-                        border: isSelected ? '1.5px solid #D7147A' : '1px solid #e2e8f0',
-                        background: isSelected ? '#D7147A' : '#f8fafc',
-                        color: isSelected ? '#ffffff' : '#475569',
-                        padding: '5px 12px',
-                        borderRadius: '9999px',
-                        fontSize: '11px',
-                        fontWeight: isSelected ? '700' : '500',
-                        whiteSpace: 'nowrap',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                        boxShadow: isSelected ? '0 2px 8px rgba(215, 20, 122, 0.25)' : 'none'
-                      }}
-                    >
-                      {cat.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+              <button
+                type="submit"
+                title="Ara"
+                style={{
+                  background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '12px',
+                  width: '32px',
+                  height: '32px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  boxShadow: '0 2px 8px rgba(215, 20, 122, 0.3)'
+                }}
+              >
+                <Send size={13} style={{ marginLeft: '-1px' }} />
+              </button>
+            </form>
 
             {/* Empty State */}
             {filteredTools.length === 0 && (
@@ -649,7 +521,7 @@ export default function PublicTools({ isEmbedded = false }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}
+                  onClick={() => setSearchQuery('')}
                   style={{
                     border: 'none',
                     background: '#D7147A',
@@ -661,166 +533,61 @@ export default function PublicTools({ isEmbedded = false }) {
                     cursor: 'pointer'
                   }}
                 >
-                  Filtreleri Temizle
+                  Aramayı Temizle
                 </button>
               </div>
             )}
 
-            {/* Grid View Mode */}
-            {viewMode === 'grid' && (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, 1fr)',
-                gap: '10px'
-              }}>
-                {filteredTools.map(t => {
-                  const Icon = t.icon;
-                  return (
-                    <div
-                      key={t.key}
-                      onClick={() => handleTabChange(t.key)}
-                      className="tool-hub-card"
-                      style={{
-                        background: '#ffffff',
-                        borderRadius: '16px',
-                        border: '1px solid #e2e8f0',
-                        padding: '14px 12px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)',
-                        minHeight: '138px',
-                        position: 'relative'
-                      }}
-                    >
-                      <div>
-                        {/* Top row: Squircle icon + Tag */}
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                          <div style={{
-                            width: '34px',
-                            height: '34px',
-                            borderRadius: '10px',
-                            background: t.bg,
-                            color: t.color,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                          }}>
-                            <Icon size={17} strokeWidth={2.2} />
-                          </div>
-                          <span style={{
-                            fontSize: '8.5px',
-                            fontWeight: '700',
-                            color: t.badgeColor,
-                            background: t.badgeBg,
-                            padding: '2px 6px',
-                            borderRadius: '6px',
-                            letterSpacing: '-0.1px'
-                          }}>
-                            {t.tag}
-                          </span>
-                        </div>
-
-                        {/* Title & Desc with balanced top & bottom spacing */}
-                        <div style={{ padding: '2px 0 6px 0' }}>
-                          <h3 style={{
-                            fontSize: '11px',
-                            fontWeight: '700',
-                            color: '#0f172a',
-                            margin: '0 0 4px 0',
-                            letterSpacing: '-0.2px',
-                            lineHeight: 1.25
-                          }}>
-                            {t.title}
-                          </h3>
-                          <p style={{
-                            fontSize: '9.5px',
-                            color: '#64748b',
-                            margin: 0,
-                            lineHeight: 1.4,
-                            display: '-webkit-box',
-                            WebkitLineClamp: 2,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden'
-                          }}>
-                            {t.desc}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Bottom mini action */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        paddingTop: '8px',
-                        marginTop: '10px',
-                        borderTop: '1px solid #f1f5f9'
-                      }}>
-                        <span style={{ fontSize: '9.5px', fontWeight: '600', color: '#94a3b8' }}>
-                          {t.categoryLabel}
-                        </span>
-                        <div style={{
-                          width: '20px',
-                          height: '20px',
-                          borderRadius: '50%',
-                          background: 'rgba(215, 20, 122, 0.08)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#D7147A'
-                        }}>
-                          <ArrowRight size={10} strokeWidth={2.5} />
-                        </div>
-                      </div>
+            {/* Seyahat Araçları Liste Görünümü */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {filteredTools.map(t => {
+                const Icon = t.icon;
+                return (
+                  <div
+                    key={t.key}
+                    onClick={() => handleTabChange(t.key)}
+                    className="tool-hub-card"
+                    style={{
+                      background: '#ffffff',
+                      borderRadius: '14px',
+                      border: '1px solid #e2e8f0',
+                      padding: '12px 14px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '11px',
+                      boxShadow: '0 1px 4px rgba(15, 23, 42, 0.03)'
+                    }}
+                  >
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '10px',
+                      background: t.bg,
+                      color: t.color,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <Icon size={18} strokeWidth={2.2} />
                     </div>
-                  );
-                })}
-              </div>
-            )}
 
-            {/* List View Mode */}
-            {viewMode === 'list' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {filteredTools.map(t => {
-                  const Icon = t.icon;
-                  return (
-                    <div
-                      key={t.key}
-                      onClick={() => handleTabChange(t.key)}
-                      className="tool-hub-card"
-                      style={{
-                        background: '#ffffff',
-                        borderRadius: '14px',
-                        border: '1px solid #e2e8f0',
-                        padding: '12px 14px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '11px',
-                        boxShadow: '0 1px 4px rgba(15, 23, 42, 0.03)'
-                      }}
-                    >
-                      <div style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: '10px',
-                        background: t.bg,
-                        color: t.color,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0
-                      }}>
-                        <Icon size={18} strokeWidth={2.2} />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0, padding: '2px 0' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
-                          <span style={{ fontSize: '11.5px', fontWeight: '700', color: '#0f172a' }}>
-                            {t.title}
-                          </span>
+                    {/* İkon ile Yazı Arasındaki Dikey Çizgi */}
+                    <div style={{
+                      width: '1.2px',
+                      height: '24px',
+                      background: '#F9BED8',
+                      borderRadius: '1px',
+                      flexShrink: 0
+                    }} />
+
+                    <div style={{ flex: 1, minWidth: 0, padding: '2px 0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                        <span style={{ fontSize: '11.5px', fontWeight: '700', color: '#0f172a' }}>
+                          {t.title}
+                        </span>
+                        {t.tag ? (
                           <span style={{
                             fontSize: '8.5px',
                             fontWeight: '700',
@@ -831,29 +598,29 @@ export default function PublicTools({ isEmbedded = false }) {
                           }}>
                             {t.tag}
                           </span>
-                        </div>
-                        <div style={{ fontSize: '9.5px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {t.desc}
-                        </div>
+                        ) : null}
                       </div>
-                      <div style={{
-                        width: '26px',
-                        height: '26px',
-                        borderRadius: '50%',
-                        background: 'rgba(215, 20, 122, 0.08)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#D7147A',
-                        flexShrink: 0
-                      }}>
-                        <ArrowRight size={13} strokeWidth={2.5} />
+                      <div style={{ fontSize: '9.5px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {t.desc}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    <div style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '50%',
+                      background: 'rgba(215, 20, 122, 0.08)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#D7147A',
+                      flexShrink: 0
+                    }}>
+                      <ArrowRight size={13} strokeWidth={2.5} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -930,6 +697,9 @@ export default function PublicTools({ isEmbedded = false }) {
         {activeTab === 'fuel' && (
           <FuelCalculator isEmbedded={true} />
         )}
+
+        {/* Bottom clearance spacer to guarantee all cards and buttons scroll completely clear of bottom-nav & Tintin */}
+        <div style={{ height: '140px', minHeight: '140px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
 
       </div>
     </div>

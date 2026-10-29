@@ -2,8 +2,67 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { MapPin, ThermometerSun, Landmark, Utensils, Star, Compass, Loader2, Clock } from 'lucide-react';
 import Header from '../../components/Header';
+import CountryFlag from '../../components/CountryFlag';
 import { useTourStore } from '../../store/tourStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import PinterestWeatherCard from '../../components/PinterestWeatherCard';
+
+const CITY_TO_COUNTRY = {
+  'japonya': { country: 'JAPONYA', code: 'jp' },
+  'tokyo': { country: 'JAPONYA', code: 'jp' },
+  'kyoto': { country: 'JAPONYA', code: 'jp' },
+  'osaka': { country: 'JAPONYA', code: 'jp' },
+  'italya': { country: 'İTALYA', code: 'it' },
+  'italy': { country: 'İTALYA', code: 'it' },
+  'roma': { country: 'İTALYA', code: 'it' },
+  'rome': { country: 'İTALYA', code: 'it' },
+  'milano': { country: 'İTALYA', code: 'it' },
+  'milan': { country: 'İTALYA', code: 'it' },
+  'venedik': { country: 'İTALYA', code: 'it' },
+  'floransa': { country: 'İTALYA', code: 'it' },
+  'fransa': { country: 'FRANSA', code: 'fr' },
+  'france': { country: 'FRANSA', code: 'fr' },
+  'paris': { country: 'FRANSA', code: 'fr' },
+  'nice': { country: 'FRANSA', code: 'fr' },
+  'ingiltere': { country: 'İNGİLTERE', code: 'gb' },
+  'londra': { country: 'İNGİLTERE', code: 'gb' },
+  'london': { country: 'İNGİLTERE', code: 'gb' },
+  'ispanya': { country: 'İSPANYA', code: 'es' },
+  'madrid': { country: 'İSPANYA', code: 'es' },
+  'barcelona': { country: 'İSPANYA', code: 'es' },
+  'barselona': { country: 'İSPANYA', code: 'es' },
+  'almanya': { country: 'ALMANYA', code: 'de' },
+  'berlin': { country: 'ALMANYA', code: 'de' },
+  'münih': { country: 'ALMANYA', code: 'de' },
+  'hollanda': { country: 'HOLLANDA', code: 'nl' },
+  'amsterdam': { country: 'HOLLANDA', code: 'nl' },
+  'amerika': { country: 'ABD', code: 'us' },
+  'abd': { country: 'ABD', code: 'us' },
+  'usa': { country: 'ABD', code: 'us' },
+  'new york': { country: 'ABD', code: 'us' },
+  'dubai': { country: 'B.A.E.', code: 'ae' },
+  'bae': { country: 'B.A.E.', code: 'ae' },
+  'yunanistan': { country: 'YUNANİSTAN', code: 'gr' },
+  'atina': { country: 'YUNANİSTAN', code: 'gr' },
+  'avusturya': { country: 'AVUSTURYA', code: 'at' },
+  'viyana': { country: 'AVUSTURYA', code: 'at' },
+  'çekya': { country: 'ÇEKYA', code: 'cz' },
+  'prag': { country: 'ÇEKYA', code: 'cz' },
+  'macaristan': { country: 'MACARİSTAN', code: 'hu' },
+  'budapeşte': { country: 'MACARİSTAN', code: 'hu' },
+  'isviçre': { country: 'İSVİÇRE', code: 'ch' },
+  'zürih': { country: 'İSVİÇRE', code: 'ch' },
+  'portekiz': { country: 'PORTEKİZ', code: 'pt' },
+  'lizbon': { country: 'PORTEKİZ', code: 'pt' },
+  'güney kore': { country: 'GÜNEY KORE', code: 'kr' },
+  'seul': { country: 'GÜNEY KORE', code: 'kr' },
+  'mısır': { country: 'MISIR', code: 'eg' },
+  'kahire': { country: 'MISIR', code: 'eg' },
+  'tayland': { country: 'TAYLAND', code: 'th' },
+  'bangkok': { country: 'TAYLAND', code: 'th' },
+  'singapur': { country: 'SİNGAPUR', code: 'sg' },
+  'türkiye': { country: 'TÜRKİYE', code: 'tr' }
+};
 
 export default function DestinationGuide() {
     const { tourId } = useParams();
@@ -19,6 +78,8 @@ export default function DestinationGuide() {
     const [loadingPlaces, setLoadingPlaces] = useState(true);
     const [localTimezone, setLocalTimezone] = useState("Europe/Istanbul");
     const [currentTime, setCurrentTime] = useState(new Date());
+    const [targetCountryName, setTargetCountryName] = useState('');
+    const [targetCountryCode, setTargetCountryCode] = useState('');
 
     const destinationsList = React.useMemo(() => {
         if (!tour || !tour.destinations) return [];
@@ -63,41 +124,63 @@ export default function DestinationGuide() {
                 }
 
                 if (geoData.results && geoData.results.length > 0) {
-                    const { latitude, longitude, timezone } = geoData.results[0];
+                    const { latitude, longitude, timezone, country, country_code } = geoData.results[0];
                     if (timezone) setLocalTimezone(timezone);
                     else setLocalTimezone("Europe/Istanbul");
+                    if (country) setTargetCountryName(country.toLocaleUpperCase('tr-TR'));
+                    if (country_code) setTargetCountryCode(country_code.toLowerCase());
                     
-                    // 2. Forecast
-                    const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`);
+                    // 2. Forecast via Open-Meteo with current and daily
+                    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,apparent_temperature,weather_code,relative_humidity_2m,wind_speed_10m,is_day&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto`;
+                    const weatherRes = await fetch(weatherUrl);
                     const weatherData = await weatherRes.json();
                     
-                    if (weatherData.daily) {
-                        const todayTemp = Math.round(weatherData.daily.temperature_2m_max[0]);
-                        const code = weatherData.daily.weather_code[0];
-                        let condition = "Açık";
-                        if (code >= 1 && code <= 3) condition = "Parçalı Bulutlu";
-                        if (code >= 45 && code <= 48) condition = "Sisli";
-                        if (code >= 51 && code <= 67) condition = "Yağmurlu";
-                        if (code >= 71 && code <= 82) condition = "Karlı";
-                        if (code >= 95) condition = "Fırtınalı";
+                    if (weatherData && weatherData.current) {
+                        const isDayVal = weatherData.current.is_day !== undefined
+                            ? weatherData.current.is_day === 1
+                            : (new Date().getHours() >= 6 && new Date().getHours() < 20);
+
+                        let localTime = '';
+                        if (weatherData.current.time && weatherData.current.time.includes('T')) {
+                            localTime = weatherData.current.time.split('T')[1].slice(0, 5);
+                        }
+
+                        const daysMap = ['PAZ', 'PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CTS'];
+                        const dailyForecast = [];
+                        if (weatherData.daily && Array.isArray(weatherData.daily.time)) {
+                            for (let i = 1; i <= 4; i++) {
+                                if (weatherData.daily.time[i]) {
+                                    const d = new Date(weatherData.daily.time[i] + 'T12:00:00');
+                                    dailyForecast.push({
+                                        day: daysMap[d.getDay()],
+                                        code: weatherData.daily.weather_code?.[i] ?? 1,
+                                        max: Math.round(weatherData.daily.temperature_2m_max?.[i] ?? 20),
+                                        min: Math.round(weatherData.daily.temperature_2m_min?.[i] ?? 12)
+                                    });
+                                }
+                            }
+                        }
 
                         setWeather({
-                            temp: `${todayTemp}°C`,
-                            condition,
-                            forecast: weatherData.daily.temperature_2m_max.map((t, i) => ({
-                                date: new Date(weatherData.daily.time[i]).toLocaleDateString('tr-TR', {weekday: 'short'}),
-                                max: Math.round(t),
-                                min: Math.round(weatherData.daily.temperature_2m_min[i])
-                            })).slice(0, 5)
+                            temp: Math.round(weatherData.current.temperature_2m),
+                            feelsLike: Math.round(weatherData.current.apparent_temperature),
+                            code: weatherData.current.weather_code,
+                            humidity: weatherData.current.relative_humidity_2m,
+                            wind: Math.round(weatherData.current.wind_speed_10m),
+                            isDay: isDayVal,
+                            tempMax: Math.round(weatherData.daily?.temperature_2m_max?.[0] ?? weatherData.current.temperature_2m + 2),
+                            tempMin: Math.round(weatherData.daily?.temperature_2m_min?.[0] ?? weatherData.current.temperature_2m - 4),
+                            localTime: localTime,
+                            dailyForecast: dailyForecast.length === 4 ? dailyForecast : null
                         });
                     }
                 } else {
                     setLocalTimezone("Europe/Istanbul");
-                    setWeather({ temp: "-", condition: "Bulunamadı", forecast: [] });
+                    setWeather(null);
                 }
             } catch (err) {
                 console.error("Hava durumu API Hatası:", err);
-                setWeather({ temp: "-", condition: "Veri Alınamadı", forecast: [] });
+                setWeather(null);
             } finally {
                 setLoadingWeather(false);
             }
@@ -195,13 +278,35 @@ export default function DestinationGuide() {
         }
     }, [localTimezone, currentTime]);
 
+    const fallbackLookup = CITY_TO_COUNTRY[searchCityQuery.toLocaleLowerCase('tr-TR')] 
+        || (tour?.destinations ? CITY_TO_COUNTRY[tour.destinations.toLocaleLowerCase('tr-TR')] : null);
+
+    const displayCountryName = (
+        targetCountryName 
+        || fallbackLookup?.country 
+        || activeCityName
+    ).replace(/\s*yerel\b/gi, '').trim().toLocaleUpperCase('tr-TR');
+
+    const displayCountryCode = targetCountryCode 
+        || fallbackLookup?.code 
+        || activeCityName;
+
     if (!tour) {
         return <div style={{padding: '24px', textAlign: 'center'}}>Tur bulunamadı.</div>;
     }
 
     return (
         <div style={{ paddingBottom: '90px', background: 'var(--bg-color)', minHeight: '100vh' }}>
-            <Header title="Şehir Rehberi" showBack />
+            <Header 
+                preTitle={
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                        <CountryFlag country={displayCountryCode} size="sm" />
+                        <span>{displayCountryName}</span>
+                    </span>
+                }
+                title="Şehir Rehberi" 
+                showBack 
+            />
             
             {destinationsList.length > 1 && (
                 <div style={{ padding: '0 16px 10px', boxSizing: 'border-box' }}>
@@ -218,7 +323,7 @@ export default function DestinationGuide() {
                             return (
                                 <button
                                     key={idx}
-                                    onClick={() => { setActiveDestIndex(idx); setWeather(null); setPlaces([]); setRestaurants([]); }}
+                                    onClick={() => { setActiveDestIndex(idx); setWeather(null); setPlaces([]); setRestaurants([]); setTargetCountryName(''); setTargetCountryCode(''); }}
                                     style={{
                                         flex: 1,
                                         border: 'none',
@@ -276,14 +381,9 @@ export default function DestinationGuide() {
                         flexDirection: 'column',
                         gap: '3px'
                     }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, letterSpacing: '-0.3px', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
-                                {activeCityName}
-                            </h2>
-                            <span style={{ fontSize: '10px', fontWeight: '700', background: 'rgba(255,255,255,0.25)', backdropFilter: 'blur(4px)', padding: '3px 8px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.3)' }}>
-                                Şehir Rehberi
-                            </span>
-                        </div>
+                        <h2 style={{ fontSize: '18px', fontWeight: '800', margin: 0, letterSpacing: '-0.3px', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
+                            {activeCityName}
+                        </h2>
                         <p style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11.5px', margin: 0, opacity: 0.9 }}>
                             <MapPin size={12} color="var(--primary)" /> {tour.destinations || activeCityName}
                         </p>
@@ -320,16 +420,18 @@ export default function DestinationGuide() {
                     
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                         <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                            <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                                🇹🇷 Türkiye
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                                <CountryFlag country="tr" size="sm" />
+                                <span>TÜRKİYE</span>
                             </div>
                             <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--text-main)', letterSpacing: '-0.5px' }}>
                                 {currentTime.toLocaleTimeString('tr-TR', { timeZone: 'Europe/Istanbul', hour: '2-digit', minute: '2-digit' })}
                             </div>
                         </div>
                         <div style={{ background: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)', padding: '12px', borderRadius: '12px', border: '1px solid #F9BED8', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                            <div style={{ fontSize: '10.5px', color: 'var(--primary)', fontWeight: '700', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                                📍 Yerel Saat
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontSize: '10.5px', color: 'var(--primary)', fontWeight: '700', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                                <CountryFlag country={displayCountryCode} size="sm" />
+                                <span>{displayCountryName}</span>
                             </div>
                             <div style={{ fontSize: '18px', fontWeight: '800', color: 'var(--primary)', letterSpacing: '-0.5px' }}>
                                 {currentTime.toLocaleTimeString('tr-TR', { timeZone: localTimezone, hour: '2-digit', minute: '2-digit' })}
@@ -357,44 +459,18 @@ export default function DestinationGuide() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13.5px', fontWeight: '700', color: 'var(--text-main)' }}>
                             <ThermometerSun size={16} className="text-primary" /> Hava Durumu Göstergesi
                         </div>
-                        {weather && (
+                        {activeCityName && (
                             <span style={{ fontSize: '10.5px', fontWeight: '700', background: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '6px', border: '1px solid #a7f3d0' }}>
                                 {activeCityName}
                             </span>
                         )}
                     </div>
                     
-                    {loadingWeather ? (
-                       <div style={{ padding: '20px', display: 'flex', justifyContent: 'center' }}>
-                           <Loader2 size={20} color="var(--primary)" style={{ animation: 'spin 1s linear infinite' }} />
-                       </div>
-                    ) : weather ? (
-                       <div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#f8fafc', padding: '10px 12px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '10px' }}>
-                              <div style={{ background: '#fffbeb', border: '1px solid #fef3c7', padding: '8px', borderRadius: '10px', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                  <ThermometerSun size={20} />
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Şu Anki Durum</div>
-                                  <div style={{ fontSize: '13.5px', fontWeight: '800', color: 'var(--text-main)', marginTop: '1px' }}>
-                                      {weather.temp} <span style={{ fontWeight: '600', color: '#64748b', fontSize: '12px' }}>• {weather.condition}</span>
-                                  </div>
-                              </div>
-                          </div>
-                          
-                          {weather.forecast && weather.forecast.length > 0 && (
-                              <div style={{ display: 'flex', justifyContent: 'space-between', background: '#f8fafc', padding: '10px 12px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-                                  {weather.forecast.map((day, idx) => (
-                                     <div key={idx} style={{ textAlign: 'center', flex: 1 }}>
-                                        <div style={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: '700' }}>{day.date}</div>
-                                        <div style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-main)', marginTop: '3px' }}>{day.max}°</div>
-                                        <div style={{ fontSize: '9.5px', color: '#94a3b8', marginTop: '1px' }}>{day.min}°</div>
-                                     </div>
-                                  ))}
-                              </div>
-                          )}
-                       </div>
-                    ) : null}
+                    <PinterestWeatherCard 
+                        weatherData={weather} 
+                        cityName={activeCityName} 
+                        loading={loadingWeather} 
+                    />
                 </div>
 
                 {/* 3. GORULECEK YERLER KARTI */}

@@ -170,9 +170,9 @@ export const DEFAULT_DEMO_BUDGETS = [
 ];
 
 export const useIndividualStore = create((set, get) => ({
-  travels: DEFAULT_DEMO_TRAVELS,
-  checklists: DEFAULT_DEMO_CHECKLISTS,
-  budgets: DEFAULT_DEMO_BUDGETS,
+  travels: [],
+  checklists: [],
+  budgets: [],
   expenses: [],
   invitations: [],
   isLoading: false,
@@ -198,7 +198,7 @@ export const useIndividualStore = create((set, get) => ({
         });
         // Sort by start date ascending
         list.sort((a, b) => (a.startDate || '').localeCompare(b.startDate || ''));
-        set({ travels: list.length > 0 ? list : DEFAULT_DEMO_TRAVELS });
+        set({ travels: list });
       }, (err) => console.error("Travels stream error:", err));
       unsubs.push(unsubTravels);
     } catch (e) {
@@ -213,7 +213,7 @@ export const useIndividualStore = create((set, get) => ({
         snapshot.forEach(docSnap => {
           list.push({ id: docSnap.id, ...docSnap.data() });
         });
-        set({ checklists: list.length > 0 ? list : DEFAULT_DEMO_CHECKLISTS });
+        set({ checklists: list });
       }, (err) => console.error("Checklists stream error:", err));
       unsubs.push(unsubChecklists);
     } catch (e) {
@@ -235,7 +235,7 @@ export const useIndividualStore = create((set, get) => ({
             list.push({ id: docSnap.id, ...data });
           }
         });
-        set({ budgets: list.length > 0 ? list : DEFAULT_DEMO_BUDGETS });
+        set({ budgets: list });
       }, (err) => console.error("Budgets stream error:", err));
       unsubs.push(unsubBudgets);
     } catch (e) {

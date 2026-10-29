@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import { 
@@ -19,12 +19,88 @@ import {
   X,
   History,
   Calendar,
-  CheckCheck
+  CheckCheck,
+  ChevronDown,
+  Check
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTourStore } from '../../store/tourStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { triggerDeviceNotification } from '../../hooks/useDeviceNotifications';
+
+const AUDIENCE_OPTIONS = [
+  {
+    key: 'all',
+    label: 'Tüm Kullanıcılar (Herkes)',
+    description: 'Sistemdeki tüm kayıtlı ve misafir kullanıcılar',
+    icon: Globe,
+    color: '#D7147A',
+    bg: '#FDF2F8'
+  },
+  {
+    key: 'individual',
+    label: 'Bireysel Seyahatçiler',
+    description: 'Bireysel seyahat asistanı ve bağımsız kullanıcılar',
+    icon: Luggage,
+    color: '#9333ea',
+    bg: '#FAF5FF'
+  },
+  {
+    key: 'corporate',
+    label: 'Kurumsal Kullanıcılar',
+    description: 'Şirket çalışanları ve kurumsal yolcular',
+    icon: Building2,
+    color: '#2563eb',
+    bg: '#EFF6FF'
+  },
+  {
+    key: 'tour',
+    label: 'Belirli Bir Tur',
+    description: 'Yalnızca seçilen turun katılımcı ve rehberleri',
+    icon: Users,
+    color: '#059669',
+    bg: '#ECFDF5'
+  }
+];
+
+const NOTIF_TYPE_OPTIONS = [
+  {
+    key: 'announcement',
+    label: 'Genel Duyuru',
+    description: 'Standart duyuru ve genel bilgilendirme',
+    icon: Megaphone,
+    color: '#D7147A',
+    bg: '#FDF2F8',
+    badge: '📢 Duyuru'
+  },
+  {
+    key: 'info',
+    label: 'Bilgilendirme',
+    description: 'Seyahat veya sistem bilgilendirmesi',
+    icon: Info,
+    color: '#2563eb',
+    bg: '#EFF6FF',
+    badge: 'ℹ️ Bilgi'
+  },
+  {
+    key: 'alert',
+    label: 'Önemli Uyarı',
+    description: 'Acil durum veya kritik seyahat uyarısı',
+    icon: AlertTriangle,
+    color: '#d97706',
+    bg: '#FFFBEB',
+    badge: '⚠️ Uyarı'
+  },
+  {
+    key: 'promo',
+    label: 'Fırsat / Kampanya',
+    description: 'Özel teklif, indirim veya kampanya',
+    icon: Sparkles,
+    color: '#059669',
+    bg: '#ECFDF5',
+    badge: '🎉 Fırsat'
+  }
+];
 
 export default function BroadcastNotification() {
   const navigate = useNavigate();
@@ -42,6 +118,35 @@ export default function BroadcastNotification() {
   const [previewPlatform, setPreviewPlatform] = useState('desktop'); // 'desktop' or 'mobile'
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
+
+  // Dropdown states
+  const [audienceOpen, setAudienceOpen] = useState(false);
+  const [notifTypeOpen, setNotifTypeOpen] = useState(false);
+
+  const audienceDropdownRef = useRef(null);
+  const notifTypeDropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (audienceDropdownRef.current && !audienceDropdownRef.current.contains(event.target)) {
+        setAudienceOpen(false);
+      }
+      if (notifTypeDropdownRef.current && !notifTypeDropdownRef.current.contains(event.target)) {
+        setNotifTypeOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  const currentAudience = AUDIENCE_OPTIONS.find(a => a.key === targetAudience) || AUDIENCE_OPTIONS[0];
+  const currentNotifType = NOTIF_TYPE_OPTIONS.find(t => t.key === notifType) || NOTIF_TYPE_OPTIONS[0];
+  const CurrentAudienceIcon = currentAudience.icon;
+  const CurrentNotifTypeIcon = currentNotifType.icon;
 
   const handleSendBroadcast = async (e) => {
     e.preventDefault();
@@ -107,7 +212,7 @@ export default function BroadcastNotification() {
   };
 
   return (
-    <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
+    <div style={{ paddingBottom: 'calc(160px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
       <Header title="Toplu Bildirim Gönder" showBack onBack={() => navigate(-1)} />
 
       <div style={{ padding: '14px 16px', maxWidth: '640px', margin: '0 auto' }}>
@@ -117,32 +222,42 @@ export default function BroadcastNotification() {
           background: 'linear-gradient(135deg, #FDF2F8 0%, #ffffff 100%)',
           borderRadius: '16px',
           border: '1.5px solid #F9BED8',
-          padding: '14px 16px',
+          padding: '12px 14px',
           marginBottom: '16px',
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
+          gap: '10px',
           boxShadow: '0 2px 8px rgba(215, 20, 122, 0.06)'
         }}>
           <div style={{
-            width: '42px',
-            height: '42px',
-            borderRadius: '12px',
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
             background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
             color: '#ffffff',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             flexShrink: 0,
-            boxShadow: '0 4px 10px rgba(215, 20, 122, 0.25)'
+            boxShadow: '0 3px 8px rgba(215, 20, 122, 0.22)'
           }}>
-            <Megaphone size={20} />
+            <Megaphone size={18} />
           </div>
+
+          {/* Dikey ayırıcı çizgi */}
+          <div style={{
+            width: '1.2px',
+            height: '24px',
+            background: '#F9BED8',
+            borderRadius: '1px',
+            flexShrink: 0
+          }} />
+
           <div>
-            <h2 style={{ fontSize: '14px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
+            <h2 style={{ fontSize: '12.5px', fontWeight: '800', color: '#0f172a', margin: 0 }}>
               Toplu Push & Web Bildirimi
             </h2>
-            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+            <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px', lineHeight: '1.3' }}>
               OneSignal tarzı anlık masaüstü, mobil kilit ekranı ve uygulama içi bildirim iletimi
             </div>
           </div>
@@ -228,117 +343,216 @@ export default function BroadcastNotification() {
               marginBottom: '20px'
             }}
           >
-            {/* 1. Hedef Kitle Seçimi */}
-            <div style={{ marginBottom: '18px' }}>
+            {/* 1. Hedef Kitle Seçimi (Dropdown) */}
+            <div 
+              ref={audienceDropdownRef}
+              style={{ 
+                marginBottom: '18px', 
+                position: 'relative', 
+                zIndex: audienceOpen ? 40 : 20 
+              }}
+            >
               <label style={{ fontSize: '12px', fontWeight: '800', color: '#334155', display: 'block', marginBottom: '8px' }}>
                 1. Hedef Kitle (Audience)
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => setTargetAudience('all')}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: '12px',
-                    border: targetAudience === 'all' ? '1.5px solid #D7147A' : '1px solid #e2e8f0',
-                    background: targetAudience === 'all' ? '#FDF2F8' : '#ffffff',
-                    color: targetAudience === 'all' ? '#D7147A' : '#475569',
-                    fontSize: '12px',
-                    fontWeight: '700',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
-                >
-                  <Globe size={16} color={targetAudience === 'all' ? '#D7147A' : '#94a3b8'} />
-                  <span>Tüm Kullanıcılar (Herkes)</span>
-                </button>
 
-                <button
-                  type="button"
-                  onClick={() => setTargetAudience('individual')}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: '12px',
-                    border: targetAudience === 'individual' ? '1.5px solid #D7147A' : '1px solid #e2e8f0',
-                    background: targetAudience === 'individual' ? '#FDF2F8' : '#ffffff',
-                    color: targetAudience === 'individual' ? '#D7147A' : '#475569',
-                    fontSize: '12px',
-                    fontWeight: '700',
+              {/* Trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  setAudienceOpen(!audienceOpen);
+                  setNotifTypeOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '14px',
+                  border: audienceOpen ? '1.5px solid #D7147A' : '1.5px solid #e2e8f0',
+                  background: audienceOpen ? '#FFF9FB' : '#ffffff',
+                  boxShadow: audienceOpen ? '0 0 0 3px rgba(215, 20, 122, 0.1), 0 2px 6px rgba(0,0,0,0.03)' : '0 1px 2px rgba(0,0,0,0.02)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textAlign: 'left'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: currentAudience.bg,
+                    color: currentAudience.color,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
-                >
-                  <Luggage size={16} color={targetAudience === 'individual' ? '#D7147A' : '#94a3b8'} />
-                  <span>Bireysel Seyahatçiler</span>
-                </button>
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <CurrentAudienceIcon size={18} />
+                  </div>
+                  {/* Dikey ayırıcı çizgi */}
+                  <div style={{
+                    width: '1.2px',
+                    height: '24px',
+                    background: '#e2e8f0',
+                    borderRadius: '1px',
+                    flexShrink: 0
+                  }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', lineHeight: 1.2 }}>
+                      {currentAudience.label}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {currentAudience.description}
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '8px',
+                  background: audienceOpen ? '#FDF2F8' : '#f8fafc',
+                  color: audienceOpen ? '#D7147A' : '#94a3b8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginLeft: '8px'
+                }}>
+                  <ChevronDown size={16} style={{ transform: audienceOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
+                </div>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => setTargetAudience('corporate')}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: '12px',
-                    border: targetAudience === 'corporate' ? '1.5px solid #D7147A' : '1px solid #e2e8f0',
-                    background: targetAudience === 'corporate' ? '#FDF2F8' : '#ffffff',
-                    color: targetAudience === 'corporate' ? '#D7147A' : '#475569',
-                    fontSize: '12px',
-                    fontWeight: '700',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
-                >
-                  <Building2 size={16} color={targetAudience === 'corporate' ? '#D7147A' : '#94a3b8'} />
-                  <span>Kurumsal Kullanıcılar</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setTargetAudience('tour')}
-                  style={{
-                    padding: '10px 12px',
-                    borderRadius: '12px',
-                    border: targetAudience === 'tour' ? '1.5px solid #D7147A' : '1px solid #e2e8f0',
-                    background: targetAudience === 'tour' ? '#FDF2F8' : '#ffffff',
-                    color: targetAudience === 'tour' ? '#D7147A' : '#475569',
-                    fontSize: '12px',
-                    fontWeight: '700',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    cursor: 'pointer',
-                    textAlign: 'left'
-                  }}
-                >
-                  <Users size={16} color={targetAudience === 'tour' ? '#D7147A' : '#94a3b8'} />
-                  <span>Belirli Bir Tur</span>
-                </button>
-              </div>
+              {/* Dropdown Menu */}
+              {audienceOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  left: 0,
+                  right: 0,
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  border: '1.2px solid #e2e8f0',
+                  boxShadow: '0 12px 30px -4px rgba(15, 23, 42, 0.16), 0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+                  padding: '6px',
+                  zIndex: 50,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  {AUDIENCE_OPTIONS.map((item) => {
+                    const isSelected = targetAudience === item.key;
+                    const IconComponent = item.icon;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => {
+                          setTargetAudience(item.key);
+                          setAudienceOpen(false);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          borderRadius: '12px',
+                          border: isSelected ? '1px solid #FCE7F3' : '1px solid transparent',
+                          background: isSelected ? '#FDF2F8' : 'transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <div style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '9px',
+                            background: item.bg,
+                            color: item.color,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <IconComponent size={16} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '12.5px', fontWeight: isSelected ? '700' : '600', color: isSelected ? '#D7147A' : '#1e293b' }}>
+                              {item.label}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                              {item.description}
+                            </div>
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <div style={{
+                            width: '22px',
+                            height: '22px',
+                            borderRadius: '50%',
+                            background: '#D7147A',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            marginLeft: '8px'
+                          }}>
+                            <Check size={13} strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Tur Seçici (Yalnızca tur seçilmişse) */}
               {targetAudience === 'tour' && (
-                <div style={{ marginTop: '10px' }}>
+                <div style={{
+                  marginTop: '10px',
+                  padding: '12px 14px',
+                  background: '#FDF2F8',
+                  borderRadius: '14px',
+                  border: '1.2px solid #FBCFE8'
+                }}>
+                  <div style={{
+                    fontSize: '11.5px',
+                    fontWeight: '700',
+                    color: '#D7147A',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginBottom: '8px'
+                  }}>
+                    <Users size={14} />
+                    <span>Bildirimin Gönderileceği Tur</span>
+                  </div>
                   <select
                     value={selectedTourId}
                     onChange={e => setSelectedTourId(e.target.value)}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
-                      borderRadius: '12px',
-                      border: '1.2px solid #e2e8f0',
-                      background: '#f8fafc',
+                      borderRadius: '10px',
+                      border: '1.5px solid #F472B6',
+                      background: '#ffffff',
                       fontSize: '12.5px',
                       fontWeight: '600',
                       outline: 'none',
-                      color: '#1e293b'
+                      color: '#1e293b',
+                      cursor: 'pointer'
                     }}
                   >
                     {tours
@@ -363,37 +577,180 @@ export default function BroadcastNotification() {
               )}
             </div>
 
-            {/* 2. Bildirim Türü */}
-            <div style={{ marginBottom: '18px' }}>
+            {/* 2. Bildirim Türü (Dropdown) */}
+            <div 
+              ref={notifTypeDropdownRef}
+              style={{ 
+                marginBottom: '18px', 
+                position: 'relative', 
+                zIndex: notifTypeOpen ? 35 : 10 
+              }}
+            >
               <label style={{ fontSize: '12px', fontWeight: '800', color: '#334155', display: 'block', marginBottom: '8px' }}>
                 2. Bildirim Türü
               </label>
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {[
-                  { key: 'announcement', label: '📢 Genel Duyuru' },
-                  { key: 'info', label: 'ℹ️ Bilgilendirme' },
-                  { key: 'alert', label: '⚠️ Önemli Uyarı' },
-                  { key: 'promo', label: '🎉 Fırsat / Kampanya' }
-                ].map(item => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setNotifType(item.key)}
-                    style={{
-                      padding: '7px 12px',
-                      borderRadius: '10px',
-                      border: notifType === item.key ? '1.5px solid #D7147A' : '1px solid #e2e8f0',
-                      background: notifType === item.key ? '#FDF2F8' : '#ffffff',
-                      color: notifType === item.key ? '#D7147A' : '#64748b',
-                      fontSize: '11.5px',
-                      fontWeight: '700',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+
+              {/* Trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  setNotifTypeOpen(!notifTypeOpen);
+                  setAudienceOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: '14px',
+                  border: notifTypeOpen ? '1.5px solid #D7147A' : '1.5px solid #e2e8f0',
+                  background: notifTypeOpen ? '#FFF9FB' : '#ffffff',
+                  boxShadow: notifTypeOpen ? '0 0 0 3px rgba(215, 20, 122, 0.1), 0 2px 6px rgba(0,0,0,0.03)' : '0 1px 2px rgba(0,0,0,0.02)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textAlign: 'left'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '10px',
+                    background: currentNotifType.bg,
+                    color: currentNotifType.color,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <CurrentNotifTypeIcon size={18} />
+                  </div>
+                  {/* Dikey ayırıcı çizgi */}
+                  <div style={{
+                    width: '1.2px',
+                    height: '24px',
+                    background: '#e2e8f0',
+                    borderRadius: '1px',
+                    flexShrink: 0
+                  }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', lineHeight: 1.2 }}>
+                      {currentNotifType.label}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {currentNotifType.description}
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '8px',
+                  background: notifTypeOpen ? '#FDF2F8' : '#f8fafc',
+                  color: notifTypeOpen ? '#D7147A' : '#94a3b8',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginLeft: '8px'
+                }}>
+                  <ChevronDown size={16} style={{ transform: notifTypeOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
+                </div>
+              </button>
+
+              {/* Dropdown Menu */}
+              {notifTypeOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  left: 0,
+                  right: 0,
+                  background: '#ffffff',
+                  borderRadius: '16px',
+                  border: '1.2px solid #e2e8f0',
+                  boxShadow: '0 12px 30px -4px rgba(15, 23, 42, 0.16), 0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+                  padding: '6px',
+                  zIndex: 50,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  {NOTIF_TYPE_OPTIONS.map((item) => {
+                    const isSelected = notifType === item.key;
+                    const IconComponent = item.icon;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() => {
+                          setNotifType(item.key);
+                          setNotifTypeOpen(false);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px',
+                          borderRadius: '12px',
+                          border: isSelected ? '1px solid #FCE7F3' : '1px solid transparent',
+                          background: isSelected ? '#FDF2F8' : 'transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isSelected) e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <div style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '9px',
+                            background: item.bg,
+                            color: item.color,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <IconComponent size={16} />
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '12.5px', fontWeight: isSelected ? '700' : '600', color: isSelected ? '#D7147A' : '#1e293b' }}>
+                              {item.label}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
+                              {item.description}
+                            </div>
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <div style={{
+                            width: '22px',
+                            height: '22px',
+                            borderRadius: '50%',
+                            background: '#D7147A',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                            marginLeft: '8px'
+                          }}>
+                            <Check size={13} strokeWidth={3} />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* 3. Başlık & İçerik */}
@@ -483,7 +840,7 @@ export default function BroadcastNotification() {
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <span style={{ fontSize: '10.5px', fontWeight: '700', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
-                  Canlı Bildirim Önizlemesi (Live Preview)
+                  Canlı Bildirim Önizlemesi
                 </span>
                 <div style={{ display: 'flex', gap: '4px' }}>
                   <button
@@ -608,20 +965,21 @@ export default function BroadcastNotification() {
             </div>
 
             {/* Submit & Cancel Buttons */}
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
               <button
                 type="button"
                 onClick={() => navigate(-1)}
                 style={{
                   flex: 1,
-                  padding: '12px',
-                  borderRadius: '12px',
+                  padding: '8px 12px',
+                  borderRadius: '10px',
                   border: '1px solid #e2e8f0',
                   background: '#ffffff',
-                  fontSize: '13px',
-                  fontWeight: '700',
+                  fontSize: '12px',
+                  fontWeight: '600',
                   color: '#64748b',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 Vazgeç
@@ -631,30 +989,30 @@ export default function BroadcastNotification() {
                 disabled={isSending}
                 style={{
                   flex: 2,
-                  padding: '12px',
-                  borderRadius: '12px',
+                  padding: '8px 14px',
+                  borderRadius: '10px',
                   border: 'none',
                   background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
                   color: '#ffffff',
-                  fontSize: '13.5px',
-                  fontWeight: '800',
+                  fontSize: '12px',
+                  fontWeight: '700',
                   cursor: isSending ? 'wait' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 14px rgba(215, 20, 122, 0.3)'
+                  gap: '6px',
+                  boxShadow: '0 2px 8px rgba(215, 20, 122, 0.25)'
                 }}
               >
                 {isSending ? (
                   <>
-                    <Loader2 size={17} className="animate-spin" />
+                    <Loader2 size={14} className="animate-spin" />
                     <span>Yayınlanıyor...</span>
                   </>
                 ) : (
                   <>
-                    <Send size={16} />
-                    <span>Tüm Kanallara Yayınla (Push)</span>
+                    <Send size={14} />
+                    <span>Tüm Kanallara Yayınla</span>
                   </>
                 )}
               </button>
@@ -716,6 +1074,8 @@ export default function BroadcastNotification() {
           )}
         </div>
 
+        {/* Bottom clearance spacer so card is 100% visible above floating bottom nav & Tintin button */}
+        <div style={{ height: '180px', minHeight: '180px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} />
       </div>
     </div>
   );

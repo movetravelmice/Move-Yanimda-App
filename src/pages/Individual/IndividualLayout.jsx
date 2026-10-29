@@ -74,11 +74,12 @@ export default function IndividualLayout() {
       {!isTintin && (
         <Header 
           title={location.pathname.includes('/profile') ? "Hesap Ayarları" : undefined} 
+          marginBottom={location.pathname.includes('/dashboard') ? 0 : undefined}
         />
       )}
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, paddingBottom: isTintin ? '0px' : '90px' }}>
+      <main style={{ flex: 1, paddingBottom: isTintin ? '0px' : '140px' }}>
         <Routes>
           <Route path="/" element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<IndividualDashboard />} />

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Calendar, Edit3, Eye, MessageCircle, Users, Megaphone, X, Send, Plus, Trash2, Timer, RotateCcw, Phone, ChevronRight, Info, CheckCircle2, ShieldCheck } from 'lucide-react';
 import Header from '../../components/Header';
+import ModeSwitchBanner from '../../components/ModeSwitchBanner';
 import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive, isTourPast } from '../../store/tourStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useAuthStore, isUserAdmin } from '../../store/authStore';
@@ -154,47 +155,10 @@ export default function ExpertDashboard() {
           </div>
       )}
 
-      <Header title={dynamicTitle} />
+      <Header title={dynamicTitle} marginBottom={0} />
       
-      <div style={{ padding: '0 16px', paddingBottom: '32px' }}>
-
-        {/* Admin Switcher Banner */}
-        {isAdmin && (
-          <div 
-            onClick={() => {
-              setActiveStaffRole('admin');
-              navigate('/dashboard');
-            }}
-            style={{
-              background: 'linear-gradient(135deg, #1e293b 0%, #2563eb 100%)',
-              color: 'white',
-              borderRadius: '14px',
-              padding: '11px 14px',
-              marginTop: '10px',
-              marginBottom: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              boxShadow: '0 3px 10px rgba(37, 99, 235, 0.2)',
-              transition: 'transform 0.15s ease'
-            }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ShieldCheck size={18} color="#93c5fd" />
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: '800' }}>👑 Yönetim Paneline Dön</span>
-                <span style={{ fontSize: '10px', color: '#bfdbfe', marginLeft: '6px' }}>Tüm şirket operasyonlarını yönetin</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#dbeafe', fontSize: '11px', fontWeight: '600' }}>
-              <span>Geç</span>
-              <ChevronRight size={14} />
-            </div>
-          </div>
-        )}
+      <div style={{ padding: '0 16px', paddingBottom: '32px', marginTop: '14px' }}>
+        <ModeSwitchBanner currentMode="corporate" />
         
         <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', marginTop: '8px', marginBottom: '16px', borderRadius: '12px', border: '1px solid #f1f5f9', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
             <h2 style={{ fontSize: '14px', fontWeight: '700', margin: '0', color: 'var(--text-main)', letterSpacing: '-0.2px' }}>Atandığım Aktif Turlar</h2>
@@ -204,7 +168,9 @@ export default function ExpertDashboard() {
         </div>
         
         {activeTours.length === 0 && (
-           <p className="text-muted" style={{ fontSize: '13px', padding: '8px 4px' }}>Şu an atandığınız aktif bir tur bulunmuyor.</p>
+           <div style={{ textAlign: 'center', padding: '24px 16px', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+             <p className="text-muted" style={{ fontSize: '13px', margin: 0, fontWeight: '500' }}>Şu an atandığınız aktif bir tur bulunmuyor.</p>
+           </div>
         )}
 
         {activeTours.map(tour => {
@@ -221,8 +187,8 @@ export default function ExpertDashboard() {
                 transition: 'transform 0.2s, box-shadow 0.2s'
             }}>
               {/* Top Full-Bleed Cover Image with Frosted Action Bar */}
-              <div style={{ height: '160px', position: 'relative', width: '100%', overflow: 'hidden', background: 'var(--primary-light)' }}>
-                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 1', overflow: 'hidden', background: '#0f172a' }}>
+                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', display: 'block', objectFit: 'cover' }} />
                 
                 {/* Subtle Gradient Shadow for Readability */}
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 45%, rgba(0,0,0,0.4) 100%)', pointerEvents: 'none' }} />
@@ -441,7 +407,9 @@ export default function ExpertDashboard() {
         </div>
         
         {pastTours.length === 0 && (
-           <p className="text-muted" style={{ fontSize: '13px', padding: '0 4px' }}>Henüz geçmiş bir turunuz bulunmuyor.</p>
+           <div style={{ textAlign: 'center', padding: '24px 16px', background: '#ffffff', borderRadius: '16px', border: '1px dashed #cbd5e1', marginBottom: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
+             <p className="text-muted" style={{ fontSize: '13px', margin: 0, fontWeight: '500' }}>Henüz geçmiş bir turunuz bulunmuyor.</p>
+           </div>
         )}
 
         {/* Display Only Latest 3 Past Tours with Active Tour Card Design */}
@@ -462,8 +430,8 @@ export default function ExpertDashboard() {
               }}
             >
               {/* Top Full-Bleed Cover Image */}
-              <div style={{ height: '160px', position: 'relative', width: '100%', overflow: 'hidden', background: '#f1f5f9' }}>
-                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'grayscale(100%)', opacity: 0.92 }} />
+              <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 1', overflow: 'hidden', background: '#0f172a' }}>
+                <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', display: 'block', objectFit: 'cover', filter: 'grayscale(100%) brightness(0.88)', opacity: 0.92 }} />
                 
                 {/* Subtle Gradient Shadow */}
                 <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 45%, rgba(0,0,0,0.4) 100%)', pointerEvents: 'none' }} />
@@ -776,54 +744,9 @@ export default function ExpertDashboard() {
           </div>
       )}
 
-      {expertModalData && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '360px', padding: '24px', animation: 'fadeIn 0.2s ease-out', textAlign: 'center', position: 'relative' }}>
-            <div onClick={() => setExpertModalData(null)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                <X size={20} />
-            </div>
+      <ExpertModal data={expertModalData} onClose={() => setExpertModalData(null)} />
 
-            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-main)' }}>
-                {expertModalData.expert2 ? 'Seyahat Uzmanlarımız' : 'Seyahat Uzmanı'}
-            </h2>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {[expertModalData.expert1, expertModalData.expert2].filter(Boolean).map((exp, idx) => (
-                    <div key={idx} style={{ background: '#f8fafc', borderRadius: '16px', padding: '16px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', marginBottom: '12px' }}>
-                            <div style={{ width: '48px', height: '48px', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--primary-light)', flexShrink: 0 }}>
-                               <img loading="lazy" src={exp.avatar} alt={exp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            </div>
-                            <div style={{ textAlign: 'left', flex: 1 }}>
-                                <h3 style={{ fontSize: '15px', fontWeight: 'bold', margin: '0 0 2px 0', color: 'var(--text-main)' }}>{exp.name}</h3>
-                                <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '600' }}>{idx === 0 ? '1. Seyahat Uzmanı' : '2. Seyahat Uzmanı'}</span>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                            <a 
-                              href={`tel:${exp.phone}`}
-                              style={{ flex: 1, padding: '10px 0', borderRadius: '10px', background: '#ffffff', border: '1px solid #cbd5e1', color: 'var(--text-main)', fontSize: '13px', fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
-                            >
-                                <Phone size={15} color="var(--primary)" /> Ara
-                            </a>
-                            <a 
-                              href={`https://wa.me/${exp.phone.replace(/[^0-9]/g, '')}`} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              style={{ flex: 1, padding: '10px 0', borderRadius: '10px', background: '#25D366', color: 'white', fontSize: '13px', fontWeight: '600', textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 2px 6px rgba(37,211,102,0.3)' }}
-                            >
-                                <MessageCircle size={15} color="white" /> WhatsApp
-                            </a>
-                        </div>
-                    </div>
-                ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Dedicated Fullscreen Live Roll Call Overlay */}
+{/* Dedicated Fullscreen Live Roll Call Overlay */}
       {activeRollCallTourId && (
         <ExpertRollCallPanel 
           tour={tours.find(t => t.id === activeRollCallTourId)} 

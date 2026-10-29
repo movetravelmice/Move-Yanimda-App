@@ -260,6 +260,8 @@ export default function ParticipantsList() {
         });
         setShowTransferSheet(false);
         setShowSht(true);
+        const appContentEl = document.querySelector('.mobile-app-content');
+        if (appContentEl) appContentEl.scrollTo({ top: 0, behavior: 'instant' });
     };
 
     const handleSaveContact = async () => {
@@ -552,488 +554,42 @@ export default function ParticipantsList() {
         resetWizard();
     };
 
-    if (!tour) return <div style={{ padding: '20px' }}>Tur bulunamadı.</div>;
-
-    return (
-        <div style={{ paddingBottom: '40px', backgroundColor: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
-
-            {/* Header */}
-            <div style={{ 
-                background: 'var(--primary)', 
-                color: 'white', 
-                padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 22px 16px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between', 
-                position: 'sticky', 
-                top: 0, 
-                zIndex: 10, 
-                boxShadow: '0 2px 10px rgba(0,0,0,0.1)' 
-            }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, marginRight: '10px' }}>
-                    <div onClick={handleBack} style={{ cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                        <ChevronLeft size={24} />
-                    </div>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                        <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 2px', lineHeight: 1.2 }}>Katılımcılar</h2>
-                        <div 
-                            title={tour.name} 
-                            style={{ 
-                                fontSize: '11px', 
-                                opacity: 0.9, 
-                                whiteSpace: 'nowrap', 
-                                overflow: 'hidden', 
-                                textOverflow: 'ellipsis',
-                                maxWidth: '100%',
-                                display: 'block'
-                            }}
-                        >
-                            {tour.name}
-                        </div>
-                    </div>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
-
-                    <div onClick={() => setShowBulkParticipant(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }} title="Excel ile Toplu Katılımcı Ekle">
-                        <UserPlus size={20} />
-                    </div>
-                    <div 
-                        onClick={() => setShowWizard(true)} 
-                        style={{ 
-                            background: 'rgba(255,255,255,0.2)', 
-                            width: '36px', 
-                            height: '36px', 
-                            borderRadius: '50%', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            cursor: 'pointer',
-                            position: 'relative',
-                            flexShrink: 0
-                        }} 
-                        title="Münferit Katılımcı Ekle"
-                    >
-                        <Plus size={20} />
-                        {participants.length > 0 && (
-                            <div
-                                style={{
-                                    position: 'absolute',
-                                    top: '-4px',
-                                    right: '-4px',
-                                    background: '#ffffff',
-                                    color: 'var(--primary)',
-                                    fontSize: '10px',
-                                    fontWeight: '800',
-                                    minWidth: '17px',
-                                    height: '17px',
-                                    padding: '0 4px',
-                                    borderRadius: '10px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                                    border: '1.5px solid var(--primary)',
-                                    lineHeight: 1
-                                }}
-                            >
-                                {participants.length}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* List */}
-            <div style={{ padding: '20px 16px' }}>
-                {participants.length === 0 ? (
-                    <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
-                        <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
-                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-main)' }}>Henüz bir katılımcı eklenmedi</h3>
-                        <p style={{ fontSize: '13px', lineHeight: '1.5' }}>Sağ üstteki (+) butonunu kullanarak bilet satışı gerçekleşen müşterileri bu tura atayın.</p>
-                    </div>
-                ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {participants.map(p => {
-                            const globalP = users.find(u => u.id === p.id) || p;
-                            const isLinked = !!globalP.linkedTo && (Array.isArray(globalP.linkedTo) ? globalP.linkedTo.length > 0 : true);
-                            const parents = isLinked ? users.filter(parentP => Array.isArray(globalP.linkedTo) ? globalP.linkedTo.includes(parentP.id) || globalP.linkedTo.includes(String(parentP.id)) : parentP.id === globalP.linkedTo || String(parentP.id) === String(globalP.linkedTo)) : [];
-                            
-                            const partTickets = (Array.isArray(p.ticketFiles) && p.ticketFiles.length > 0)
-                                ? p.ticketFiles
-                                : ((Array.isArray(globalP.ticketFiles) && globalP.ticketFiles.length > 0)
-                                    ? globalP.ticketFiles
-                                    : ((p.ticketPdf || globalP.ticketPdf) ? [p.ticketPdf || globalP.ticketPdf] : []));
-                            const ticketCount = partTickets.length;
-                            const hasTicketPdf = ticketCount > 0;
-                            const companyName = globalP.company && globalP.company !== 'Bireysel Müşteri' && globalP.company !== 'Move Travel & Mice' ? globalP.company : null;
-
-                            return (
-                                <div 
-                                    key={p.id} 
-                                    onClick={() => openProfile(p)} 
-                                    style={{ 
-                                        background: '#ffffff', 
-                                        borderRadius: '16px', 
-                                        padding: '12px 14px', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '12px', 
-                                        border: '1px solid #f1f5f9', 
-                                        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)', 
-                                        cursor: 'pointer', 
-                                        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                                        position: 'relative'
-                                    }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.borderColor = '#e2e8f0';
-                                        e.currentTarget.style.boxShadow = '0 6px 14px rgba(15, 23, 42, 0.07)';
-                                        e.currentTarget.style.transform = 'translateY(-1px)';
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.borderColor = '#f1f5f9';
-                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(15, 23, 42, 0.04)';
-                                        e.currentTarget.style.transform = 'translateY(0)';
-                                    }}
-                                >
-                                    {/* Ticket Icon Indicator (Replaces Avatar) */}
-                                    <div style={{ position: 'relative', flexShrink: 0 }}>
-                                        <div 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedUser(globalP);
-                                                setShowTransferSheet(true);
-                                            }}
-                                            style={{ 
-                                                width: '44px', 
-                                                height: '44px', 
-                                                borderRadius: '14px', 
-                                                background: hasTicketPdf ? '#f0fdf4' : '#fef2f2', 
-                                                border: hasTicketPdf ? '1.5px solid #bbf7d0' : '1.5px solid #fecaca', 
-                                                color: hasTicketPdf ? '#16a34a' : '#dc2626', 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'center',
-                                                boxShadow: hasTicketPdf ? '0 2px 6px rgba(22, 163, 74, 0.08)' : '0 2px 6px rgba(220, 38, 38, 0.08)',
-                                                cursor: 'pointer',
-                                                transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
-                                                position: 'relative'
-                                            }}
-                                            onMouseEnter={e => {
-                                                e.currentTarget.style.transform = 'scale(1.08)';
-                                                e.currentTarget.style.boxShadow = hasTicketPdf ? '0 4px 10px rgba(22, 163, 74, 0.22)' : '0 4px 10px rgba(220, 38, 38, 0.22)';
-                                            }}
-                                            onMouseLeave={e => {
-                                                e.currentTarget.style.transform = 'scale(1)';
-                                                e.currentTarget.style.boxShadow = hasTicketPdf ? '0 2px 6px rgba(22, 163, 74, 0.08)' : '0 2px 6px rgba(220, 38, 38, 0.08)';
-                                            }}
-                                            title={hasTicketPdf ? (ticketCount > 1 ? `${ticketCount} Adet Bilet PDF Yüklendi (Görüntüle / Yönet)` : "Bilet PDF Yüklendi (Görüntüle / Değiştir)") : "Bilet PDF Bekleniyor (Yüklemek için tıklayın)"}
-                                        >
-                                            <Ticket size={22} />
-                                            {ticketCount > 1 && (
-                                                <div 
-                                                    style={{ 
-                                                        position: 'absolute', 
-                                                        top: '-4px', 
-                                                        right: '-4px', 
-                                                        background: '#16a34a', 
-                                                        color: 'white', 
-                                                        border: '1.5px solid #ffffff', 
-                                                        borderRadius: '10px', 
-                                                        padding: '0 4px', 
-                                                        fontSize: '9.5px', 
-                                                        fontWeight: 'bold', 
-                                                        lineHeight: '14px',
-                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.15)' 
-                                                    }}
-                                                >
-                                                    {ticketCount}
-                                                </div>
-                                            )}
-                                        </div>
-                                        {isLinked && (
-                                            <div 
-                                                style={{ 
-                                                    position: 'absolute', 
-                                                    bottom: '-3px', 
-                                                    right: '-3px', 
-                                                    background: '#ffffff', 
-                                                    border: '1.5px solid #fdf4ff', 
-                                                    borderRadius: '50%', 
-                                                    width: '18px', 
-                                                    height: '18px', 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    justifyContent: 'center',
-                                                    boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
-                                                    fontSize: '10px'
-                                                }}
-                                                title="Çocuk Katılımcı"
-                                            >
-                                                🎈
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Content Info */}
-                                    <div style={{ flex: 1, minWidth: 0 }}>
-                                        {/* Parent Info for Children */}
-                                        {parents.length > 0 && (
-                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginBottom: '3px', background: '#f8fafc', padding: '1px 7px 1px 2px', borderRadius: '10px', border: '1px solid #e2e8f0', maxWidth: '100%' }}>
-                                                <div style={{ display: 'flex' }}>
-                                                    {parents.slice(0, 2).map((par, idx) => (
-                                                        <img key={par.id} src={par.avatar} title={par.name} style={{ width: '15px', height: '15px', borderRadius: '50%', border: '1px solid white', marginLeft: idx > 0 ? '-4px' : '0', position: 'relative', zIndex: parents.length - idx, objectFit: 'cover' }} />
-                                                    ))}
-                                                </div>
-                                                <span style={{ fontSize: '10px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>
-                                                    {parents.map(par => par.name.split(' ')[0]).join(' & ')}
-                                                </span>
-                                            </div>
-                                        )}
-
-                                        {/* Participant Name & Company */}
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                            <h4 style={{ margin: 0, fontSize: '12.5px', fontWeight: '600', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.1px', lineHeight: 1.25 }}>
-                                                {p.name}
-                                            </h4>
-                                            {companyName && (
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#64748b', fontSize: '10.5px', lineHeight: 1 }}>
-                                                    <Building size={10} color="#94a3b8" style={{ flexShrink: 0 }} />
-                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px', fontWeight: '500' }}>
-                                                        {companyName}
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Action Buttons */}
-                                    <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                                        {isLinked ? (
-                                            <span style={{ 
-                                                background: '#fdf4ff', 
-                                                color: '#a21caf', 
-                                                border: '1px solid #fae8ff', 
-                                                fontSize: '11px', 
-                                                fontWeight: '700', 
-                                                width: '70px', 
-                                                height: '34px', 
-                                                borderRadius: '20px', 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'center', 
-                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                boxSizing: 'border-box'
-                                            }}>
-                                                Çocuk
-                                            </span>
-                                        ) : (
-                                            <div 
-                                                onClick={(e) => e.stopPropagation()}
-                                                style={{ 
-                                                    display: 'flex', 
-                                                    alignItems: 'center', 
-                                                    justifyContent: 'space-between', 
-                                                    width: '70px', 
-                                                    height: '34px', 
-                                                    background: '#f8fafc', 
-                                                    border: '1px solid #e2e8f0', 
-                                                    borderRadius: '20px', 
-                                                    padding: '0 3px', 
-                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
-                                                    boxSizing: 'border-box'
-                                                }}
-                                            >
-                                                <button 
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const globalP = users.find(u => u.id === p.id || u.email === p.email) || p;
-                                                        if (globalP.phone && globalP.phone !== '-') {
-                                                            window.location.href = `tel:${globalP.phone}`;
-                                                        } else {
-                                                            alert("Kullanıcıya ait telefon numarası kayıtlı değil.");
-                                                        }
-                                                    }} 
-                                                    style={{ 
-                                                        width: '28px', 
-                                                        height: '28px', 
-                                                        borderRadius: '50%', 
-                                                        background: 'transparent', 
-                                                        color: '#16a34a', 
-                                                        border: 'none', 
-                                                        display: 'flex', 
-                                                        alignItems: 'center', 
-                                                        justifyContent: 'center', 
-                                                        cursor: 'pointer',
-                                                        transition: 'background 0.15s ease'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
-                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                                    title="Telefonla Ara"
-                                                >
-                                                    <Phone size={13} />
-                                                </button>
-                                                <div style={{ width: '1px', height: '14px', background: '#cbd5e1' }} />
-                                                <button 
-                                                    onClick={(e) => { 
-                                                        e.stopPropagation(); 
-                                                        navigate(`/dashboard/chat/direct_${tour.id}_${p.id}`); 
-                                                    }} 
-                                                    style={{ 
-                                                        width: '28px', 
-                                                        height: '28px', 
-                                                        borderRadius: '50%', 
-                                                        background: 'transparent', 
-                                                        color: '#2563eb', 
-                                                        border: 'none', 
-                                                        display: 'flex', 
-                                                        alignItems: 'center', 
-                                                        justifyContent: 'center', 
-                                                        cursor: 'pointer',
-                                                        transition: 'background 0.15s ease'
-                                                    }}
-                                                    onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
-                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                                                    title="Mesaj Gönder"
-                                                >
-                                                    <MessageCircle size={13} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {participants.length > 0 && (
-                    <div style={{ 
-                        marginTop: '32px', 
-                        background: 'white', 
-                        borderRadius: '20px', 
-                        padding: '16px 14px', 
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
-                        border: '1px solid #e2e8f0',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '12px'
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', minWidth: 0 }}>
-                            <div style={{ 
-                                width: '7px', 
-                                height: '7px', 
-                                borderRadius: '50%', 
-                                background: allTicketsCompleted ? '#10b981' : '#f59e0b',
-                                flexShrink: 0
-                            }}></div>
-                            <span style={{ 
-                                fontSize: 'clamp(9px, 2.85vw, 12.5px)', 
-                                fontWeight: '700', 
-                                color: allTicketsCompleted ? '#10b981' : '#d97706',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                flex: 1,
-                                minWidth: 0
-                            }}>
-                                {allTicketsCompleted 
-                                    ? 'Tüm katılımcıların uçak biletleri (PDF) sisteme yüklendi.' 
-                                    : `Biletleme tamamlanmadı (${missingTicketsCount} katılımcının bilet PDF\'i eksik).`}
-                            </span>
-                        </div>
-                        
-                        <button
-                            onClick={handleSendNotifications}
-                            disabled={!allTicketsCompleted || sendingNotifications}
-                            style={{
-                                width: '100%',
-                                padding: '12px',
-                                borderRadius: '12px',
-                                fontSize: 'clamp(12px, 3.2vw, 13.5px)',
-                                fontWeight: 'bold',
-                                border: 'none',
-                                cursor: allTicketsCompleted && !sendingNotifications ? 'pointer' : 'not-allowed',
-                                background: allTicketsCompleted 
-                                    ? 'linear-gradient(135deg, var(--primary), #ec4899)' 
-                                    : '#cbd5e1',
-                                color: allTicketsCompleted ? 'white' : '#94a3b8',
-                                boxShadow: allTicketsCompleted && !sendingNotifications 
-                                    ? '0 6px 16px rgba(215, 20, 122, 0.25)' 
-                                    : 'none',
-                                transition: 'all 0.25s ease-in-out',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                gap: '8px',
-                                whiteSpace: 'nowrap'
-                            }}
-                        >
-                            {sendingNotifications ? (
-                                <>Katılımcılar Bilgilendiriliyor...</>
-                            ) : (
-                                <>Biletleme bilgisini müşterilere gönder</>
-                            )}
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            {/* Full Screen Profile Page Overlay */}
-            {showSht && selectedUser && (
+    const renderProfileView = () => {
+        if (!selectedUser) return null;
+        return (
+            <div style={{ paddingBottom: '40px', backgroundColor: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
+                {/* Header */}
                 <div style={{ 
-                    position: 'fixed', 
+                    background: 'var(--primary)', 
+                    color: 'white', 
+                    padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 22px 16px', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    position: 'sticky', 
                     top: 0, 
-                    left: '50%', 
-                    transform: 'translateX(-50%)', 
-                    width: '100%', 
-                    maxWidth: '480px', 
-                    height: '100dvh', 
-                    maxHeight: '100vh', 
-                    zIndex: 1100, 
-                    background: '#f8fafc', 
+                    zIndex: 10, 
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)' 
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div onClick={() => setShowSht(false)} style={{ cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}>
+                            <ChevronLeft size={24} />
+                        </div>
+                        <div>
+                            <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 2px', lineHeight: 1.2 }}>Müşteri Profili</h2>
+                            <div style={{ fontSize: '11px', opacity: 0.9 }}>{selectedUser.name}</div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Content Body */}
+                <div style={{ 
+                    padding: '16px', 
                     display: 'flex', 
                     flexDirection: 'column', 
-                    animation: 'fadeIn 0.2s',
-                    boxShadow: '0 0 30px rgba(0,0,0,0.15)'
+                    gap: '14px',
+                    animation: 'fadeIn 0.2s ease'
                 }}>
-
-                    {/* Header */}
-                    <div style={{ 
-                        background: 'var(--primary)', 
-                        color: 'white', 
-                        padding: 'calc(20px + env(safe-area-inset-top, 0px)) 16px 18px 16px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between', 
-                        position: 'sticky', 
-                        top: 0, 
-                        zIndex: 10, 
-                        flexShrink: 0,
-                        boxShadow: '0 2px 10px rgba(0,0,0,0.1)' 
-                    }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <div onClick={() => setShowSht(false)} style={{ cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}>
-                                <ChevronLeft size={24} />
-                            </div>
-                            <div>
-                                <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 2px', lineHeight: 1.2 }}>Müşteri Profili</h2>
-                                <div style={{ fontSize: '11px', opacity: 0.85 }}>{selectedUser.name}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Content Body */}
-                    <div style={{ 
-                        padding: '16px 16px calc(30px + env(safe-area-inset-bottom, 0px)) 16px', 
-                        flex: 1, 
-                        overflowY: 'auto', 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        gap: '14px', 
-                        WebkitOverflowScrolling: 'touch',
-                        animation: 'slideUp 0.3s ease' 
-                    }}>
-
                         {/* 1. Hero Identity & Quick Contact Card */}
                         <div style={{ 
                             background: 'white', 
@@ -1766,9 +1322,476 @@ export default function ParticipantsList() {
                                 <Trash2 size={20} />
                             </button>
                         </div>
+                </div>
+
+                {/* Bottom clearance spacer so that cards & buttons are never covered by floating bottom nav & Tintin button */}
+                <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
+
+                {/* Remove Confirmation Popup */}
+                {userToRemove && (
+                    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1100, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', animation: 'fadeIn 0.2s' }}>
+                        <div style={{ background: 'white', width: '100%', maxWidth: '340px', borderRadius: '24px', padding: '24px', textAlign: 'center', animation: 'slideUp 0.3s ease' }}>
+                            <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+                                <AlertTriangle size={32} />
+                            </div>
+                            <h2 style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text-main)', margin: '0 0 12px' }}>Listeden Çıkart</h2>
+                            <div style={{ fontSize: '14px', color: 'var(--text-muted)', lineHeight: '1.5', marginBottom: '24px' }}>
+                                <b>{userToRemove.name}</b> adlı kişiyi bu seyahatin katılımcı listesinden tamamen çıkartmak istediğinize emin misiniz?
+                            </div>
+                            <div style={{ display: 'flex', gap: '12px' }}>
+                                <button onClick={() => setUserToRemove(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'white', color: 'var(--text-muted)', fontWeight: '600', cursor: 'pointer' }}>İptal</button>
+                                <button onClick={() => {
+                                    removeParticipantFromTour(tourId, userToRemove.id);
+                                    setUserToRemove(null);
+                                    setShowSht(false);
+                                }} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: 'none', background: '#dc2626', color: 'white', fontWeight: '600', cursor: 'pointer' }}>Evet, Çıkart</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Transfer Manager Layer */}
+                {showTransferSheet && selectedUser && (
+                    <ParticipantTransferManager
+                        tourId={tourId}
+                        participant={selectedUser}
+                        onClose={() => setShowTransferSheet(false)}
+                    />
+                )}
+            </div>
+        );
+    };
+
+    if (!tour) return <div style={{ padding: '20px' }}>Tur bulunamadı.</div>;
+    if (showSht && selectedUser) return renderProfileView();
+
+    return (
+        <div style={{ paddingBottom: '40px', backgroundColor: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
+
+            {/* Header */}
+            <div style={{ 
+                background: 'var(--primary)', 
+                color: 'white', 
+                padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 22px 16px', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between', 
+                position: 'sticky', 
+                top: 0, 
+                zIndex: 10, 
+                boxShadow: '0 2px 10px rgba(0,0,0,0.1)' 
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0, marginRight: '10px' }}>
+                    <div onClick={handleBack} style={{ cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                        <ChevronLeft size={24} />
+                    </div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                        <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 2px', lineHeight: 1.2 }}>Katılımcılar</h2>
+                        <div 
+                            title={tour.name} 
+                            style={{ 
+                                fontSize: '11px', 
+                                opacity: 0.9, 
+                                whiteSpace: 'nowrap', 
+                                overflow: 'hidden', 
+                                textOverflow: 'ellipsis',
+                                maxWidth: '100%',
+                                display: 'block'
+                            }}
+                        >
+                            {tour.name}
+                        </div>
                     </div>
                 </div>
-            )}
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+
+                    <div onClick={() => setShowBulkParticipant(true)} style={{ background: 'rgba(255,255,255,0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }} title="Excel ile Toplu Katılımcı Ekle">
+                        <UserPlus size={20} />
+                    </div>
+                    <div 
+                        onClick={() => setShowWizard(true)} 
+                        style={{ 
+                            background: 'rgba(255,255,255,0.2)', 
+                            width: '36px', 
+                            height: '36px', 
+                            borderRadius: '50%', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            cursor: 'pointer',
+                            position: 'relative',
+                            flexShrink: 0
+                        }} 
+                        title="Münferit Katılımcı Ekle"
+                    >
+                        <Plus size={20} />
+                        {participants.length > 0 && (
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    top: '-4px',
+                                    right: '-4px',
+                                    background: '#ffffff',
+                                    color: 'var(--primary)',
+                                    fontSize: '10px',
+                                    fontWeight: '800',
+                                    minWidth: '17px',
+                                    height: '17px',
+                                    padding: '0 4px',
+                                    borderRadius: '10px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                                    border: '1.5px solid var(--primary)',
+                                    lineHeight: 1
+                                }}
+                            >
+                                {participants.length}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* List */}
+            <div style={{ padding: '20px 16px' }}>
+                {participants.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                        <Users size={48} style={{ margin: '0 auto 16px', opacity: 0.3 }} />
+                        <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-main)' }}>Henüz bir katılımcı eklenmedi</h3>
+                        <p style={{ fontSize: '13px', lineHeight: '1.5' }}>Sağ üstteki (+) butonunu kullanarak bilet satışı gerçekleşen müşterileri bu tura atayın.</p>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {participants.map(p => {
+                            const globalP = users.find(u => u.id === p.id) || p;
+                            const isLinked = !!globalP.linkedTo && (Array.isArray(globalP.linkedTo) ? globalP.linkedTo.length > 0 : true);
+                            const parents = isLinked ? users.filter(parentP => Array.isArray(globalP.linkedTo) ? globalP.linkedTo.includes(parentP.id) || globalP.linkedTo.includes(String(parentP.id)) : parentP.id === globalP.linkedTo || String(parentP.id) === String(globalP.linkedTo)) : [];
+                            
+                            const partTickets = (Array.isArray(p.ticketFiles) && p.ticketFiles.length > 0)
+                                ? p.ticketFiles
+                                : ((Array.isArray(globalP.ticketFiles) && globalP.ticketFiles.length > 0)
+                                    ? globalP.ticketFiles
+                                    : ((p.ticketPdf || globalP.ticketPdf) ? [p.ticketPdf || globalP.ticketPdf] : []));
+                            const ticketCount = partTickets.length;
+                            const hasTicketPdf = ticketCount > 0;
+                            const companyName = globalP.company && globalP.company !== 'Bireysel Müşteri' && globalP.company !== 'Move Travel & Mice' ? globalP.company : null;
+
+                            return (
+                                <div 
+                                    key={p.id} 
+                                    onClick={() => openProfile(p)} 
+                                    style={{ 
+                                        background: '#ffffff', 
+                                        borderRadius: '16px', 
+                                        padding: '12px 14px', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        gap: '12px', 
+                                        border: '1px solid #f1f5f9', 
+                                        boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)', 
+                                        cursor: 'pointer', 
+                                        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                                        position: 'relative'
+                                    }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.borderColor = '#e2e8f0';
+                                        e.currentTarget.style.boxShadow = '0 6px 14px rgba(15, 23, 42, 0.07)';
+                                        e.currentTarget.style.transform = 'translateY(-1px)';
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.borderColor = '#f1f5f9';
+                                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(15, 23, 42, 0.04)';
+                                        e.currentTarget.style.transform = 'translateY(0)';
+                                    }}
+                                >
+                                    {/* Ticket Icon Indicator (Replaces Avatar) */}
+                                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                                        <div 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedUser(globalP);
+                                                setShowTransferSheet(true);
+                                            }}
+                                            style={{ 
+                                                width: '44px', 
+                                                height: '44px', 
+                                                borderRadius: '14px', 
+                                                background: hasTicketPdf ? '#f0fdf4' : '#fef2f2', 
+                                                border: hasTicketPdf ? '1.5px solid #bbf7d0' : '1.5px solid #fecaca', 
+                                                color: hasTicketPdf ? '#16a34a' : '#dc2626', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center',
+                                                boxShadow: hasTicketPdf ? '0 2px 6px rgba(22, 163, 74, 0.08)' : '0 2px 6px rgba(220, 38, 38, 0.08)',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                                                position: 'relative'
+                                            }}
+                                            onMouseEnter={e => {
+                                                e.currentTarget.style.transform = 'scale(1.08)';
+                                                e.currentTarget.style.boxShadow = hasTicketPdf ? '0 4px 10px rgba(22, 163, 74, 0.22)' : '0 4px 10px rgba(220, 38, 38, 0.22)';
+                                            }}
+                                            onMouseLeave={e => {
+                                                e.currentTarget.style.transform = 'scale(1)';
+                                                e.currentTarget.style.boxShadow = hasTicketPdf ? '0 2px 6px rgba(22, 163, 74, 0.08)' : '0 2px 6px rgba(220, 38, 38, 0.08)';
+                                            }}
+                                            title={hasTicketPdf ? (ticketCount > 1 ? `${ticketCount} Adet Bilet PDF Yüklendi (Görüntüle / Yönet)` : "Bilet PDF Yüklendi (Görüntüle / Değiştir)") : "Bilet PDF Bekleniyor (Yüklemek için tıklayın)"}
+                                        >
+                                            <Ticket size={22} />
+                                            {ticketCount > 1 && (
+                                                <div 
+                                                    style={{ 
+                                                        position: 'absolute', 
+                                                        top: '-4px', 
+                                                        right: '-4px', 
+                                                        background: '#16a34a', 
+                                                        color: 'white', 
+                                                        border: '1.5px solid #ffffff', 
+                                                        borderRadius: '10px', 
+                                                        padding: '0 4px', 
+                                                        fontSize: '9.5px', 
+                                                        fontWeight: 'bold', 
+                                                        lineHeight: '14px',
+                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.15)' 
+                                                    }}
+                                                >
+                                                    {ticketCount}
+                                                </div>
+                                            )}
+                                        </div>
+                                        {isLinked && (
+                                            <div 
+                                                style={{ 
+                                                    position: 'absolute', 
+                                                    bottom: '-3px', 
+                                                    right: '-3px', 
+                                                    background: '#ffffff', 
+                                                    border: '1.5px solid #fdf4ff', 
+                                                    borderRadius: '50%', 
+                                                    width: '18px', 
+                                                    height: '18px', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center',
+                                                    boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                                                    fontSize: '10px'
+                                                }}
+                                                title="Çocuk Katılımcı"
+                                            >
+                                                🎈
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Content Info */}
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                        {/* Parent Info for Children */}
+                                        {parents.length > 0 && (
+                                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', marginBottom: '3px', background: '#f8fafc', padding: '1px 7px 1px 2px', borderRadius: '10px', border: '1px solid #e2e8f0', maxWidth: '100%' }}>
+                                                <div style={{ display: 'flex' }}>
+                                                    {parents.slice(0, 2).map((par, idx) => (
+                                                        <img key={par.id} src={par.avatar} title={par.name} style={{ width: '15px', height: '15px', borderRadius: '50%', border: '1px solid white', marginLeft: idx > 0 ? '-4px' : '0', position: 'relative', zIndex: parents.length - idx, objectFit: 'cover' }} />
+                                                    ))}
+                                                </div>
+                                                <span style={{ fontSize: '10px', color: '#64748b', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>
+                                                    {parents.map(par => par.name.split(' ')[0]).join(' & ')}
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Participant Name & Company */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                            <h4 style={{ margin: 0, fontSize: '12.5px', fontWeight: '600', color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.1px', lineHeight: 1.25 }}>
+                                                {p.name}
+                                            </h4>
+                                            {companyName && (
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#64748b', fontSize: '10.5px', lineHeight: 1 }}>
+                                                    <Building size={10} color="#94a3b8" style={{ flexShrink: 0 }} />
+                                                    <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px', fontWeight: '500' }}>
+                                                        {companyName}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                        {isLinked ? (
+                                            <span style={{ 
+                                                background: '#fdf4ff', 
+                                                color: '#a21caf', 
+                                                border: '1px solid #fae8ff', 
+                                                fontSize: '11px', 
+                                                fontWeight: '700', 
+                                                width: '70px', 
+                                                height: '34px', 
+                                                borderRadius: '20px', 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                justifyContent: 'center', 
+                                                boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                boxSizing: 'border-box'
+                                            }}>
+                                                Çocuk
+                                            </span>
+                                        ) : (
+                                            <div 
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'space-between', 
+                                                    width: '70px', 
+                                                    height: '34px', 
+                                                    background: '#f8fafc', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    borderRadius: '20px', 
+                                                    padding: '0 3px', 
+                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                                                    boxSizing: 'border-box'
+                                                }}
+                                            >
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const globalP = users.find(u => u.id === p.id || u.email === p.email) || p;
+                                                        if (globalP.phone && globalP.phone !== '-') {
+                                                            window.location.href = `tel:${globalP.phone}`;
+                                                        } else {
+                                                            alert("Kullanıcıya ait telefon numarası kayıtlı değil.");
+                                                        }
+                                                    }} 
+                                                    style={{ 
+                                                        width: '28px', 
+                                                        height: '28px', 
+                                                        borderRadius: '50%', 
+                                                        background: 'transparent', 
+                                                        color: '#16a34a', 
+                                                        border: 'none', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center', 
+                                                        cursor: 'pointer',
+                                                        transition: 'background 0.15s ease'
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                    title="Telefonla Ara"
+                                                >
+                                                    <Phone size={13} />
+                                                </button>
+                                                <div style={{ width: '1px', height: '14px', background: '#cbd5e1' }} />
+                                                <button 
+                                                    onClick={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        navigate(`/dashboard/chat/direct_${tour.id}_${p.id}`); 
+                                                    }} 
+                                                    style={{ 
+                                                        width: '28px', 
+                                                        height: '28px', 
+                                                        borderRadius: '50%', 
+                                                        background: 'transparent', 
+                                                        color: '#2563eb', 
+                                                        border: 'none', 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'center', 
+                                                        cursor: 'pointer',
+                                                        transition: 'background 0.15s ease'
+                                                    }}
+                                                    onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
+                                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                                    title="Mesaj Gönder"
+                                                >
+                                                    <MessageCircle size={13} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {participants.length > 0 && (
+                    <div style={{ 
+                        marginTop: '32px', 
+                        background: 'white', 
+                        borderRadius: '20px', 
+                        padding: '16px 14px', 
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.02)',
+                        border: '1px solid #e2e8f0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', width: '100%', minWidth: 0 }}>
+                            <div style={{ 
+                                width: '7px', 
+                                height: '7px', 
+                                borderRadius: '50%', 
+                                background: allTicketsCompleted ? '#10b981' : '#f59e0b',
+                                flexShrink: 0
+                            }}></div>
+                            <span style={{ 
+                                fontSize: 'clamp(9px, 2.85vw, 12.5px)', 
+                                fontWeight: '700', 
+                                color: allTicketsCompleted ? '#10b981' : '#d97706',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                flex: 1,
+                                minWidth: 0
+                            }}>
+                                {allTicketsCompleted 
+                                    ? 'Tüm katılımcıların uçak biletleri (PDF) sisteme yüklendi.' 
+                                    : `Biletleme tamamlanmadı (${missingTicketsCount} katılımcının bilet PDF\'i eksik).`}
+                            </span>
+                        </div>
+                        
+                        <button
+                            onClick={handleSendNotifications}
+                            disabled={!allTicketsCompleted || sendingNotifications}
+                            style={{
+                                width: '100%',
+                                padding: '12px',
+                                borderRadius: '12px',
+                                fontSize: 'clamp(12px, 3.2vw, 13.5px)',
+                                fontWeight: 'bold',
+                                border: 'none',
+                                cursor: allTicketsCompleted && !sendingNotifications ? 'pointer' : 'not-allowed',
+                                background: allTicketsCompleted 
+                                    ? 'linear-gradient(135deg, var(--primary), #ec4899)' 
+                                    : '#cbd5e1',
+                                color: allTicketsCompleted ? 'white' : '#94a3b8',
+                                boxShadow: allTicketsCompleted && !sendingNotifications 
+                                    ? '0 6px 16px rgba(215, 20, 122, 0.25)' 
+                                    : 'none',
+                                transition: 'all 0.25s ease-in-out',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            {sendingNotifications ? (
+                                <>Katılımcılar Bilgilendiriliyor...</>
+                            ) : (
+                                <>Biletleme bilgisini müşterilere gönder</>
+                            )}
+                        </button>
+                    </div>
+                )}
+
+                {/* Bottom clearance spacer so that cards & buttons are never covered by floating bottom nav & Tintin button */}
+                <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
+            </div>
+
 
             {/* Remove Confirmation Popup */}
             {userToRemove && (

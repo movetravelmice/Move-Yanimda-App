@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import Header from '../../components/Header';
 import { useTourStore, calculateDaysAndNights, isTourPast } from '../../store/tourStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Star, 
   Users, 
@@ -13,6 +13,7 @@ import {
   Trash2, 
   MessageSquare,
   ChevronRight,
+  ChevronLeft,
   SlidersHorizontal,
   X,
   FileText,
@@ -53,15 +54,42 @@ class ErrorBoundary extends React.Component {
 function PastOperationsContent() {
   const navigate = useNavigate();
   const { tours, setTourStatus, deleteTour } = useTourStore();
+  
+  // Filter for past/completed tours safely
+  const pastTours = (tours || []).filter(isTourPast);
+
   const [successToast, setSuccessToast] = useState(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [searchQuery, setSearchQuery] = useState('');
   const [reportModalTour, setReportModalTour] = useState(null);
   const [deleteConfirmModal, setDeleteConfirmModal] = useState(null);
   const [modalFilterTab, setModalFilterTab] = useState('feedbacks'); // 'feedbacks' | 'all'
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Filter for past/completed tours safely
-  const pastTours = (tours || []).filter(isTourPast);
+  React.useEffect(() => {
+    const reportTourId = searchParams.get('report');
+    if (reportTourId && pastTours.length > 0) {
+      const found = pastTours.find(t => t.id === reportTourId);
+      if (found) {
+        setReportModalTour(found);
+      }
+    }
+  }, [searchParams, pastTours]);
+
+  const handleOpenReport = (tour) => {
+    setReportModalTour(tour);
+    setSearchParams({ report: tour.id });
+    const contentEl = document.querySelector('.mobile-app-content');
+    if (contentEl) contentEl.scrollTo({ top: 0, behavior: 'instant' });
+  };
+
+  const handleCloseReport = () => {
+    setReportModalTour(null);
+    if (searchParams.get('report')) {
+      searchParams.delete('report');
+      setSearchParams(searchParams, { replace: true });
+    }
+  };
 
   const uniqueYears = useMemo(() => {
     const years = new Set();
@@ -100,6 +128,299 @@ function PastOperationsContent() {
     konaklamaKonum: 'Otel & Lokasyon',
     restoranYemek: 'Restoran & Yemek Kalitesi'
   };
+
+  const renderReportPage = () => {
+    if (!reportModalTour) return null;
+
+    const safeParticipants = reportModalTour.participants || [];
+    const filteredFeedbacks = safeParticipants.filter(p => p && p.feedback);
+    
+    let avgRating = 0;
+    if (filteredFeedbacks.length > 0) {
+      const totalScore = filteredFeedbacks.reduce((sum, p) => sum + Number(p.feedback?.rating || 0), 0);
+      avgRating = (totalScore / filteredFeedbacks.length).toFixed(1);
+    }
+
+    const detailedAverages = {
+      program: 0,
+      acentaHizmeti: 0,
+      ucakHizmeti: 0,
+      turlar: 0,
+      konaklamaTemizlik: 0,
+      konaklamaKonum: 0,
+      restoranYemek: 0
+    };
+
+    if (filteredFeedbacks.length > 0) {
+      const counts = { program: 0, acentaHizmeti: 0, ucakHizmeti: 0, turlar: 0, konaklamaTemizlik: 0, konaklamaKonum: 0, restoranYemek: 0 };
+      filteredFeedbacks.forEach(p => {
+        const det = p.feedback.detailedRatings || {};
+        Object.keys(detailedAverages).forEach(key => {
+          if (det[key] !== undefined && Number(det[key]) > 0) {
+            detailedAverages[key] += Number(det[key]);
+            counts[key]++;
+          }
+        });
+      });
+      Object.keys(detailedAverages).forEach(key => {
+        if (counts[key] > 0) {
+          detailedAverages[key] = (detailedAverages[key] / counts[key]).toFixed(1);
+        } else {
+          detailedAverages[key] = null;
+        }
+      });
+    }
+
+    const displayedUsers = modalFilterTab === 'feedbacks' ? filteredFeedbacks : safeParticipants;
+
+    return (
+      <div style={{ paddingBottom: '40px', backgroundColor: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
+        {/* Header */}
+        <div style={{ 
+          background: 'var(--primary)', 
+          color: 'white', 
+          padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 22px 16px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          position: 'sticky', 
+          top: 0, 
+          zIndex: 10, 
+          boxShadow: '0 2px 10px rgba(0,0,0,0.1)' 
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+            <div 
+              onClick={handleCloseReport} 
+              style={{ cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+              title="Geri Dön"
+            >
+              <ChevronLeft size={24} />
+            </div>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <h2 style={{ fontSize: '16px', fontWeight: 'bold', margin: '0 0 2px', lineHeight: 1.2 }}>
+                Operasyon Değerlendirme Raporu
+              </h2>
+              <div style={{ fontSize: '11px', opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {reportModalTour.name}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', animation: 'fadeIn 0.2s ease' }}>
+          
+          {/* Executive Scorecard */}
+          <div style={{ 
+            background: 'white', 
+            borderRadius: '20px', 
+            padding: '16px 20px', 
+            border: '1px solid #e2e8f0', 
+            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-around'
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '24px', fontWeight: '800', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                <Star size={22} fill="#d97706" color="#d97706" /> {avgRating > 0 ? avgRating : '-'}
+              </div>
+              <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>
+                Genel Ortalama
+              </div>
+            </div>
+
+            <div style={{ width: '1px', height: '40px', background: '#e2e8f0' }} />
+
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '22px', fontWeight: '800', color: 'var(--primary)' }}>
+                {filteredFeedbacks.length} / {safeParticipants.length}
+              </div>
+              <div style={{ fontSize: '10.5px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>
+                Katılımcı Anketi
+              </div>
+            </div>
+          </div>
+
+          {/* Category Breakdown */}
+          {filteredFeedbacks.length > 0 && (
+            <div style={{ 
+              background: 'white', 
+              borderRadius: '20px', 
+              padding: '16px 18px', 
+              border: '1px solid #e2e8f0', 
+              boxShadow: '0 2px 8px rgba(0,0,0,0.03)'
+            }}>
+              <h4 style={{ fontSize: '13px', fontWeight: '800', color: '#1e293b', margin: '0 0 12px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <BarChart2 size={16} color="var(--primary)" /> Kategori Bazlı Puan Dağılımı
+              </h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {Object.keys(detailedAverages).map(key => {
+                  const score = detailedAverages[key];
+                  if (score === null) return null;
+                  const percent = (Number(score) / 5) * 100;
+                  return (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11.5px' }}>
+                      <span style={{ width: '150px', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {ratingLabels[key]}
+                      </span>
+                      <div style={{ flex: 1, height: '7px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: `${percent}%`, height: '100%', background: score >= 4 ? '#10b981' : score >= 3 ? '#f59e0b' : '#ef4444', borderRadius: '4px' }} />
+                      </div>
+                      <span style={{ width: '32px', textAlign: 'right', fontWeight: '800', color: '#1e293b' }}>
+                        {score}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Filter Tabs */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              onClick={() => setModalFilterTab('feedbacks')}
+              style={{ 
+                flex: 1, 
+                padding: '9px 12px', 
+                borderRadius: '12px', 
+                fontSize: '11.5px', 
+                fontWeight: '700', 
+                cursor: 'pointer',
+                background: modalFilterTab === 'feedbacks' ? 'var(--primary)' : 'white', 
+                color: modalFilterTab === 'feedbacks' ? 'white' : '#64748b',
+                boxShadow: modalFilterTab === 'feedbacks' ? '0 3px 10px rgba(215, 20, 122, 0.25)' : 'none',
+                border: '1px solid ' + (modalFilterTab === 'feedbacks' ? 'var(--primary)' : '#e2e8f0'),
+                transition: 'all 0.2s'
+              }}
+            >
+              Anketi Dolduranlar ({filteredFeedbacks.length})
+            </button>
+            <button 
+              onClick={() => setModalFilterTab('all')}
+              style={{ 
+                flex: 1, 
+                padding: '9px 12px', 
+                borderRadius: '12px', 
+                fontSize: '11.5px', 
+                fontWeight: '700', 
+                cursor: 'pointer',
+                background: modalFilterTab === 'all' ? 'var(--primary)' : 'white', 
+                color: modalFilterTab === 'all' ? 'white' : '#64748b',
+                boxShadow: modalFilterTab === 'all' ? '0 3px 10px rgba(215, 20, 122, 0.25)' : 'none',
+                border: '1px solid ' + (modalFilterTab === 'all' ? 'var(--primary)' : '#e2e8f0'),
+                transition: 'all 0.2s'
+              }}
+            >
+              Tüm Katılımcılar ({safeParticipants.length})
+            </button>
+          </div>
+
+          {/* Participant Reviews List */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {displayedUsers.length === 0 ? (
+              <div style={{ padding: '32px 16px', textAlign: 'center', background: 'white', borderRadius: '16px', color: '#94a3b8', fontSize: '12px', border: '1px solid #e2e8f0' }}>
+                {modalFilterTab === 'feedbacks' ? 'Henüz anket dolduran misafir bulunmuyor.' : 'Katılımcı bulunamadı.'}
+              </div>
+            ) : (
+              displayedUsers.map((u, pidx) => (
+                <div 
+                  key={u?.id || pidx} 
+                  style={{ 
+                    background: 'white', 
+                    borderRadius: '16px', 
+                    padding: '14px', 
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.02)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: u?.feedback ? '10px' : '0' }}>
+                    <img 
+                      src={u?.avatar || "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=100"} 
+                      style={{ width: '36px', height: '36px', borderRadius: '50%', objectFit: 'cover' }} 
+                      alt={u?.name || "Misafir"} 
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: '700', fontSize: '13px', color: '#1e293b' }}>
+                        {u?.name || "Bilinmeyen Misafir"}
+                      </div>
+                      <span style={{ fontSize: '10.5px', color: '#64748b' }}>
+                        {u?.phone || u?.email || "Kayıtlı Misafir"}
+                      </span>
+                    </div>
+
+                    {u?.feedback?.rating ? (
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '4px', 
+                        background: '#fef3c7', 
+                        color: '#b45309', 
+                        padding: '3px 8px', 
+                        borderRadius: '8px', 
+                        fontWeight: '800', 
+                        fontSize: '12px',
+                        border: '1px solid #fde68a'
+                      }}>
+                        <Star size={13} fill="#d97706" color="#d97706" /> {Number(u.feedback.rating).toFixed(1)}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: '10.5px', color: '#94a3b8', fontStyle: 'italic' }}>
+                        Değerlendirmedi
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Feedback Details */}
+                  {u?.feedback && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {u.feedback.comment && (
+                        <div style={{ 
+                          fontSize: '12px', 
+                          color: '#334155', 
+                          background: '#f8fafc', 
+                          padding: '10px 12px', 
+                          borderRadius: '10px', 
+                          borderLeft: '3px solid var(--primary)', 
+                          fontStyle: 'italic',
+                          lineHeight: 1.4
+                        }}>
+                          "{u.feedback.comment}"
+                        </div>
+                      )}
+
+                      {(u.feedback.contactPref || u.feedback.nextYearPlaces) && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', fontSize: '10.5px', color: '#475569' }}>
+                          {u.feedback.contactPref && (
+                            <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px' }}>
+                              📞 {u.feedback.contactPref === 'telefon' ? 'Telefonla aransın' : u.feedback.contactPref === 'brosur' ? 'Broşür istiyor' : u.feedback.contactPref}
+                            </span>
+                          )}
+                          {u.feedback.nextYearPlaces && (
+                            <span style={{ background: '#f1f5f9', padding: '3px 8px', borderRadius: '6px' }}>
+                              ✈️ Gelecek yıl: {u.feedback.nextYearPlaces}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Bottom clearance spacer */}
+        <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
+      </div>
+    );
+  };
+
+  if (reportModalTour) {
+    return renderReportPage();
+  }
 
   return (
     <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
@@ -212,336 +533,6 @@ function PastOperationsContent() {
           </div>
         </div>
       )}
-
-      {/* DETAYLI DEĞERLENDİRME & RAPOR MODALI */}
-      {reportModalTour && (() => {
-        const safeParticipants = reportModalTour.participants || [];
-        const filteredFeedbacks = safeParticipants.filter(p => p && p.feedback);
-        
-        let avgRating = 0;
-        if (filteredFeedbacks.length > 0) {
-          const totalScore = filteredFeedbacks.reduce((sum, p) => sum + Number(p.feedback?.rating || 0), 0);
-          avgRating = (totalScore / filteredFeedbacks.length).toFixed(1);
-        }
-
-        const detailedAverages = {
-          program: 0,
-          acentaHizmeti: 0,
-          ucakHizmeti: 0,
-          turlar: 0,
-          konaklamaTemizlik: 0,
-          konaklamaKonum: 0,
-          restoranYemek: 0
-        };
-
-        if (filteredFeedbacks.length > 0) {
-          const counts = { program: 0, acentaHizmeti: 0, ucakHizmeti: 0, turlar: 0, konaklamaTemizlik: 0, konaklamaKonum: 0, restoranYemek: 0 };
-          filteredFeedbacks.forEach(p => {
-            const det = p.feedback.detailedRatings || {};
-            Object.keys(detailedAverages).forEach(key => {
-              if (det[key] !== undefined && Number(det[key]) > 0) {
-                detailedAverages[key] += Number(det[key]);
-                counts[key]++;
-              }
-            });
-          });
-          Object.keys(detailedAverages).forEach(key => {
-            if (counts[key] > 0) {
-              detailedAverages[key] = (detailedAverages[key] / counts[key]).toFixed(1);
-            } else {
-              detailedAverages[key] = null;
-            }
-          });
-        }
-
-        const displayedUsers = modalFilterTab === 'feedbacks' ? filteredFeedbacks : safeParticipants;
-
-        return (
-          <div style={{ 
-            position: 'fixed', 
-            inset: 0, 
-            background: 'rgba(15, 23, 42, 0.65)', 
-            zIndex: 99999, 
-            display: 'flex', 
-            alignItems: 'flex-end', 
-            justifyContent: 'center', 
-            backdropFilter: 'blur(5px)' 
-          }}>
-            <div style={{ 
-              background: '#f8fafc', 
-              width: '100%', 
-              maxWidth: '480px', 
-              maxHeight: '90vh', 
-              borderRadius: '24px 24px 0 0', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              overflow: 'hidden',
-              boxShadow: '0 -10px 40px rgba(0,0,0,0.25)',
-              animation: 'slideUp 0.25s ease-out'
-            }}>
-              
-              {/* Modal Header */}
-              <div style={{ 
-                padding: '16px 20px', 
-                background: 'white', 
-                borderBottom: '1px solid #e2e8f0', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between' 
-              }}>
-                <div>
-                  <h3 style={{ fontSize: '14px', fontWeight: '800', color: '#1e293b', margin: '0 0 2px 0' }}>
-                    Operasyon Değerlendirme Raporu
-                  </h3>
-                  <span style={{ fontSize: '11px', color: '#64748b' }}>
-                    {reportModalTour.name}
-                  </span>
-                </div>
-                <div 
-                  onClick={() => setReportModalTour(null)}
-                  style={{ 
-                    width: '32px', 
-                    height: '32px', 
-                    borderRadius: '50%', 
-                    background: '#f1f5f9', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    cursor: 'pointer',
-                    color: '#64748b' 
-                  }}
-                >
-                  <X size={18} />
-                </div>
-              </div>
-
-              {/* Modal Body */}
-              <div style={{ padding: '16px', overflowY: 'auto', flex: 1 }}>
-                
-                {/* Executive Scorecard */}
-                <div style={{ 
-                  background: 'white', 
-                  borderRadius: '16px', 
-                  padding: '14px', 
-                  border: '1px solid #e2e8f0', 
-                  marginBottom: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-around'
-                }}>
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '22px', fontWeight: '800', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                      <Star size={20} fill="#d97706" color="#d97706" /> {avgRating > 0 ? avgRating : '-'}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>
-                      Genel Ortalama
-                    </div>
-                  </div>
-
-                  <div style={{ width: '1px', height: '36px', background: '#e2e8f0' }} />
-
-                  <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '20px', fontWeight: '800', color: '#2563eb' }}>
-                      {filteredFeedbacks.length} / {safeParticipants.length}
-                    </div>
-                    <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>
-                      Katılımcı Anketi
-                    </div>
-                  </div>
-                </div>
-
-                {/* Category Breakdown */}
-                {filteredFeedbacks.length > 0 && (
-                  <div style={{ 
-                    background: 'white', 
-                    borderRadius: '16px', 
-                    padding: '14px', 
-                    border: '1px solid #e2e8f0', 
-                    marginBottom: '14px' 
-                  }}>
-                    <h4 style={{ fontSize: '12px', fontWeight: '800', color: '#1e293b', margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <BarChart2 size={14} color="#2563eb" /> Kategori Bazlı Puan Dağılımı
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      {Object.keys(detailedAverages).map(key => {
-                        const score = detailedAverages[key];
-                        if (score === null) return null;
-                        const percent = (Number(score) / 5) * 100;
-                        return (
-                          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
-                            <span style={{ width: '140px', color: '#475569', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {ratingLabels[key]}
-                            </span>
-                            <div style={{ flex: 1, height: '6px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                              <div style={{ width: `${percent}%`, height: '100%', background: score >= 4 ? '#10b981' : score >= 3 ? '#f59e0b' : '#ef4444', borderRadius: '4px' }} />
-                            </div>
-                            <span style={{ width: '32px', textAlign: 'right', fontWeight: '800', color: '#1e293b' }}>
-                              {score}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Filter Tabs */}
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
-                  <button 
-                    onClick={() => setModalFilterTab('feedbacks')}
-                    style={{ 
-                      flex: 1, 
-                      padding: '7px', 
-                      borderRadius: '10px', 
-                      fontSize: '11px', 
-                      fontWeight: '700', 
-                      cursor: 'pointer',
-                      background: modalFilterTab === 'feedbacks' ? '#2563eb' : 'white', 
-                      color: modalFilterTab === 'feedbacks' ? 'white' : '#64748b',
-                      boxShadow: modalFilterTab === 'feedbacks' ? '0 2px 8px rgba(37,99,235,0.25)' : 'none',
-                      border: '1px solid ' + (modalFilterTab === 'feedbacks' ? '#2563eb' : '#e2e8f0')
-                    }}
-                  >
-                    Anketi Dolduranlar ({filteredFeedbacks.length})
-                  </button>
-                  <button 
-                    onClick={() => setModalFilterTab('all')}
-                    style={{ 
-                      flex: 1, 
-                      padding: '7px', 
-                      borderRadius: '10px', 
-                      fontSize: '11px', 
-                      fontWeight: '700', 
-                      cursor: 'pointer',
-                      background: modalFilterTab === 'all' ? '#2563eb' : 'white', 
-                      color: modalFilterTab === 'all' ? 'white' : '#64748b',
-                      boxShadow: modalFilterTab === 'all' ? '0 2px 8px rgba(37,99,235,0.25)' : 'none',
-                      border: '1px solid ' + (modalFilterTab === 'all' ? '#2563eb' : '#e2e8f0')
-                    }}
-                  >
-                    Tüm Katılımcılar ({safeParticipants.length})
-                  </button>
-                </div>
-
-                {/* Participant Reviews List */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {displayedUsers.length === 0 ? (
-                    <div style={{ padding: '24px', textAlign: 'center', background: 'white', borderRadius: '12px', color: '#94a3b8', fontSize: '11.5px' }}>
-                      {modalFilterTab === 'feedbacks' ? 'Henüz anket dolduran misafir bulunmuyor.' : 'Katılımcı bulunamadı.'}
-                    </div>
-                  ) : (
-                    displayedUsers.map((user, pidx) => (
-                      <div 
-                        key={user?.id || pidx} 
-                        style={{ 
-                          background: 'white', 
-                          borderRadius: '12px', 
-                          padding: '12px', 
-                          border: '1px solid #e2e8f0' 
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: user?.feedback ? '8px' : '0' }}>
-                          <img 
-                            src={user?.avatar || "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=100"} 
-                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} 
-                            alt="User" 
-                          />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontWeight: '700', fontSize: '12px', color: '#1e293b' }}>
-                              {user?.name || "Bilinmeyen Misafir"}
-                            </div>
-                            <span style={{ fontSize: '10px', color: '#64748b' }}>
-                              {user?.phone || user?.email || "Kayıtlı Misafir"}
-                            </span>
-                          </div>
-
-                          {user?.feedback?.rating ? (
-                            <div style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: '3px', 
-                              background: '#fef3c7', 
-                              color: '#b45309', 
-                              padding: '2px 7px', 
-                              borderRadius: '8px', 
-                              fontWeight: '800', 
-                              fontSize: '11.5px',
-                              border: '1px solid #fde68a'
-                            }}>
-                              <Star size={12} fill="#d97706" color="#d97706" /> {Number(user.feedback.rating).toFixed(1)}
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: '10px', color: '#94a3b8', fontStyle: 'italic' }}>
-                              Değerlendirmedi
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Feedback Details */}
-                        {user?.feedback && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            {user.feedback.comment && (
-                              <div style={{ 
-                                fontSize: '11px', 
-                                color: '#334155', 
-                                background: '#f8fafc', 
-                                padding: '8px 10px', 
-                                borderRadius: '8px', 
-                                borderLeft: '3px solid #2563eb', 
-                                fontStyle: 'italic',
-                                lineHeight: 1.35
-                              }}>
-                                "{user.feedback.comment}"
-                              </div>
-                            )}
-
-                            {(user.feedback.contactPref || user.feedback.nextYearPlaces) && (
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', fontSize: '10px', color: '#475569' }}>
-                                {user.feedback.contactPref && (
-                                  <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
-                                    📞 {user.feedback.contactPref === 'telefon' ? 'Telefonla aransın' : user.feedback.contactPref === 'brosur' ? 'Broşür istiyor' : user.feedback.contactPref}
-                                  </span>
-                                )}
-                                {user.feedback.nextYearPlaces && (
-                                  <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
-                                    ✈️ Gelecek yıl: {user.feedback.nextYearPlaces}
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-
-              </div>
-
-              {/* Modal Footer */}
-              <div style={{ padding: '12px 16px', background: 'white', borderTop: '1px solid #e2e8f0' }}>
-                <button 
-                  onClick={() => setReportModalTour(null)}
-                  style={{ 
-                    width: '100%', 
-                    padding: '10px', 
-                    borderRadius: '12px', 
-                    background: '#2563eb', 
-                    color: 'white', 
-                    border: 'none', 
-                    fontSize: '12.5px', 
-                    fontWeight: '700', 
-                    cursor: 'pointer' 
-                  }}
-                >
-                  Kapat
-                </button>
-              </div>
-
-            </div>
-          </div>
-        );
-      })()}
 
       {/* MAIN CONTENT AREA */}
       <div style={{ padding: '14px 16px' }}>
@@ -849,7 +840,7 @@ function PastOperationsContent() {
                     {/* Action Buttons Row */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px' }}>
                       <button 
-                        onClick={() => setReportModalTour(tour)}
+                        onClick={() => handleOpenReport(tour)}
                         style={{ 
                           background: '#eff6ff', 
                           color: '#2563eb', 
@@ -898,6 +889,9 @@ function PastOperationsContent() {
             })}
           </div>
         )}
+
+        {/* Bottom clearance spacer so cards are never covered by floating bottom nav & Tintin button */}
+        <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
 
       </div>
     </div>

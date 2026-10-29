@@ -1,5 +1,6 @@
 // Travel Tools & Translation Service Layer
 // Uses real backend endpoints, Web Speech API, and real-time calculation logic
+import { getApiBaseUrl } from '../utils/apiConfig';
 
 export const SUPPORTED_LANGUAGES = [
   { code: 'auto', name: 'Otomatik Algıla', flag: '🌐', flagCode: '', bcp: 'tr-TR' },
@@ -27,7 +28,8 @@ export const translateText = async (text, sourceLang = 'auto', targetLang = 'en'
 
   // 1. Try Backend API first
   try {
-    const response = await fetch('/api/translate', {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/api/translate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -680,7 +680,7 @@ export default function WelcomeLanding() {
                   </div>
 
                   {/* Görsel Altındaki Bilgiler & Buton */}
-                  <div style={{ padding: '12px 14px 14px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ padding: '18px 14px 16px 14px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                     {/* Seyahat Bilgi Çubuğu (Birleşik Mimari Bar) */}
                     <div style={{
                       display: 'grid',
@@ -688,7 +688,7 @@ export default function WelcomeLanding() {
                       background: '#f8fafc',
                       borderRadius: '14px',
                       border: '1px solid #e2e8f0',
-                      padding: '10px 4px'
+                      padding: '11px 4px'
                     }}>
                       {/* Saat Farkı */}
                       <div style={{ 

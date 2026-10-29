@@ -516,6 +516,13 @@ export default function TimezoneCalculator({ isEmbedded = false }) {
         }}>
           <Clock size={22} strokeWidth={2.4} />
         </div>
+        <div style={{
+          width: '1.2px',
+          height: '24px',
+          background: '#F9BED8',
+          borderRadius: '1px',
+          flexShrink: 0
+        }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '13.5px', fontWeight: '800', color: '#0f172a' }}>

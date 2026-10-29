@@ -21,7 +21,8 @@ import {
   Smartphone,
   Monitor,
   ShieldAlert,
-  HelpCircle
+  HelpCircle,
+  ChevronDown
 } from 'lucide-react';
 import { 
   SUPPORTED_LANGUAGES, 
@@ -69,6 +70,23 @@ export default function PublicTranslator({ isEmbedded = false }) {
   const [permissionGuideDevice, setPermissionGuideDevice] = useState('mobile'); // 'mobile' | 'ios' | 'desktop'
   const [pendingMicAction, setPendingMicAction] = useState(null);
   const [permissionSuccessMsg, setPermissionSuccessMsg] = useState('');
+  const [openDropdown, setOpenDropdown] = useState(null); // 'source' | 'target' | null
+
+  // Click outside to close language dropdowns
+  useEffect(() => {
+    if (!openDropdown) return;
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.custom-lang-dropdown')) {
+        setOpenDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [openDropdown]);
 
   // Auto-detect device for permission guide
   useEffect(() => {
@@ -528,61 +546,160 @@ export default function PublicTranslator({ isEmbedded = false }) {
         </div>
       )}
 
-      {/* 2. Language Selector Bar (Daha Oval & Küçültülmüş Yazılar & Gerçek Bayraklar) */}
+      {/* 2. Language Selector Bar (Şık ve Temaya Uygun Custom Açılır Menü) */}
       <div style={{
         backgroundColor: '#ffffff',
         borderRadius: '30px',
-        border: '1px solid #e2e8f0',
-        padding: '6px 10px',
+        border: '1.2px solid #F9BED8',
+        padding: '6px 8px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        gap: '8px',
+        gap: '6px',
         marginBottom: '12px',
-        boxShadow: '0 2px 6px rgba(15, 23, 42, 0.02)'
+        boxShadow: '0 4px 14px rgba(215, 20, 122, 0.05)',
+        position: 'relative',
+        zIndex: 60
       }}>
-        {/* Source Language Select */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          borderRadius: '24px',
-          padding: '2px 8px 2px 10px'
-        }}>
-          {sourceLangObj?.flagCode && (
-            <CountryFlag country={sourceLangObj.flagCode} size="sm" />
-          )}
-          <select
-            value={sourceLang}
-            onChange={e => setSourceLang(e.target.value)}
+        {/* Source Language Custom Dropdown */}
+        <div className="custom-lang-dropdown" style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+          <button
+            type="button"
+            onClick={() => setOpenDropdown(openDropdown === 'source' ? null : 'source')}
             style={{
               width: '100%',
-              padding: '6px 2px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '6px',
+              background: openDropdown === 'source' ? '#FFF5F9' : '#f8fafc',
+              border: openDropdown === 'source' ? '1.5px solid #D7147A' : '1px solid #e2e8f0',
               borderRadius: '24px',
-              border: 'none',
-              background: 'transparent',
-              fontSize: '11.5px',
-              fontWeight: '700',
-              color: '#0f172a',
-              outline: 'none',
-              cursor: 'pointer'
+              padding: '6px 10px',
+              cursor: 'pointer',
+              transition: 'all 0.18s ease',
+              boxShadow: openDropdown === 'source' ? '0 0 0 3px rgba(215, 20, 122, 0.12)' : 'none',
+              outline: 'none'
             }}
           >
-            {SUPPORTED_LANGUAGES.filter(l => activeMode === 'dialogue' ? l.code !== 'auto' : true).map(lang => (
-              <option key={lang.code} value={lang.code}>
-                {lang.name}
-              </option>
-            ))}
-          </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
+              {sourceLangObj?.flagCode ? (
+                <CountryFlag country={sourceLangObj.flagCode} size="sm" />
+              ) : (
+                <span style={{ fontSize: '13px', lineHeight: 1 }}>{sourceLangObj?.flag || '🌐'}</span>
+              )}
+              <span style={{
+                fontSize: '11.5px',
+                fontWeight: '750',
+                color: openDropdown === 'source' ? '#D7147A' : '#0f172a',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>
+                {sourceLangObj?.name || 'Türkçe'}
+              </span>
+            </div>
+            <ChevronDown
+              size={13}
+              style={{
+                color: openDropdown === 'source' ? '#D7147A' : '#64748b',
+                transform: openDropdown === 'source' ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s ease',
+                flexShrink: 0
+              }}
+            />
+          </button>
+
+          {/* Source Menu Popup */}
+          {openDropdown === 'source' && (
+            <div style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              left: 0,
+              width: '185px',
+              maxHeight: '260px',
+              overflowY: 'auto',
+              background: '#ffffff',
+              borderRadius: '16px',
+              border: '1.2px solid #F9BED8',
+              boxShadow: '0 12px 28px -4px rgba(215, 20, 122, 0.18), 0 6px 16px rgba(15, 23, 42, 0.08)',
+              zIndex: 1000,
+              padding: '6px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px'
+            }}>
+              {SUPPORTED_LANGUAGES.filter(l => activeMode === 'dialogue' ? l.code !== 'auto' : true).map(lang => {
+                const isSelected = lang.code === sourceLang;
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      setSourceLang(lang.code);
+                      setOpenDropdown(null);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      padding: '7px 10px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: isSelected ? 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)' : 'transparent',
+                      color: isSelected ? '#D7147A' : '#334155',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={e => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = '#FDF2F8';
+                        e.currentTarget.style.color = '#D7147A';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#334155';
+                      }
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      {lang.flagCode ? (
+                        <CountryFlag country={lang.flagCode} size="sm" />
+                      ) : (
+                        <span style={{ fontSize: '13px', lineHeight: 1 }}>{lang.flag || '🌐'}</span>
+                      )}
+                      <span style={{
+                        fontSize: '11.5px',
+                        fontWeight: isSelected ? '800' : '600',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {lang.name}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <Check size={13} color="#D7147A" strokeWidth={2.8} style={{ flexShrink: 0 }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Swap Button */}
         <button
           type="button"
-          onClick={handleSwap}
+          onClick={() => {
+            handleSwap();
+            setOpenDropdown(null);
+          }}
           title="Dilleri Değiştir"
           style={{
             width: '32px',
@@ -604,42 +721,136 @@ export default function PublicTranslator({ isEmbedded = false }) {
           <ArrowLeftRight size={14} />
         </button>
 
-        {/* Target Language Select */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          background: '#f8fafc',
-          border: '1px solid #e2e8f0',
-          borderRadius: '24px',
-          padding: '2px 8px 2px 10px'
-        }}>
-          {targetLangObj?.flagCode && (
-            <CountryFlag country={targetLangObj.flagCode} size="sm" />
-          )}
-          <select
-            value={targetLang}
-            onChange={e => setTargetLang(e.target.value)}
+        {/* Target Language Custom Dropdown */}
+        <div className="custom-lang-dropdown" style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+          <button
+            type="button"
+            onClick={() => setOpenDropdown(openDropdown === 'target' ? null : 'target')}
             style={{
               width: '100%',
-              padding: '6px 2px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '6px',
+              background: openDropdown === 'target' ? '#FFF5F9' : '#f8fafc',
+              border: openDropdown === 'target' ? '1.5px solid #D7147A' : '1px solid #e2e8f0',
               borderRadius: '24px',
-              border: 'none',
-              background: 'transparent',
-              fontSize: '11.5px',
-              fontWeight: '700',
-              color: '#0f172a',
-              outline: 'none',
-              cursor: 'pointer'
+              padding: '6px 10px',
+              cursor: 'pointer',
+              transition: 'all 0.18s ease',
+              boxShadow: openDropdown === 'target' ? '0 0 0 3px rgba(215, 20, 122, 0.12)' : 'none',
+              outline: 'none'
             }}
           >
-            {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => (
-              <option key={lang.code} value={lang.code}>
-                {lang.name}
-              </option>
-            ))}
-          </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, overflow: 'hidden' }}>
+              {targetLangObj?.flagCode ? (
+                <CountryFlag country={targetLangObj.flagCode} size="sm" />
+              ) : (
+                <span style={{ fontSize: '13px', lineHeight: 1 }}>{targetLangObj?.flag || '🌐'}</span>
+              )}
+              <span style={{
+                fontSize: '11.5px',
+                fontWeight: '750',
+                color: openDropdown === 'target' ? '#D7147A' : '#0f172a',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>
+                {targetLangObj?.name || 'İngilizce'}
+              </span>
+            </div>
+            <ChevronDown
+              size={13}
+              style={{
+                color: openDropdown === 'target' ? '#D7147A' : '#64748b',
+                transform: openDropdown === 'target' ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s ease',
+                flexShrink: 0
+              }}
+            />
+          </button>
+
+          {/* Target Menu Popup */}
+          {openDropdown === 'target' && (
+            <div style={{
+              position: 'absolute',
+              top: 'calc(100% + 6px)',
+              right: 0,
+              width: '185px',
+              maxHeight: '260px',
+              overflowY: 'auto',
+              background: '#ffffff',
+              borderRadius: '16px',
+              border: '1.2px solid #F9BED8',
+              boxShadow: '0 12px 28px -4px rgba(215, 20, 122, 0.18), 0 6px 16px rgba(15, 23, 42, 0.08)',
+              zIndex: 1000,
+              padding: '6px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px'
+            }}>
+              {SUPPORTED_LANGUAGES.filter(l => l.code !== 'auto').map(lang => {
+                const isSelected = lang.code === targetLang;
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      setTargetLang(lang.code);
+                      setOpenDropdown(null);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      padding: '7px 10px',
+                      borderRadius: '10px',
+                      border: 'none',
+                      background: isSelected ? 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)' : 'transparent',
+                      color: isSelected ? '#D7147A' : '#334155',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      width: '100%',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={e => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = '#FDF2F8';
+                        e.currentTarget.style.color = '#D7147A';
+                      }
+                    }}
+                    onMouseLeave={e => {
+                      if (!isSelected) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#334155';
+                      }
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                      {lang.flagCode ? (
+                        <CountryFlag country={lang.flagCode} size="sm" />
+                      ) : (
+                        <span style={{ fontSize: '13px', lineHeight: 1 }}>{lang.flag || '🌐'}</span>
+                      )}
+                      <span style={{
+                        fontSize: '11.5px',
+                        fontWeight: isSelected ? '800' : '600',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis'
+                      }}>
+                        {lang.name}
+                      </span>
+                    </div>
+                    {isSelected && (
+                      <Check size={13} color="#D7147A" strokeWidth={2.8} style={{ flexShrink: 0 }} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

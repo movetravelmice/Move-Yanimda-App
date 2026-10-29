@@ -83,16 +83,20 @@ export function useDeviceNotifications() {
         initFirestoreNotifications();
 
         const checkCurrentPermission = async () => {
-            let isGranted = false;
-            if (Capacitor.isNativePlatform()) {
-                const cur = await LocalNotifications.checkPermissions();
-                isGranted = cur.display === 'granted';
-            } else if ('Notification' in window) {
-                isGranted = Notification.permission === 'granted';
-            }
+            try {
+                let isGranted = false;
+                if (Capacitor.isNativePlatform()) {
+                    const cur = await LocalNotifications.checkPermissions();
+                    isGranted = cur.display === 'granted';
+                } else if ('Notification' in window) {
+                    isGranted = Notification.permission === 'granted';
+                }
 
-            if (user.pushEnabled !== isGranted) {
-                updateProfile({ pushEnabled: isGranted });
+                if (user.pushEnabled !== isGranted) {
+                    updateProfile({ pushEnabled: isGranted });
+                }
+            } catch (err) {
+                console.warn("Device notification permission check failed:", err);
             }
         };
 

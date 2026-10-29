@@ -142,6 +142,89 @@ export const isTourActive = (tour) => {
     return !isTourPast(tour);
 };
 
+export const getUserTourReview = (tour, user) => {
+    if (!tour) return null;
+
+    // 1. Check matching participant's feedback in this tour
+    if (tour.participants && user) {
+        const uEmail = user.email ? user.email.trim().toLowerCase() : '';
+        const uPhone = (user.phone || '').replace(/\D/g, '');
+        const uName = user.name ? user.name.trim().toLowerCase() : '';
+
+        const p = tour.participants.find(part => {
+            if (user.id && part.id === user.id) return true;
+            if (uEmail && part.email && part.email.trim().toLowerCase() === uEmail) return true;
+            const pPhone = (part.phone || '').replace(/\D/g, '');
+            if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) return true;
+            if (uName && part.name && part.name.trim().toLowerCase() === uName) return true;
+            return false;
+        });
+
+        if (p?.feedback?.rating) {
+            return {
+                rating: Number(p.feedback.rating),
+                detailedRatings: p.feedback.detailedRatings || null,
+                comment: p.feedback.comment || '',
+                contactPref: p.feedback.contactPref || '',
+                nextYearPlaces: p.feedback.nextYearPlaces || '',
+                date: p.feedback.date || '',
+                customerName: p.feedback.customerName || p.name || '',
+                participant: p,
+                source: 'participant'
+            };
+        }
+    }
+
+    // 2. Check reviews in tour.reviews
+    if (tour.reviews && Array.isArray(tour.reviews) && user) {
+        const uEmail = user.email ? user.email.trim().toLowerCase() : '';
+        const uName = user.name ? user.name.trim().toLowerCase() : '';
+
+        const rev = tour.reviews.find(r => {
+            if (user.id && r.userId === user.id) return true;
+            if (uEmail && r.email && r.email.trim().toLowerCase() === uEmail) return true;
+            if (uName && r.customerName && r.customerName.trim().toLowerCase() === uName) return true;
+            return false;
+        });
+
+        if (rev?.rating) {
+            return {
+                rating: Number(rev.rating),
+                detailedRatings: rev.detailedRatings || null,
+                comment: rev.comment || '',
+                contactPref: rev.contactPref || '',
+                nextYearPlaces: rev.nextYearPlaces || '',
+                date: rev.date || '',
+                customerName: rev.customerName || '',
+                review: rev,
+                source: 'review'
+            };
+        }
+    }
+
+    // 3. Fallback to localStorage (browser cache)
+    try {
+        const saved = localStorage.getItem('base44_reviews');
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            const val = parsed[tour.id] ?? parsed[String(tour.id)];
+            if (val !== undefined && val !== null && !isNaN(Number(val))) {
+                return {
+                    rating: Number(val),
+                    detailedRatings: null,
+                    comment: '',
+                    contactPref: '',
+                    nextYearPlaces: '',
+                    date: '',
+                    source: 'localStorage'
+                };
+            }
+        }
+    } catch (e) {}
+
+    return null;
+};
+
 const parseExcelDateValue = (val) => {
     if (!val) return { date: '', departureTime: '', arrivalTime: '' };
     const str = String(val).trim();
@@ -446,34 +529,84 @@ export const useTourStore = create((set, get) => ({
       }
   },
 
-  addParticipantFeedback: async (tourId, participantIdentifier, feedbackData) => {
-      const tour = get().tours.find(t => t.id === tourId);
+  addParticipantFeedback: async (tourId, userOrIdentifier, feedbackData) => {
+      const tour = get().tours.find(t => String(t.id) === String(tourId));
       if (!tour) return;
+
+      const isMatch = (p) => {
+          if (!p) return false;
+          if (typeof userOrIdentifier === 'object' && userOrIdentifier !== null) {
+              const u = userOrIdentifier;
+              if (u.id && p.id === u.id) return true;
+              if (u.email && p.email && p.email.trim().toLowerCase() === u.email.trim().toLowerCase()) return true;
+              const pPhone = (p.phone || '').replace(/\D/g, '');
+              const uPhone = (u.phone || '').replace(/\D/g, '');
+              if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) return true;
+              if (u.name && p.name && p.name.trim().toLowerCase() === u.name.trim().toLowerCase()) return true;
+              return false;
+          }
+          const idStr = String(userOrIdentifier || '').trim().toLowerCase();
+          if (p.id && String(p.id).trim().toLowerCase() === idStr) return true;
+          if (p.email && p.email.trim().toLowerCase() === idStr) return true;
+          if (p.name && p.name.trim().toLowerCase() === idStr) return true;
+          const pPhone = (p.phone || '').replace(/\D/g, '');
+          const idDigits = idStr.replace(/\D/g, '');
+          if (pPhone.length >= 7 && idDigits.length >= 7 && (pPhone.endsWith(idDigits.slice(-10)) || idDigits.endsWith(pPhone.slice(-10)))) return true;
+          return false;
+      };
+
       let found = false;
       let updatedParticipants = (tour.participants || []).map(p => {
-          if (p.id === participantIdentifier || p.name === participantIdentifier) {
+          if (isMatch(p)) {
               found = true;
               return { ...p, feedback: feedbackData };
           }
           return p;
       });
+
       if (!found && updatedParticipants.length > 0) {
-          updatedParticipants[0] = { ...updatedParticipants[0], feedback: feedbackData };
+          const fbEmail = (feedbackData?.email || '').trim().toLowerCase();
+          const fbName = (feedbackData?.customerName || '').trim().toLowerCase();
+          const pIdx = updatedParticipants.findIndex(p =>
+              (fbEmail && p.email && p.email.trim().toLowerCase() === fbEmail) ||
+              (fbName && p.name && p.name.trim().toLowerCase() === fbName)
+          );
+          if (pIdx !== -1) {
+              found = true;
+              updatedParticipants[pIdx] = { ...updatedParticipants[pIdx], feedback: feedbackData };
+          } else {
+              updatedParticipants[0] = { ...updatedParticipants[0], feedback: feedbackData };
+          }
       }
+
       set(state => ({
-          tours: state.tours.map(t => t.id === tourId ? { ...t, participants: updatedParticipants } : t)
+          tours: state.tours.map(t => String(t.id) === String(tourId) ? { ...t, participants: updatedParticipants } : t)
       }));
-      try { await updateDoc(doc(db, 'tours', tourId), { participants: updatedParticipants }); } catch (e) {}
+      try { 
+          await updateDoc(doc(db, 'tours', tour.id), { participants: updatedParticipants }); 
+      } catch (e) {
+          console.error("addParticipantFeedback update error:", e);
+      }
   },
 
   rateTour: async (tourId, reviewData) => {
-      const tour = get().tours.find(t => t.id === tourId);
+      const tour = get().tours.find(t => String(t.id) === String(tourId));
       if (!tour) return;
-      const reviews = tour.reviews ? [...tour.reviews, reviewData] : [reviewData];
+      const otherReviews = (tour.reviews || []).filter(r => {
+          if (reviewData.userId && r.userId && r.userId === reviewData.userId) return false;
+          if (reviewData.email && r.email && r.email.trim().toLowerCase() === reviewData.email.trim().toLowerCase()) return false;
+          if (reviewData.customerName && r.customerName && r.customerName.trim().toLowerCase() === reviewData.customerName.trim().toLowerCase()) return false;
+          return true;
+      });
+      const reviews = [...otherReviews, reviewData];
       set(state => ({
-          tours: state.tours.map(t => t.id === tourId ? { ...t, reviews } : t)
+          tours: state.tours.map(t => String(t.id) === String(tourId) ? { ...t, reviews } : t)
       }));
-      try { await updateDoc(doc(db, 'tours', tourId), { reviews }); } catch (e) {}
+      try { 
+          await updateDoc(doc(db, 'tours', tour.id), { reviews }); 
+      } catch (e) {
+          console.error("rateTour update error:", e);
+      }
   },
 
   deleteTour: async (tourId) => {

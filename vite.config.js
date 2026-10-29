@@ -8,5 +8,17 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3001'
     }
+  },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-firebase': ['firebase/app', 'firebase/firestore', 'firebase/auth', 'firebase/storage'],
+          'vendor-icons': ['lucide-react']
+        }
+      }
+    }
   }
 })

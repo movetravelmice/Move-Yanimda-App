@@ -25,6 +25,7 @@ import { useSettingsStore, DEFAULT_POPULAR_ROUTES } from '../../store/settingsSt
 import { useIndividualStore } from '../../store/individualStore';
 import WeatherOutfitWidget from '../../components/WeatherOutfitWidget';
 import EmergencyCardWidget from '../../components/EmergencyCardWidget';
+import ModeSwitchBanner from '../../components/ModeSwitchBanner';
 import CountryFlag, { getCurrencySymbol } from '../../components/CountryFlag';
 
 const formatDuration = (val) => val ? String(val).replace(/\bsa\b/gi, 'Saat').trim() : '';
@@ -208,6 +209,7 @@ export default function IndividualDashboard() {
       `}</style>
 
       <div style={{ maxWidth: '640px', margin: '0 auto', width: '100%', padding: '14px 14px 10px 14px', boxSizing: 'border-box' }}>
+        <ModeSwitchBanner currentMode="individual" />
         
         {/* ==========================================
             0. KİŞİSELLEŞTİRİLMİŞ KULLANICI KARTI & SEYAHAT DURUMU
@@ -223,7 +225,7 @@ export default function IndividualDashboard() {
           {/* Üst Karşılama ve Buton */}
           <div style={{ 
             display: 'flex', 
-            alignItems: 'stretch', 
+            alignItems: 'center', 
             justifyContent: 'space-between', 
             paddingTop: '6px',
             paddingBottom: '8px',
@@ -256,28 +258,33 @@ export default function IndividualDashboard() {
             <button
               type="button"
               onClick={() => navigate('/individual/travels/new')}
+              title="Yeni Seyahat Ekle"
+              aria-label="Yeni Seyahat Ekle"
               style={{
-                alignSelf: 'stretch',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                padding: '0 15px',
-                borderRadius: '12px',
+                width: '36px',
+                height: '36px',
+                borderRadius: '10px',
                 border: 'none',
                 background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)',
                 color: '#ffffff',
-                fontSize: '11.5px',
-                fontWeight: '800',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
                 boxShadow: '0 2px 8px rgba(215, 20, 122, 0.22)',
                 transition: 'all 0.15s ease',
-                whiteSpace: 'nowrap',
-                minHeight: '38px'
+                flexShrink: 0
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(215, 20, 122, 0.32)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(215, 20, 122, 0.22)';
               }}
             >
-              <Plus size={14} strokeWidth={2.4} />
-              <span>Yeni Seyahat</span>
+              <Plus size={18} strokeWidth={2.4} />
             </button>
           </div>
 
@@ -887,7 +894,7 @@ export default function IndividualDashboard() {
                   </div>
 
                   {/* Görsel Altındaki Bilgiler & Buton */}
-                  <div style={{ padding: '12px 14px 14px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ padding: '18px 14px 16px 14px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                     {/* Seyahat Bilgi Çubuğu */}
                     <div style={{
                       display: 'grid',
@@ -895,7 +902,7 @@ export default function IndividualDashboard() {
                       background: '#f8fafc',
                       borderRadius: '14px',
                       border: '1px solid #e2e8f0',
-                      padding: '10px 4px'
+                      padding: '11px 4px'
                     }}>
                       {/* Saat Farkı */}
                       <div style={{ 

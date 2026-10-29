@@ -58,7 +58,7 @@ export default function Notifications() {
     })
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const hasUnread = myNotifications.some(n => !n.readBy.includes(user?.email || 'mock_user'));
+  const hasUnread = myNotifications.some(n => !(n.readBy || []).includes(user?.email || 'mock_user'));
 
   const canSendBroadcast = ['admin', 'expert', 'ticketing'].includes(user?.role);
 
@@ -125,6 +125,12 @@ export default function Notifications() {
               }}>
                 <Megaphone size={17} />
               </div>
+              <div style={{
+                width: '1px',
+                height: '24px',
+                background: 'rgba(255, 255, 255, 0.35)',
+                flexShrink: 0
+              }} />
               <div style={{ textAlign: 'left' }}>
                 <div style={{ fontSize: '13px', fontWeight: '800' }}>
                   Toplu Push & Web Bildirimi Gönder
@@ -194,7 +200,7 @@ export default function Notifications() {
             </div>
           ) : (
             myNotifications.map(n => {
-              const isUnread = !n.readBy.includes(user?.email || 'mock_user');
+              const isUnread = !(n.readBy || []).includes(user?.email || 'mock_user');
               const isExpertAlert = n.type === 'expert_alert' || n.type === 'alert';
               const isPromo = n.type === 'promo';
 
@@ -289,6 +295,9 @@ export default function Notifications() {
             })
           )}
         </div>
+
+        {/* Bottom clearance spacer so notifications are never covered by floating bottom nav & Tintin button */}
+        <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} />
       </div>
     </div>
   );

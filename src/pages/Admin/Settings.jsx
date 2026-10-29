@@ -1,10 +1,10 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Settings, Image as ImageIcon, Briefcase, Mail, Cpu, Upload, 
   Loader2, Info, Smartphone, AlertTriangle, Trash2, Bot, Sparkles, 
   Eye, EyeOff, CheckCircle2, XCircle, Check, KeyRound, Globe, 
-  ShieldAlert, Send, Layers, MessageSquare, Compass, ArrowRight
+  ShieldAlert, Send, Layers, MessageSquare, Compass, ArrowRight, ChevronDown
 } from 'lucide-react';
 import Header from '../../components/Header';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -49,6 +49,25 @@ export default function AdminSettings() {
   const [testWaTemplate, setTestWaTemplate] = useState('new_user_welcome');
   const [isSendingTestWa, setIsSendingTestWa] = useState(false);
   const [testWaResult, setTestWaResult] = useState(null);
+
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
 
   const sendTestSms = async () => {
       if (!testSmsNumber) {
@@ -235,13 +254,16 @@ export default function AdminSettings() {
   };
 
   const tabs = [
-    { key: 'all', label: 'Tümü', icon: Layers },
-    { key: 'popular_routes', label: 'Popüler Rotalar', icon: Compass },
-    { key: 'brand', label: 'Kurumsal', icon: Briefcase },
-    { key: 'messaging', label: 'E-Posta & SMS', icon: Mail },
-    { key: 'whatsapp_ai', label: 'WhatsApp & Yapay Zeka', icon: Sparkles },
-    { key: 'api', label: 'Servisler & Sistem', icon: Cpu },
+    { key: 'all', label: 'Tümü', icon: Layers, desc: 'Tüm sistem ve entegrasyon ayarları' },
+    { key: 'popular_routes', label: 'Popüler Rotalar', icon: Compass, desc: 'Ana sayfa vitrini & tur rotaları' },
+    { key: 'brand', label: 'Kurumsal', icon: Briefcase, desc: 'Logo, firma adı ve duyuru avatarları' },
+    { key: 'messaging', label: 'E-Posta & SMS', icon: Mail, desc: 'SMTP posta ve NetGSM SMS yapılandırması' },
+    { key: 'whatsapp_ai', label: 'WhatsApp & Yapay Zeka', icon: Sparkles, desc: 'Green API ve Gemini Yapay Zeka botu' },
+    { key: 'api', label: 'Servisler & Sistem', icon: Cpu, desc: 'Google Places, Akbank döviz & API anahtarları' },
   ];
+
+  const currentTab = tabs.find(t => t.key === activeTab) || tabs[0];
+  const CurrentIcon = currentTab.icon;
 
   return (
     <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
@@ -250,100 +272,206 @@ export default function AdminSettings() {
       <div style={{ maxWidth: '680px', margin: '0 auto', padding: '14px 12px' }}>
 
          {/* 1. Header Overview Banner */}
-         <div style={{ 
-           background: 'white', 
-           borderRadius: '16px', 
-           border: '1px solid #e2e8f0', 
-           padding: '12px 14px', 
+         <div style={{
+           background: 'white',
+           borderRadius: '16px',
+           border: '1px solid #e2e8f0',
+           padding: '12px 14px',
            marginBottom: '12px',
            boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)',
            display: 'flex',
            alignItems: 'center',
-           justifyContent: 'space-between',
            gap: '10px'
          }}>
-           <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
-             <div style={{ 
-               width: '32px', 
-               height: '32px', 
-               borderRadius: '10px', 
-               background: 'var(--primary-light)', 
-               display: 'flex', 
-               alignItems: 'center', 
-               justifyContent: 'center',
-               color: 'var(--primary)',
-               flexShrink: 0
-             }}>
-               <Settings size={17} />
-             </div>
-             <div>
-               <h1 style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: '#1e293b' }}>
-                 Genel Sistem Ayarları
-               </h1>
-               <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '1px' }}>
-                 Entegrasyonlar, kurumsal kimlik ve API bağlantılarını yönetin
-               </div>
-             </div>
-           </div>
-
-           <div style={{ 
-             fontSize: '9.5px', 
-             fontWeight: '800', 
-             background: '#ecfdf5', 
-             color: '#059669', 
-             padding: '3px 7px', 
-             borderRadius: '6px', 
-             border: '1px solid #a7f3d0',
+           <div style={{
+             width: '32px',
+             height: '32px',
+             borderRadius: '10px',
+             background: 'var(--primary-light)',
              display: 'flex',
              alignItems: 'center',
-             gap: '4px',
-             whiteSpace: 'nowrap'
+             justifyContent: 'center',
+             color: 'var(--primary)',
+             flexShrink: 0
            }}>
-             <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#10b981' }} />
-             Canlı Sistem
+             <Settings size={17} strokeWidth={2.2} />
+           </div>
+           <div style={{ width: '1.2px', height: '22px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
+           <div>
+             <h1 style={{ margin: 0, fontSize: '13px', fontWeight: '800', color: '#1e293b' }}>
+               Genel Sistem Ayarları
+             </h1>
+             <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '1px' }}>
+               Entegrasyonlar, kurumsal kimlik ve API bağlantılarını yönetin
+             </div>
            </div>
          </div>
 
-         {/* 2. Compact Segmented Filter Tabs */}
-         <div style={{ 
-           display: 'flex', 
-           gap: '5px', 
-           overflowX: 'auto', 
-           paddingBottom: '4px',
-           marginBottom: '12px',
-           scrollbarWidth: 'none',
-           msOverflowStyle: 'none'
-         }}>
-           {tabs.map(tab => {
-             const IconComp = tab.icon;
-             const isActive = activeTab === tab.key;
-             return (
-               <button
-                 key={tab.key}
-                 onClick={() => setActiveTab(tab.key)}
-                 style={{
-                   display: 'flex',
-                   alignItems: 'center',
-                   gap: '4px',
-                   padding: '6px 9px',
-                   borderRadius: '9px',
-                   fontSize: 'clamp(10px, 2.8vw, 11px)',
-                   fontWeight: isActive ? '800' : '600',
-                   background: isActive ? 'var(--primary)' : 'white',
-                   color: isActive ? 'white' : '#64748b',
-                   border: isActive ? 'none' : '1px solid #e2e8f0',
-                   boxShadow: isActive ? '0 2px 8px rgba(215, 20, 122, 0.25)' : 'none',
-                   cursor: 'pointer',
-                   whiteSpace: 'nowrap',
-                   flexShrink: 0,
-                   transition: 'all 0.15s ease'
-                 }}
-               >
-                 <IconComp size={12} strokeWidth={isActive ? 2.5 : 2} style={{ flexShrink: 0 }} />
-                 {tab.label}
-               </button>
-             );
-           })}
+         {/* 2. Theme-Compliant Stylish Dropdown Category Menu */}
+         <div ref={dropdownRef} style={{ position: 'relative', marginBottom: '14px', zIndex: 60 }}>
+           <button
+             type="button"
+             onClick={() => setIsDropdownOpen(prev => !prev)}
+             style={{
+               width: '100%',
+               display: 'flex',
+               alignItems: 'center',
+               justifyContent: 'space-between',
+               padding: '10px 14px',
+               borderRadius: '14px',
+               background: 'white',
+               border: isDropdownOpen ? '1.5px solid var(--primary)' : '1px solid #e2e8f0',
+               boxShadow: isDropdownOpen 
+                 ? '0 4px 16px rgba(215, 20, 122, 0.15), 0 0 0 3px rgba(215, 20, 122, 0.1)' 
+                 : '0 2px 6px rgba(15, 23, 42, 0.03)',
+               cursor: 'pointer',
+               transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+               outline: 'none'
+             }}
+           >
+             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+               <div style={{
+                 width: '32px',
+                 height: '32px',
+                 borderRadius: '10px',
+                 background: 'var(--primary-light)',
+                 color: 'var(--primary)',
+                 display: 'flex',
+                 alignItems: 'center',
+                 justifyContent: 'center',
+                 flexShrink: 0
+               }}>
+                 <CurrentIcon size={16} strokeWidth={2.3} />
+               </div>
+               <div style={{ width: '1.2px', height: '22px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
+               <div style={{ textAlign: 'left', minWidth: 0 }}>
+                 <div style={{ fontSize: '10px', color: '#94a3b8', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1.1 }}>
+                   Kategori Seçimi
+                 </div>
+                 <div style={{ fontSize: '13px', fontWeight: '800', color: '#1e293b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                   {currentTab.label}
+                 </div>
+               </div>
+             </div>
+
+             <div style={{
+               width: '28px',
+               height: '28px',
+               borderRadius: '8px',
+               background: isDropdownOpen ? 'var(--primary-light)' : '#f8fafc',
+               color: isDropdownOpen ? 'var(--primary)' : '#64748b',
+               display: 'flex',
+               alignItems: 'center',
+               justifyContent: 'center',
+               flexShrink: 0,
+               transition: 'transform 0.25s ease, background 0.2s ease, color 0.2s ease',
+               transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)'
+             }}>
+               <ChevronDown size={16} strokeWidth={2.4} />
+             </div>
+           </button>
+
+           {/* Dropdown Menu List */}
+           {isDropdownOpen && (
+             <div style={{
+               position: 'absolute',
+               top: 'calc(100% + 6px)',
+               left: 0,
+               right: 0,
+               background: 'white',
+               borderRadius: '16px',
+               border: '1.2px solid #F9BED8',
+               boxShadow: '0 12px 32px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(215, 20, 122, 0.08)',
+               padding: '6px',
+               display: 'flex',
+               flexDirection: 'column',
+               gap: '3px',
+               zIndex: 100,
+               animation: 'fadeIn 0.16s ease-out',
+               maxHeight: '340px',
+               overflowY: 'auto'
+             }}>
+               {tabs.map(tab => {
+                 const TabIcon = tab.icon;
+                 const isSelected = activeTab === tab.key;
+                 return (
+                   <div
+                     key={tab.key}
+                     onClick={() => {
+                       setActiveTab(tab.key);
+                       setIsDropdownOpen(false);
+                     }}
+                     style={{
+                       display: 'flex',
+                       alignItems: 'center',
+                       justifyContent: 'space-between',
+                       gap: '10px',
+                       padding: '9px 12px',
+                       borderRadius: '11px',
+                       background: isSelected ? 'var(--primary-light)' : 'transparent',
+                       color: isSelected ? 'var(--primary)' : '#334155',
+                       cursor: 'pointer',
+                       transition: 'all 0.15s ease',
+                       border: isSelected ? '1px solid #F9BED8' : '1px solid transparent'
+                     }}
+                     onMouseEnter={e => {
+                       if (!isSelected) {
+                         e.currentTarget.style.background = '#f8fafc';
+                       }
+                     }}
+                     onMouseLeave={e => {
+                       if (!isSelected) {
+                         e.currentTarget.style.background = 'transparent';
+                       }
+                     }}
+                   >
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                       <div style={{
+                         width: '28px',
+                         height: '28px',
+                         borderRadius: '8px',
+                         background: isSelected ? 'white' : '#f1f5f9',
+                         color: isSelected ? 'var(--primary)' : '#64748b',
+                         display: 'flex',
+                         alignItems: 'center',
+                         justifyContent: 'center',
+                         flexShrink: 0,
+                         boxShadow: isSelected ? '0 1px 3px rgba(215, 20, 122, 0.12)' : 'none'
+                       }}>
+                         <TabIcon size={14} strokeWidth={isSelected ? 2.5 : 2} />
+                       </div>
+                       <div style={{ minWidth: 0, flex: 1 }}>
+                         <div style={{ fontSize: '12px', fontWeight: isSelected ? '800' : '700', color: isSelected ? 'var(--primary)' : '#1e293b' }}>
+                           {tab.label}
+                         </div>
+                         {tab.desc && (
+                           <div style={{ fontSize: '10px', color: isSelected ? '#be185d' : '#94a3b8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                             {tab.desc}
+                           </div>
+                         )}
+                       </div>
+                     </div>
+
+                     {isSelected && (
+                       <div style={{
+                         width: '20px',
+                         height: '20px',
+                         borderRadius: '50%',
+                         background: 'var(--primary)',
+                         color: 'white',
+                         display: 'flex',
+                         alignItems: 'center',
+                         justifyContent: 'center',
+                         flexShrink: 0
+                       }}>
+                         <Check size={12} strokeWidth={3} />
+                       </div>
+                     )}
+                   </div>
+                 );
+               })}
+             </div>
+           )}
          </div>
 
          {/* Content Sections */}
@@ -358,33 +486,20 @@ export default function AdminSettings() {
                padding: '14px',
                boxShadow: '0 2px 10px rgba(215, 20, 122, 0.05)'
              }}>
-               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                   <div style={{ width: '26px', height: '26px', borderRadius: '8px', background: '#FDF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7147A' }}>
-                     <Compass size={15} />
-                   </div>
-                   <div>
-                     <h2 style={{ fontSize: '13px', fontWeight: '800', margin: 0, color: '#0f172a' }}>
-                       Popüler Rotalar & Ana Sayfa Vitrini
-                     </h2>
-                     <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                       Ana sayfada yer alan 6 kaydırmalı kart rotası ve fotoğrafları
-                     </div>
-                   </div>
-                 </div>
-
-                 <span style={{
-                   fontSize: '11px',
-                   fontWeight: '800',
-                   background: '#FDF2F8',
-                   color: '#D7147A',
-                   border: '1px solid #F9BED8',
-                   padding: '2px 8px',
-                   borderRadius: '8px'
-                 }}>
-                   {popularRoutes?.filter(r => r.isActive)?.length || 6} / 6 Aktif
-                 </span>
-               </div>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                  <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#FDF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7147A', flexShrink: 0 }}>
+                    <Compass size={17} strokeWidth={2.2} />
+                  </div>
+                  <div style={{ width: '1.2px', height: '22px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
+                  <div>
+                    <h2 style={{ fontSize: '13px', fontWeight: '800', margin: 0, color: '#0f172a' }}>
+                      Popüler Rotalar & Ana Sayfa Vitrini
+                    </h2>
+                    <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                      Ana sayfada yer alan 6 kaydırmalı kart rotası ve fotoğrafları
+                    </div>
+                  </div>
+                </div>
 
                <p style={{ fontSize: '11.5px', color: '#475569', lineHeight: 1.4, margin: '0 0 12px 0' }}>
                  Ana sayfa ziyaretçilerine sunulan şehir kartlarını, görsellerini, saat farkı ve priz bilgilerini düzenleyin veya yeni rotalar ekleyin.
@@ -403,7 +518,7 @@ export default function AdminSettings() {
                    color: '#ffffff',
                    border: 'none',
                    borderRadius: '11px',
-                   padding: '9px 14px',
+                   padding: '14px 18px',
                    fontSize: '12px',
                    fontWeight: '800',
                    cursor: 'pointer',
@@ -420,10 +535,11 @@ export default function AdminSettings() {
            {/* SECTION 1: Firma & Marka Bilgisi */}
            {(activeTab === 'all' || activeTab === 'brand') && (
              <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                 <div style={{ width: '24px', height: '24px', borderRadius: '7px', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-                   <Briefcase size={13} />
+               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+                   <Briefcase size={17} strokeWidth={2.2} />
                  </div>
+                 <div style={{ width: '1.2px', height: '20px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
                  <h2 style={{ fontSize: '12.5px', fontWeight: '800', margin: 0, color: '#1e293b' }}>Firma & Marka İsmi</h2>
                </div>
 
@@ -443,100 +559,186 @@ export default function AdminSettings() {
              </div>
            )}
 
-           {/* SECTION 1.5: Kurumsal Logo */}
-           {(activeTab === 'all' || activeTab === 'brand') && (
-             <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                 <div style={{ width: '24px', height: '24px', borderRadius: '7px', background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e11d48' }}>
-                   <ImageIcon size={13} />
-                 </div>
-                 <h2 style={{ fontSize: '12.5px', fontWeight: '800', margin: 0, color: '#1e293b' }}>Kurumsal Logo & Görsel</h2>
-               </div>
+            {/* SECTION 1.5: Kurumsal Logo */}
+            {(activeTab === 'all' || activeTab === 'brand') && (
+              <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#fff1f2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e11d48', flexShrink: 0 }}>
+                      <ImageIcon size={17} strokeWidth={2.2} />
+                    </div>
+                    <div style={{ width: '1.2px', height: '20px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
+                    <h2 style={{ fontSize: '12.5px', fontWeight: '800', margin: 0, color: '#1e293b' }}>Kurumsal Logo</h2>
+                  </div>
 
-               <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                 <div style={{ 
-                   width: '64px', 
-                   height: '64px', 
-                   borderRadius: '12px', 
-                   border: '1px solid #334155', 
-                   display: 'flex', 
-                   alignItems: 'center', 
-                   justifyContent: 'center', 
-                   background: 'linear-gradient(145deg, #1e293b, #0f172a)', 
-                   boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.4), 0 2px 6px rgba(0,0,0,0.08)',
-                   overflow: 'hidden', 
-                   flexShrink: 0,
-                   padding: '6px'
-                 }}>
-                   {corporateLogo ? (
-                     <img src={corporateLogo} alt="Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
-                   ) : (
-                     <ImageIcon size={22} color="#64748b" />
-                   )}
-                 </div>
-
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flex: 1 }}>
-                   <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                     PNG, JPG veya SVG formatında şeffaf arka planlı logonuzu yükleyin.
-                   </div>
-                   
-                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                     <input 
-                       type="file" 
-                       accept="image/*" 
-                       ref={logoFileRef}
-                       style={{ display: 'none' }}
-                       onChange={(e) => handleImageUpload(e, setCorporateLogo)}
-                     />
-                     <button 
-                       onClick={() => logoFileRef.current?.click()}
-                       style={{ 
-                         display: 'flex', 
-                         alignItems: 'center', 
-                         gap: '5px', 
-                         background: 'var(--primary)', 
-                         color: 'white', 
-                         padding: '6px 12px', 
-                         borderRadius: '8px', 
-                         fontSize: '10.5px', 
-                         fontWeight: '700', 
-                         border: 'none', 
-                         cursor: 'pointer',
-                         boxShadow: '0 2px 6px rgba(215, 20, 122, 0.25)'
-                       }}>
-                       <Upload size={12} /> Logo Yükle
-                     </button>
-
-                     {corporateLogo && (
-                       <button 
-                         onClick={() => setCorporateLogo(null)}
-                         style={{ 
-                           background: '#fee2e2', 
-                           color: '#dc2626', 
-                           border: '1px solid #fecaca', 
-                           padding: '6px 10px', 
-                           borderRadius: '8px', 
-                           fontSize: '10px', 
-                           fontWeight: '700', 
-                           cursor: 'pointer' 
-                         }}>
-                         Logoyu Kaldır
-                       </button>
-                     )}
-                   </div>
+                  {corporateLogo ? (
+                    <span style={{ fontSize: '9.5px', fontWeight: '800', background: '#ecfdf5', color: '#059669', padding: '2px 8px', borderRadius: '6px', border: '1px solid #a7f3d0', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Check size={11} strokeWidth={3} /> Yüklendi
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '9.5px', fontWeight: '700', background: '#f8fafc', color: '#94a3b8', padding: '2px 8px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                      Varsayılan
+                    </span>
+                  )}
                 </div>
-             </div>
+
+                <div style={{
+                  background: 'linear-gradient(135deg, #ffffff 0%, #fff8fb 100%)',
+                  borderRadius: '14px',
+                  border: '1.2px solid #F9BED8',
+                  padding: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
+                  boxShadow: '0 2px 8px rgba(215, 20, 122, 0.03)'
+                }}>
+                  {/* Logo Preview Canvas */}
+                  <div 
+                    onClick={() => logoFileRef.current?.click()}
+                    title="Logoyu değiştirmek için tıklayın"
+                    style={{ 
+                      width: '78px', 
+                      height: '78px', 
+                      borderRadius: '13px', 
+                      border: '1.5px solid #334155', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      background: 'radial-gradient(circle at top, #1e293b 0%, #0f172a 100%)', 
+                      boxShadow: '0 4px 14px rgba(15, 23, 42, 0.18), inset 0 1px 0 rgba(255,255,255,0.08)',
+                      overflow: 'hidden', 
+                      flexShrink: 0,
+                      padding: '8px',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.02)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  >
+                    {corporateLogo ? (
+                      <>
+                        <img 
+                          src={corporateLogo} 
+                          alt="Logo" 
+                          style={{ 
+                            maxWidth: '100%', 
+                            maxHeight: '100%', 
+                            objectFit: 'contain',
+                            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.5))' 
+                          }} 
+                        />
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '3px',
+                          right: '4px',
+                          fontSize: '8px',
+                          fontWeight: '800',
+                          color: '#94a3b8',
+                          letterSpacing: '0.3px',
+                          textTransform: 'uppercase',
+                          opacity: 0.8
+                        }}>
+                          PNG
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ textAlign: 'center', color: '#64748b' }}>
+                        <Upload size={20} color="#94a3b8" />
+                        <div style={{ fontSize: '9px', fontWeight: '700', marginTop: '3px', color: '#94a3b8' }}>Logo Seç</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right Details & Action Buttons */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, minWidth: 0 }}>
+                    <div>
+                      <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', lineHeight: 1.2 }}>
+                        Uygulama & Belge Logosu
+                      </div>
+                      <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '3px', lineHeight: 1.35 }}>
+                        Giriş ekranı, başlık alanı ve PDF belgelerinde görüntülenecek logonuz.
+                      </div>
+                      <div style={{ fontSize: '9.5px', color: '#94a3b8', marginTop: '3px', fontWeight: '600' }}>
+                        Format: PNG, SVG veya JPG (Şeffaf arka plan önerilir)
+                      </div>
+                    </div>
+                    
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        ref={logoFileRef}
+                        style={{ display: 'none' }}
+                        onChange={(e) => handleImageUpload(e, setCorporateLogo)}
+                      />
+                      
+                      <button 
+                        type="button"
+                        onClick={() => logoFileRef.current?.click()}
+                        style={{ 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: '6px', 
+                          background: 'linear-gradient(135deg, #D7147A 0%, #B01064 100%)', 
+                          color: 'white', 
+                          padding: '7px 14px', 
+                          borderRadius: '9px', 
+                          fontSize: '11px', 
+                          fontWeight: '700', 
+                          border: 'none', 
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(215, 20, 122, 0.22)',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.opacity = '0.92'}
+                        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                      >
+                        <Upload size={13} strokeWidth={2.4} /> 
+                        <span>{corporateLogo ? 'Logoyu Değiştir' : 'Logo Yükle'}</span>
+                      </button>
+
+                      {corporateLogo && (
+                        <button 
+                          type="button"
+                          onClick={() => setCorporateLogo(null)}
+                          style={{ 
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '5px',
+                            background: '#fff1f2', 
+                            color: '#e11d48', 
+                            border: '1px solid #fecdd3', 
+                            padding: '7px 12px', 
+                            borderRadius: '9px', 
+                            fontSize: '10.5px', 
+                            fontWeight: '700', 
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#ffe4e6'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#fff1f2'}
+                        >
+                          <Trash2 size={12} strokeWidth={2.2} />
+                          <span>Kaldır</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
-           )}
+            )}
 
            {/* SECTION 2: E-Posta Sunucu (SMTP) */}
            {(activeTab === 'all' || activeTab === 'messaging') && (
              <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                   <div style={{ width: '24px', height: '24px', borderRadius: '7px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}>
-                     <Mail size={13} />
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                   <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', flexShrink: 0 }}>
+                     <Mail size={17} strokeWidth={2.2} />
                    </div>
+                   <div style={{ width: '1.2px', height: '20px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
                    <h2 style={{ fontSize: '12.5px', fontWeight: '800', margin: 0, color: '#1e293b' }}>E-Posta Sunucu (SMTP)</h2>
                  </div>
 
@@ -669,10 +871,11 @@ export default function AdminSettings() {
            {/* SECTION 3: NetGSM Gateway */}
            {(activeTab === 'all' || activeTab === 'messaging') && (
              <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                 <div style={{ width: '24px', height: '24px', borderRadius: '7px', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
-                   <Smartphone size={13} />
+               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706', flexShrink: 0 }}>
+                   <Smartphone size={17} strokeWidth={2.2} />
                  </div>
+                 <div style={{ width: '1.2px', height: '20px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
                  <h2 style={{ fontSize: '12.5px', fontWeight: '800', margin: 0, color: '#1e293b' }}>SMS Gateway (NetGSM)</h2>
                </div>
 
@@ -753,10 +956,11 @@ export default function AdminSettings() {
            {(activeTab === 'all' || activeTab === 'whatsapp_ai') && (
              <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                   <div style={{ width: '24px', height: '24px', borderRadius: '7px', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
-                     <MessageSquare size={13} />
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                   <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669', flexShrink: 0 }}>
+                     <MessageSquare size={17} strokeWidth={2.2} />
                    </div>
+                   <div style={{ width: '1.2px', height: '20px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
                    <h2 style={{ fontSize: '12.5px', fontWeight: '800', margin: 0, color: '#1e293b' }}>WhatsApp Business (Cloud API)</h2>
                  </div>
 
@@ -958,10 +1162,11 @@ export default function AdminSettings() {
            {(activeTab === 'all' || activeTab === 'whatsapp_ai') && (
              <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                   <div style={{ width: '24px', height: '24px', borderRadius: '7px', background: '#FDF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7147A' }}>
-                     <Sparkles size={13} />
+                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                   <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#FDF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7147A', flexShrink: 0 }}>
+                     <Sparkles size={17} strokeWidth={2.2} />
                    </div>
+                   <div style={{ width: '1.2px', height: '20px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
                    <h2 style={{ fontSize: '12.5px', fontWeight: '800', margin: 0, color: '#1e293b' }}>Tintin AI (Google Gemini)</h2>
                  </div>
 
@@ -1107,10 +1312,11 @@ export default function AdminSettings() {
            {/* SECTION 6: Harici API & Sistem Ayarları */}
            {(activeTab === 'all' || activeTab === 'api') && (
              <div style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', padding: '14px', boxShadow: '0 1px 4px rgba(15, 23, 42, 0.02)' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '10px' }}>
-                 <div style={{ width: '24px', height: '24px', borderRadius: '7px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}>
-                   <Cpu size={13} />
+               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+                 <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', flexShrink: 0 }}>
+                   <Cpu size={17} strokeWidth={2.2} />
                  </div>
+                 <div style={{ width: '1.2px', height: '20px', background: '#F9BED8', borderRadius: '1px', flexShrink: 0 }} />
                  <h2 style={{ fontSize: '12.5px', fontWeight: '800', margin: 0, color: '#1e293b' }}>Harici API Servisleri</h2>
                </div>
 
@@ -1141,6 +1347,9 @@ export default function AdminSettings() {
            )}
 
          </div>
+
+         {/* Bottom Nav & Tintin Clearance Spacer */}
+         <div style={{ height: '170px', minHeight: '170px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
 
       </div>
     </div>

@@ -594,7 +594,7 @@ export default function Chat() {
   };
 
   return (
-      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc', position: 'relative', boxSizing: 'border-box', marginBottom: 'calc(-95px - env(safe-area-inset-bottom, 0px))' }}>
+      <div style={{ height: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc', position: 'relative', boxSizing: 'border-box', marginBottom: 'calc(-95px - env(safe-area-inset-bottom, 0px))' }}>
         
         {/* Clear Chat Confirmation Modal */}
         {confirmClearPopup && (
@@ -628,7 +628,7 @@ export default function Chat() {
         
         {/* Modern Chat Top Navigation Header */}
         <div style={{ 
-          padding: 'calc(14px + env(safe-area-inset-top, 0px)) 16px 14px 16px', 
+          padding: 'calc(24px + env(safe-area-inset-top, 0px)) 16px 20px 16px', 
           background: isReadOnlyArchive ? '#1e293b' : 'linear-gradient(135deg, #D7147A 0%, #D7147A 100%)', 
           color: 'white', 
           display: 'flex', 

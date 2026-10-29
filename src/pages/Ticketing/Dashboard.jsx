@@ -135,91 +135,9 @@ export default function TicketingDashboard() {
       )}
 
       {/* Expert Details Modal */}
-      {expertModalData && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', backdropFilter: 'blur(4px)' }}>
-          <div className="card" style={{ width: '100%', maxWidth: '360px', padding: '24px', animation: 'fadeIn 0.2s ease-out', textAlign: 'center', position: 'relative' }}>
-            <div onClick={() => setExpertModalData(null)} style={{ position: 'absolute', top: '16px', right: '16px', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                <X size={20} />
-            </div>
+      <ExpertModal data={expertModalData} onClose={() => setExpertModalData(null)} />
 
-            <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: 'var(--text-main)' }}>
-                {expertModalData.expert2 ? 'Seyahat Uzmanlarımız' : 'Seyahat Uzmanı'}
-            </h2>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {[expertModalData.expert1, expertModalData.expert2].filter(Boolean).map((exp, idx) => (
-                    <div key={idx} style={{ background: '#f8fafc', borderRadius: '14px', padding: '14px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%', marginBottom: '10px' }}>
-                            <div style={{ width: '44px', height: '44px', borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--primary-light)', flexShrink: 0 }}>
-                               <img loading="lazy" src={exp.avatar} alt={exp.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            </div>
-                            <div style={{ textAlign: 'left', flex: 1 }}>
-                                <h3 style={{ fontSize: '14px', fontWeight: 'bold', margin: '0 0 2px 0', color: 'var(--text-main)' }}>{exp.name}</h3>
-                                <span style={{ fontSize: '11px', color: 'var(--primary)', fontWeight: '600' }}>{idx === 0 ? '1. Seyahat Uzmanı' : '2. Seyahat Uzmanı'}</span>
-                            </div>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', fontSize: '12px', textAlign: 'left', background: 'white', padding: '10px 12px', borderRadius: '10px', border: '1px solid #edf2f7' }}>
-                            {exp.phone && (
-                                <a href={`tel:${exp.phone}`} style={{ color: 'var(--primary)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}>
-                                    <Phone size={13} /> {exp.phone}
-                                </a>
-                            )}
-                            {exp.email && (
-                                <div style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    ✉️ {exp.email}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            <button className="btn-primary" onClick={() => setExpertModalData(null)} style={{ marginTop: '16px', width: '100%', padding: '10px', borderRadius: '10px', fontSize: '13px' }}>
-                Kapat
-            </button>
-          </div>
-        </div>
-      )}
-      
-      <div style={{ padding: '16px' }}>
-
-        {/* Admin Switcher Banner */}
-        {isAdmin && (
-          <div 
-            onClick={() => {
-              setActiveStaffRole('admin');
-              navigate('/dashboard');
-            }}
-            style={{
-              background: 'linear-gradient(135deg, #1e293b 0%, #2563eb 100%)',
-              color: 'white',
-              borderRadius: '14px',
-              padding: '11px 14px',
-              marginBottom: '14px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'pointer',
-              boxShadow: '0 3px 10px rgba(37, 99, 235, 0.2)',
-              transition: 'transform 0.15s ease'
-            }}
-            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <ShieldCheck size={18} color="#93c5fd" />
-              <div>
-                <span style={{ fontSize: '12px', fontWeight: '800' }}>👑 Yönetim Paneline Dön</span>
-                <span style={{ fontSize: '10px', color: '#bfdbfe', marginLeft: '6px' }}>Tüm şirket operasyonlarını yönetin</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '2px', color: '#dbeafe', fontSize: '11px', fontWeight: '600' }}>
-              <span>Geç</span>
-              <ChevronRight size={14} />
-            </div>
-          </div>
-        )}
+<div style={{ padding: '16px' }}>
 
         {/* EKSİK BİLET PANOSU (MİNİMAL & ELEGANT) */}
         {missingTicketsGroups.length > 0 && (
@@ -384,8 +302,8 @@ export default function TicketingDashboard() {
                         transition: 'transform 0.2s, box-shadow 0.2s'
                     }}>
                       {/* Top Full-Bleed Cover Image with Frosted Overlapping Badges */}
-                      <div style={{ height: '160px', position: 'relative', width: '100%', overflow: 'hidden', background: 'var(--primary-light)' }}>
-                        <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 1', overflow: 'hidden', background: '#0f172a' }}>
+                        <img loading="lazy" src={tour.avatar} alt={tour.name} style={{ width: '100%', height: '100%', display: 'block', objectFit: 'cover' }} />
                         
                         {/* Subtle Gradient Shadow for Readability */}
                         <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, transparent 45%, rgba(0,0,0,0.4) 100%)', pointerEvents: 'none' }} />

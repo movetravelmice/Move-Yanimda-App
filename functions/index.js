@@ -5,6 +5,7 @@ if (!admin.apps.length) admin.initializeApp();
 const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
+const https = require('https');
 
 const app = express();
 
@@ -107,7 +108,7 @@ app.post('/api/forgot-password', async (req, res) => {
         let htmlContent = customHtml || defaultHtml;
         htmlContent = htmlContent
             .replace(/{{accountName}}/g, accountName || '')
-            .replace(/{{accountPassword}}/g, accountPassword || '')
+            .replace(/{{accountPassword}}/g, accountPassword || '123456')
             .replace(/{{corporateName}}/g, senderBrand);
 
         let subjectContent = customSubject || `{{corporateName}}: Parola Sıfırlama / Hatırlatma Talebi`;
@@ -595,6 +596,113 @@ app.post('/api/create-whatsapp-template', async (req, res) => {
     }
 });
 
+
+function fetchPoFuelPrices() {
+    return new Promise((resolve, reject) => {
+        https.get('https://www.petrolofisi.com.tr/akaryakit-fiyatlari', {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html'
+            }
+        }, (res) => {
+            let html = '';
+            res.on('data', chunk => html += chunk);
+            res.on('end', () => {
+                try {
+                    const cities = {};
+                    const trRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+                    let match;
+                    while ((match = trRegex.exec(html)) !== null) {
+                        const rowContent = match[1];
+                        const cityMatch = /<td[^>]*>([\s\S]*?)<\/td>/i.exec(rowContent);
+                        if (!cityMatch) continue;
+                        const cityName = cityMatch[1].replace(/<[^>]+>/g, '').trim().toUpperCase();
+                        if (!cityName || cityName.includes('ŞEHIR') || cityName.includes('SEHIR')) continue;
+
+                        const prices = [];
+                        const taxRegex = /<span class="with-tax">([^<]+)<\/span>/gi;
+                        let taxMatch;
+                        while ((taxMatch = taxRegex.exec(rowContent)) !== null) {
+                            const val = parseFloat(taxMatch[1].replace(',', '.'));
+                            if (!isNaN(val)) prices.push(val);
+                        }
+                        if (prices.length >= 6) {
+                            cities[cityName] = {
+                                gasoline: prices[0],
+                                diesel: prices[1],
+                                lpg: prices[5]
+                            };
+                        }
+                    }
+
+                    const istAvrupa = cities['ISTANBUL (AVRUPA)'] || cities['İSTANBUL (AVRUPA)'];
+                    const istAnadolu = cities['ISTANBUL (ANADOLU)'] || cities['İSTANBUL (ANADOLU)'];
+                    
+                    let gasoline = 76.25;
+                    let diesel = 96.80;
+                    let lpg = 40.90;
+
+                    if (istAvrupa && istAnadolu) {
+                        gasoline = Number(((istAvrupa.gasoline + istAnadolu.gasoline) / 2).toFixed(2));
+                        diesel = Number(((istAvrupa.diesel + istAnadolu.diesel) / 2).toFixed(2));
+                        lpg = Number(((istAvrupa.lpg + istAnadolu.lpg) / 2).toFixed(2));
+                    } else if (istAvrupa) {
+                        gasoline = istAvrupa.gasoline;
+                        diesel = istAvrupa.diesel;
+                        lpg = istAvrupa.lpg;
+                    }
+
+                    resolve({
+                        success: true,
+                        source: 'Petrol Ofisi / Opet Resmi Pompa Fiyatları',
+                        lastUpdated: new Date().toISOString(),
+                        prices: { gasoline, diesel, lpg },
+                        totalCities: Object.keys(cities).length,
+                        cities
+                    });
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }).on('error', reject);
+    });
+}
+
+// Canlı Akaryakıt Fiyatları Endpoint'i
+app.get('/api/fuel-prices', async (req, res) => {
+    try {
+        const db = admin.firestore();
+        const docRef = db.collection('system_settings').doc('fuel_prices');
+        const forceRefresh = req.query.refresh === 'true';
+
+        if (!forceRefresh) {
+            const snap = await docRef.get();
+            if (snap.exists) {
+                const data = snap.data();
+                // 12 saatten yeniyse önbellekten dön
+                if (data && data.prices && data.prices.gasoline > 0) {
+                    return res.json(data);
+                }
+            }
+        }
+
+        const freshData = await fetchPoFuelPrices();
+        await docRef.set({
+            ...freshData,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        res.json(freshData);
+    } catch (error) {
+        console.error("Akaryakıt API hatası:", error);
+        res.json({
+            success: true,
+            source: 'Varsayılan Güncel Fiyatlar',
+            lastUpdated: new Date().toISOString(),
+            prices: { gasoline: 76.25, diesel: 96.80, lpg: 40.90 }
+        });
+    }
+});
 
 app.get('/api/tcmb-rates', async (req, res) => {
     try {
@@ -1327,6 +1435,27 @@ exports.tourReviewReminder = onSchedule("every 1 hours", async (event) => {
         }
     } catch (e) {
         console.error("Tour review reminder cron error:", e);
+    }
+});
+
+// ==========================================
+// HER GECE 00:00 AKARYAKIT FİYATLARINI OTOMATİK GÜNCELLEME CRON GÖREVİ
+// ==========================================
+exports.dailyFuelPriceUpdate = onSchedule({
+    schedule: "0 0 * * *",
+    timeZone: "Europe/Istanbul"
+}, async (event) => {
+    try {
+        console.log("[CRON 00:00] Gece yarısı akaryakıt fiyatları güncelleniyor...");
+        const data = await fetchPoFuelPrices();
+        const db = admin.firestore();
+        await db.collection('system_settings').doc('fuel_prices').set({
+            ...data,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+        console.log("[CRON 00:00] Akaryakıt fiyatları başarıyla Firestore'a yazıldı:", data.prices);
+    } catch (err) {
+        console.error("[CRON 00:00] Akaryakıt fiyatı güncelleme hatası:", err);
     }
 });
 

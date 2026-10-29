@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   MessageCircle, 
@@ -16,7 +16,10 @@ import {
   Sparkles,
   MapPin,
   Mic,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ChevronDown,
+  Layers,
+  Filter
 } from 'lucide-react';
 import Header from '../../components/Header';
 import { useAuthStore } from '../../store/authStore';
@@ -35,6 +38,24 @@ export default function ChatList() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'groups' | 'staff' | 'customers' | 'unread'
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
 
   const mySenderKey = user?.role === 'expert' ? 'expert' : (user?.role === 'admin' ? 'admin' : (user?.role === 'ticketing' ? 'ticketing' : 'customer'));
 
@@ -604,6 +625,57 @@ export default function ChatList() {
     );
   };
 
+  const filterOptions = useMemo(() => [
+    {
+      id: 'all',
+      label: 'Tüm Sohbetler',
+      shortLabel: 'Tümü',
+      count: activeChats.length,
+      icon: Layers,
+      color: 'var(--primary)',
+      bg: '#FDF2F8'
+    },
+    {
+      id: 'groups',
+      label: 'Tur Grupları',
+      shortLabel: 'Tur Grupları',
+      count: groupChats.length,
+      icon: Users,
+      color: '#0284c7',
+      bg: '#f0f9ff'
+    },
+    ...(staffChats.length > 0 ? [{
+      id: 'staff',
+      label: 'Personel & Yetkili',
+      shortLabel: 'Personel & Yetkili',
+      count: staffChats.length,
+      icon: ShieldCheck,
+      color: '#6366f1',
+      bg: '#eef2ff'
+    }] : []),
+    ...(customerChats.length > 0 ? [{
+      id: 'customers',
+      label: 'Müşteriler',
+      shortLabel: 'Müşteriler',
+      count: customerChats.length,
+      icon: User,
+      color: '#059669',
+      bg: '#ecfdf5'
+    }] : []),
+    ...(unreadCount > 0 ? [{
+      id: 'unread',
+      label: 'Okunmamış Mesajlar',
+      shortLabel: 'Okunmamış',
+      count: unreadCount,
+      icon: Sparkles,
+      color: '#D7147A',
+      bg: '#FDF2F8'
+    }] : [])
+  ], [activeChats.length, groupChats.length, staffChats.length, customerChats.length, unreadCount]);
+
+  const currentFilterOption = filterOptions.find(opt => opt.id === activeTab) || filterOptions[0];
+  const CurrentIcon = currentFilterOption.icon;
+
   const showGroupsSection = (activeTab === 'all' || activeTab === 'groups' || activeTab === 'unread') && filteredGroups.length > 0;
   const showStaffSection = (activeTab === 'all' || activeTab === 'staff' || activeTab === 'unread') && filteredStaff.length > 0;
   const showCustomersSection = (activeTab === 'all' || activeTab === 'customers' || activeTab === 'unread') && filteredCustomers.length > 0;
@@ -662,135 +734,163 @@ export default function ChatList() {
              )}
          </div>
 
-         {/* Filter Tabs Pills (Kart İçinde) */}
-          <div style={{
-            background: 'white',
-            borderRadius: '16px',
-            border: '1px solid #e2e8f0',
-            padding: '8px 10px',
-            boxShadow: '0 2px 6px rgba(15, 23, 42, 0.03)',
-            marginBottom: '14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            overflowX: 'auto',
-            scrollbarWidth: 'none'
-          }}>
-              <button
-                onClick={() => setActiveTab('all')}
-                style={{
-                  padding: '6px 11px',
-                  borderRadius: '12px',
-                  border: activeTab === 'all' ? '1.2px solid var(--primary)' : '1px solid #f1f5f9',
-                  background: activeTab === 'all' ? 'var(--primary)' : '#f8fafc',
-                  color: activeTab === 'all' ? 'white' : '#64748b',
-                  fontSize: '11.5px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
+         {/* Temaya Uygun Şık Aşağı Açılır Menü (Dropdown Filter) */}
+          <div ref={dropdownRef} style={{ position: 'relative', marginBottom: '14px', zIndex: 40 }}>
+            <button
+              type="button"
+              onClick={() => setIsDropdownOpen(prev => !prev)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: '#ffffff',
+                border: isDropdownOpen ? '1.5px solid var(--primary)' : '1.5px solid #e2e8f0',
+                borderRadius: '16px',
+                padding: '10px 14px',
+                cursor: 'pointer',
+                boxShadow: isDropdownOpen 
+                  ? '0 4px 16px rgba(215, 20, 122, 0.12)' 
+                  : '0 2px 6px rgba(15, 23, 42, 0.03)',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                outline: 'none'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '10px',
+                  background: currentFilterOption.bg,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.15s',
-                  boxShadow: activeTab === 'all' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
-                }}
-              >
-                Tümü <span style={{ fontSize: '10px', opacity: 0.85 }}>({activeChats.length})</span>
-              </button>
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <CurrentIcon size={16} color={currentFilterOption.color} />
+                </div>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', fontWeight: '600', lineHeight: 1.2 }}>
+                    Sohbet Filtresi
+                  </div>
+                  <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>{currentFilterOption.label}</span>
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      background: currentFilterOption.id === 'unread' ? '#D7147A' : '#f1f5f9',
+                      color: currentFilterOption.id === 'unread' ? '#ffffff' : '#64748b',
+                      padding: '1px 7px',
+                      borderRadius: '10px'
+                    }}>
+                      {currentFilterOption.count}
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-              <button
-                onClick={() => setActiveTab('groups')}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <ChevronDown 
+                  size={18} 
+                  color={isDropdownOpen ? 'var(--primary)' : '#64748b'} 
+                  style={{ 
+                    transform: isDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', 
+                    transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)' 
+                  }} 
+                />
+              </div>
+            </button>
+
+            {/* Dropdown Menü Listesi */}
+            {isDropdownOpen && (
+              <div
                 style={{
-                  padding: '6px 11px',
-                  borderRadius: '12px',
-                  border: activeTab === 'groups' ? '1.2px solid var(--primary)' : '1px solid #f1f5f9',
-                  background: activeTab === 'groups' ? 'var(--primary)' : '#f8fafc',
-                  color: activeTab === 'groups' ? 'white' : '#64748b',
-                  fontSize: '11.5px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
+                  position: 'absolute',
+                  top: 'calc(100% + 6px)',
+                  left: 0,
+                  right: 0,
+                  background: '#ffffff',
+                  border: '1.5px solid #f1f5f9',
+                  borderRadius: '18px',
+                  boxShadow: '0 12px 32px rgba(15, 23, 42, 0.12), 0 2px 8px rgba(215, 20, 122, 0.05)',
+                  padding: '6px',
+                  zIndex: 50,
                   display: 'flex',
-                  alignItems: 'center',
+                  flexDirection: 'column',
                   gap: '4px',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.15s',
-                  boxShadow: activeTab === 'groups' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
+                  animation: 'fadeIn 0.15s ease-out'
                 }}
               >
-                <Users size={12} /> Tur Grupları <span style={{ fontSize: '10px', opacity: 0.85 }}>({groupChats.length})</span>
-              </button>
+                {filterOptions.map(opt => {
+                  const isSelected = activeTab === opt.id;
+                  const IconComp = opt.icon;
+                  return (
+                    <div
+                      key={opt.id}
+                      onClick={() => {
+                        setActiveTab(opt.id);
+                        setIsDropdownOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        borderRadius: '12px',
+                        cursor: 'pointer',
+                        background: isSelected ? '#FDF2F8' : 'transparent',
+                        border: isSelected ? '1px solid #F9BED8' : '1px solid transparent',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={e => {
+                        if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                      }}
+                      onMouseLeave={e => {
+                        if (!isSelected) e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '30px',
+                          height: '30px',
+                          borderRadius: '9px',
+                          background: opt.bg,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <IconComp size={15} color={opt.color} />
+                        </div>
+                        <span style={{
+                          fontSize: '12.5px',
+                          fontWeight: isSelected ? '700' : '600',
+                          color: isSelected ? '#D7147A' : 'var(--text-main)'
+                        }}>
+                          {opt.label}
+                        </span>
+                      </div>
 
-              {staffChats.length > 0 && (
-                <button
-                  onClick={() => setActiveTab('staff')}
-                  style={{
-                    padding: '6px 11px',
-                    borderRadius: '12px',
-                    border: activeTab === 'staff' ? '1.2px solid #6366f1' : '1px solid #f1f5f9',
-                    background: activeTab === 'staff' ? '#6366f1' : '#f8fafc',
-                    color: activeTab === 'staff' ? 'white' : '#64748b',
-                    fontSize: '11.5px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    whiteSpace: 'nowrap',
-                    transition: 'all 0.15s',
-                    boxShadow: activeTab === 'staff' ? '0 2px 6px rgba(99, 102, 241, 0.2)' : 'none'
-                  }}
-                >
-                  <ShieldCheck size={12} /> Personel & Yetkili <span style={{ fontSize: '10px', opacity: 0.85 }}>({staffChats.length})</span>
-                </button>
-              )}
-
-              {customerChats.length > 0 && (
-                <button
-                  onClick={() => setActiveTab('customers')}
-                  style={{
-                    padding: '6px 11px',
-                    borderRadius: '12px',
-                    border: activeTab === 'customers' ? '1.2px solid #0284c7' : '1px solid #f1f5f9',
-                    background: activeTab === 'customers' ? '#0284c7' : '#f8fafc',
-                    color: activeTab === 'customers' ? 'white' : '#64748b',
-                    fontSize: '11.5px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    whiteSpace: 'nowrap',
-                    transition: 'all 0.15s',
-                    boxShadow: activeTab === 'customers' ? '0 2px 6px rgba(2, 132, 199, 0.2)' : 'none'
-                  }}
-                >
-                  <User size={12} /> Müşteriler <span style={{ fontSize: '10px', opacity: 0.85 }}>({customerChats.length})</span>
-                </button>
-              )}
-
-              {unreadCount > 0 && (
-                <button
-                  onClick={() => setActiveTab('unread')}
-                  style={{
-                    padding: '6px 11px',
-                    borderRadius: '12px',
-                    border: activeTab === 'unread' ? '1.2px solid #D7147A' : '1px solid #F9BED8',
-                    background: activeTab === 'unread' ? '#D7147A' : '#FDF2F8',
-                    color: activeTab === 'unread' ? 'white' : '#D7147A',
-                    fontSize: '11.5px',
-                    fontWeight: '700',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    whiteSpace: 'nowrap',
-                    transition: 'all 0.15s',
-                    boxShadow: activeTab === 'unread' ? '0 2px 6px rgba(215, 20, 122, 0.2)' : 'none'
-                  }}
-                >
-                  <Sparkles size={11} /> Okunmamış <span style={{ fontSize: '9.5px', background: activeTab === 'unread' ? 'rgba(255,255,255,0.25)' : '#D7147A', color: 'white', padding: '1px 5px', borderRadius: '6px' }}>{unreadCount}</span>
-                </button>
-              )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          fontSize: '11px',
+                          fontWeight: '700',
+                          background: isSelected ? '#D7147A' : (opt.id === 'unread' ? '#D7147A' : '#f1f5f9'),
+                          color: (isSelected || opt.id === 'unread') ? '#ffffff' : '#64748b',
+                          padding: '2px 8px',
+                          borderRadius: '10px'
+                        }}>
+                          {opt.count}
+                        </span>
+                        {isSelected && (
+                          <Check size={16} color="#D7147A" strokeWidth={2.5} />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Chat List Categorized into Separate Cards */}
