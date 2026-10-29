@@ -3,7 +3,7 @@ import { X, Download, Upload, FileSpreadsheet, CheckCircle2, AlertCircle, Refres
 import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore, formatTitleCase } from '../store/userStore';
-import { isUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, checkEmailDomainTypo } from '../utils/userUtils';
+import { isUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, checkEmailDomainTypo, normalizeTurkish } from '../utils/userUtils';
 import { getApiBaseUrl } from '../utils/apiConfig';
 
 export default function BulkParticipantManager({ tourId, onClose }) {
@@ -192,19 +192,44 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 correctedEmail = emailTypo.suggestedEmail;
             }
 
+            // 1. T.C. Kimlik ile eşleştirme (11 haneli benzersiz kimlik)
+            if (!existingUser && tcNo && String(tcNo).replace(/\D/g, '').length === 11) {
+                const cleanTc = String(tcNo).replace(/\D/g, '');
+                existingUser = currentUsersList.find(u => {
+                    const uTc = String(u.tcNo || u.tc || '').replace(/\D/g, '');
+                    return uTc === cleanTc;
+                });
+            }
+
+            // 2. Gerçek e-posta ile eşleştirme (placeholder @move.local hariç)
             if (!existingUser && (email || correctedEmail)) {
+                const isPlaceholder = (em) => !em || em.endsWith('@move.local') || em.endsWith('.local');
                 existingUser = currentUsersList.find(u => {
                     const uEmail = (u.email || '').trim().toLowerCase();
+                    if (isPlaceholder(uEmail)) return false;
                     return (email && uEmail === email.toLowerCase()) || (correctedEmail && uEmail === correctedEmail.toLowerCase());
                 });
             }
+
+            // 3. Telefon ile eşleştirme: Yalnızca SOYADI da tutuyorsa (farklı bireylerin aynı santral/şirket numarasını paylaşmasını korumak için)
             if (!existingUser && phone) {
                 const cleanP = phone.replace(/\D/g, '');
                 if (cleanP.length >= 7) {
-                    existingUser = currentUsersList.find(u => {
+                    const candidate = currentUsersList.find(u => {
                         const uPhone = (u.phone || '').replace(/\D/g, '');
                         return uPhone.length >= 7 && (uPhone.endsWith(cleanP.slice(-10)) || cleanP.endsWith(uPhone.slice(-10)));
                     });
+                    if (candidate) {
+                        const uNorm = normalizeTurkish(candidate.name);
+                        const rowNorm = normalizeTurkish(name);
+                        const uParts = uNorm.split(/\s+/).filter(Boolean);
+                        const rowParts = rowNorm.split(/\s+/).filter(Boolean);
+                        const uSurname = uParts[uParts.length - 1];
+                        const rowSurname = rowParts[rowParts.length - 1];
+                        if (uSurname && rowSurname && uSurname === rowSurname) {
+                            existingUser = candidate;
+                        }
+                    }
                 }
             }
 
