@@ -284,27 +284,6 @@ export default function PopularRoutes() {
               <PlusCircle size={15} />
               <span>Yeni Rota Ekle</span>
             </button>
-
-            <button
-              onClick={handleResetDefaults}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
-                color: '#64748b',
-                borderRadius: '12px',
-                padding: '10px 14px',
-                fontSize: '12px',
-                fontWeight: '700',
-                cursor: 'pointer'
-              }}
-              title="Varsayılan 8 şehri geri yükle"
-            >
-              <RotateCcw size={14} />
-              <span>Varsayılanlar</span>
-            </button>
           </div>
         </div>
 
