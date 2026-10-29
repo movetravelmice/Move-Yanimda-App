@@ -1466,7 +1466,8 @@ export default function ParticipantsList() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {participants.map(p => {
                             const globalP = users.find(u => u.id === p.id) || p;
-                            const isLinked = !!globalP.linkedTo && (Array.isArray(globalP.linkedTo) ? globalP.linkedTo.length > 0 : true);
+                            const isChild = isUserChild(globalP);
+                            const isLinked = isChild && !!globalP.linkedTo && (Array.isArray(globalP.linkedTo) ? globalP.linkedTo.length > 0 : true);
                             const parents = isLinked ? users.filter(parentP => Array.isArray(globalP.linkedTo) ? globalP.linkedTo.includes(parentP.id) || globalP.linkedTo.includes(String(parentP.id)) : parentP.id === globalP.linkedTo || String(parentP.id) === String(globalP.linkedTo)) : [];
                             
                             const partTickets = (Array.isArray(p.ticketFiles) && p.ticketFiles.length > 0)
@@ -1619,7 +1620,7 @@ export default function ParticipantsList() {
 
                                     {/* Action Buttons */}
                                     <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                                        {isLinked ? (
+                                        {isChild && isLinked ? (
                                             <span style={{ 
                                                 background: '#fdf4ff', 
                                                 color: '#a21caf', 

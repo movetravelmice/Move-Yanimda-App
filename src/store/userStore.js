@@ -115,7 +115,7 @@ export const useUserStore = create((set, get) => ({
 
         // Check if user already exists (by email if real email, or by tcNo)
         const currentUsers = get().users || [];
-        const isChild = userObj.isChildProfile || normalizedEmail.startsWith('child_') || normalizedEmail.endsWith('.local');
+        const isChild = Boolean(userObj.isChildProfile || normalizedEmail.startsWith('child_') || normalizedEmail.startsWith('cocuk_'));
         
         let existingUser = null;
         if (!isChild && normalizedEmail && !normalizedEmail.endsWith('@move.local')) {
@@ -139,6 +139,11 @@ export const useUserStore = create((set, get) => ({
             if (userObj.tcNo && !existingUser.tcNo) {
                 updates.tcNo = userObj.tcNo;
             }
+            if (userObj.passportNo && !existingUser.passportNo) updates.passportNo = userObj.passportNo;
+            if (userObj.passportExp && !existingUser.passportExp) updates.passportExp = userObj.passportExp;
+            if (userObj.birthDate && !existingUser.birthDate) updates.birthDate = userObj.birthDate;
+            if (userObj.gender && !existingUser.gender) updates.gender = userObj.gender;
+            if (userObj.title && !existingUser.title) updates.title = userObj.title;
             if (Object.keys(updates).length > 0) {
                 await get().updateUser(existingUser.id, updates);
                 return { ...existingUser, ...updates };
@@ -156,13 +161,20 @@ export const useUserStore = create((set, get) => ({
             name: normalizedName,
             id: newUserId, 
             role: role,
-            userType: userObj.userType || 'corporate',
+            userType: userObj.userType || (isChild ? 'child' : 'corporate'),
             company: normalizedCompany,
             status: 'Aktif',
             phone: cleanPhone,
             email: normalizedEmail,
             password: userObj.password ? String(userObj.password).trim() : '123456',
-            avatar: userObj.avatar || fallbackAvatar 
+            avatar: userObj.avatar || fallbackAvatar,
+            isChildProfile: isChild,
+            tcNo: userObj.tcNo || '',
+            passportNo: userObj.passportNo || '',
+            passportExp: userObj.passportExp || '',
+            birthDate: userObj.birthDate || '',
+            gender: userObj.gender || '',
+            title: userObj.title || ''
         };
         
         // Optimistic UI Update
