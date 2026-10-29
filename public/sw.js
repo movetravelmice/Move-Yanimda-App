@@ -1,4 +1,4 @@
-const CACHE_NAME = 'move-yanimda-v11';
+const CACHE_NAME = 'move-yanimda-v12';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
