@@ -27,12 +27,20 @@ import WeatherOutfitWidget from '../../components/WeatherOutfitWidget';
 import EmergencyCardWidget from '../../components/EmergencyCardWidget';
 import ModeSwitchBanner from '../../components/ModeSwitchBanner';
 import CountryFlag, { getCurrencySymbol } from '../../components/CountryFlag';
+import { getRouteFlightDurationForUser, initUserLocationDetector, subscribeUserLocation } from '../../services/routeIntelligenceService';
 
 const formatDuration = (val) => val ? String(val).replace(/\bsa\b/gi, 'Saat').trim() : '';
 
 export default function IndividualDashboard() {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
+  const [userOriginLoc, setUserOriginLoc] = useState(null);
+
+  useEffect(() => {
+    initUserLocationDetector(user);
+    const unsub = subscribeUserLocation(loc => setUserOriginLoc(loc));
+    return unsub;
+  }, [user]);
 
   const travels = useIndividualStore(state => state.travels);
   const checklists = useIndividualStore(state => state.checklists);
@@ -964,7 +972,7 @@ export default function IndividualDashboard() {
                           color: '#0f172a', 
                           marginTop: '6px' 
                         }}>
-                          {formatDuration(c.flight)}
+                          {getRouteFlightDurationForUser(c, userOriginLoc)}
                         </div>
                       </div>
 

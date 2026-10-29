@@ -22,12 +22,20 @@ import Header from '../../components/Header';
 import WeatherOutfitWidget from '../../components/WeatherOutfitWidget';
 import EmergencyCardWidget from '../../components/EmergencyCardWidget';
 import CountryFlag, { getCurrencySymbol } from '../../components/CountryFlag';
+import { getRouteFlightDurationForUser, initUserLocationDetector, subscribeUserLocation } from '../../services/routeIntelligenceService';
 
 const formatDuration = (val) => val ? String(val).replace(/\bsa\b/gi, 'Saat').trim() : '';
 
 export default function WelcomeLanding() {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
+  const [userOriginLoc, setUserOriginLoc] = useState(null);
+
+  useEffect(() => {
+    initUserLocationDetector(user);
+    const unsub = subscribeUserLocation(loc => setUserOriginLoc(loc));
+    return unsub;
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -750,7 +758,7 @@ export default function WelcomeLanding() {
                           color: '#0f172a', 
                           marginTop: '6px' 
                         }}>
-                          {formatDuration(c.flight)}
+                          {getRouteFlightDurationForUser(c, userOriginLoc)}
                         </div>
                       </div>
 

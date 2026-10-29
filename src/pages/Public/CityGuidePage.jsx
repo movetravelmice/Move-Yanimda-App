@@ -23,6 +23,7 @@ import {
 import { generateCityGuideAI } from '../../services/aiService';
 import { useSettingsStore, DEFAULT_POPULAR_ROUTES } from '../../store/settingsStore';
 import CountryFlag, { getCurrencySymbol } from '../../components/CountryFlag';
+import { getRouteFlightDurationForUser, initUserLocationDetector, subscribeUserLocation } from '../../services/routeIntelligenceService';
 
 // Kapsamlı ve Zengin Şehir Rehberleri Veritabanı
 const CURATED_CITY_GUIDES = {
@@ -183,6 +184,13 @@ export default function CityGuidePage() {
   const [loadingWeather, setLoadingWeather] = useState(true);
   const [localTimezone, setLocalTimezone] = useState('Europe/Istanbul');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [userOriginLoc, setUserOriginLoc] = useState(null);
+
+  useEffect(() => {
+    initUserLocationDetector(null);
+    const unsub = subscribeUserLocation(loc => setUserOriginLoc(loc));
+    return unsub;
+  }, []);
 
   // AI guide state
   const [guideData, setGuideData] = useState(null);
@@ -520,7 +528,7 @@ export default function CityGuidePage() {
                 <Plane size={11} color="#0284c7" /> Uçuş Süresi
               </div>
               <div style={{ fontSize: '12.5px', fontWeight: '800', color: '#0f172a', marginTop: '4px' }}>
-                {city.flight || '3.5 Saat'}
+                {getRouteFlightDurationForUser(city, userOriginLoc)}
               </div>
             </div>
 

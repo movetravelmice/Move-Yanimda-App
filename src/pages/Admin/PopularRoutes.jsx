@@ -25,13 +25,15 @@ import {
   Upload,
   Link2,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Lock
 } from 'lucide-react';
 import Header from '../../components/Header';
 import { useSettingsStore, DEFAULT_POPULAR_ROUTES } from '../../store/settingsStore';
 import CountryFlag, { getCurrencySymbol } from '../../components/CountryFlag';
 import ConfirmModal from '../../components/ConfirmModal';
 import { fetchDestinationPhoto } from '../../services/destinationImageService';
+import { detectRouteIntelligence, getRouteFlightDurationForUser } from '../../services/routeIntelligenceService';
 
 const formatDuration = (val) => val ? String(val).replace(/\bsa\b/gi, 'Saat').trim() : '';
 
@@ -158,15 +160,17 @@ export default function PopularRoutes() {
 
   const handleOpenAdd = () => {
     setEditingRoute(null);
+    const defaultIntel = detectRouteIntelligence('İtalya', 'Roma');
     setFormData({
       city: '',
       country: '',
-      flag: '🌍',
-      image: 'https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&q=80&w=800',
-      currency: 'EUR',
-      time: '-1 Saat',
-      flight: '3 Saat',
-      plug: 'Tip C/F',
+      flag: 'IT',
+      image: 'https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&q=80&w=800',
+      currency: defaultIntel.currency,
+      time: defaultIntel.time,
+      flight: defaultIntel.flight,
+      plug: defaultIntel.plug,
+      coords: defaultIntel.coords,
       isActive: activeCount < 6
     });
     setAlertMsg('');
@@ -176,15 +180,17 @@ export default function PopularRoutes() {
 
   const handleOpenEdit = (route) => {
     setEditingRoute(route);
+    const intel = detectRouteIntelligence(route.country || '', route.city || '');
     setFormData({
       city: route.city || '',
       country: route.country || '',
-      flag: route.flag || '🌍',
+      flag: intel.countryCode || route.flag || 'IT',
       image: route.image || '',
-      currency: route.currency || 'EUR',
-      time: formatDuration(route.time) || '-1 Saat',
-      flight: formatDuration(route.flight) || '3 Saat',
-      plug: route.plug || 'Tip C/F',
+      currency: intel.currency || route.currency || 'EUR',
+      time: intel.time || formatDuration(route.time) || '-1 Saat',
+      flight: intel.flight || formatDuration(route.flight) || '3 Saat',
+      plug: intel.plug || route.plug || 'Tip C/F',
+      coords: intel.coords || route.coords,
       isActive: Boolean(route.isActive)
     });
     setAlertMsg('');
@@ -258,19 +264,30 @@ export default function PopularRoutes() {
       return;
     }
 
+    const intel = detectRouteIntelligence(formData.country, formData.city);
+    const finalRouteData = {
+      ...formData,
+      flag: formData.flag || intel.countryCode || 'IT',
+      currency: intel.currency || formData.currency || 'EUR',
+      time: formData.time || intel.time || '-1 Saat',
+      flight: formData.flight || intel.flight || '2.5 Saat',
+      plug: formData.plug || intel.plug || 'Tip C/F',
+      coords: formData.coords || intel.coords
+    };
+
     let updated;
     if (editingRoute) {
       // Edit existing
       updated = routes.map(r => r.id === editingRoute.id ? {
         ...r,
-        ...formData
+        ...finalRouteData
       } : r);
     } else {
       // Add new
       const newId = formData.city.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now();
       const newRoute = {
         id: newId,
-        ...formData,
+        ...finalRouteData,
         order: routes.length + 1
       };
       updated = [newRoute, ...routes];
@@ -504,7 +521,21 @@ export default function PopularRoutes() {
                     type="text"
                     required
                     value={formData.city}
-                    onChange={e => setFormData({ ...formData, city: e.target.value })}
+                    onChange={e => {
+                      const newCity = e.target.value;
+                      const intel = detectRouteIntelligence(formData.country, newCity);
+                      setFormData(prev => ({
+                        ...prev,
+                        city: newCity,
+                        flag: intel.countryCode || prev.flag,
+                        currency: intel.currency,
+                        time: intel.time,
+                        flight: intel.flight,
+                        plug: intel.plug,
+                        coords: intel.coords,
+                        ...(intel.isAutoDetected && (!prev.country || prev.country.trim() === '') ? { country: intel.country } : {})
+                      }));
+                    }}
                     onBlur={e => {
                       if (e.target.value.trim().length >= 3 && (!formData.image || formData.image.includes('images.unsplash.com/photo-1552832230') || formData.image.includes('photo-1502602898657'))) {
                         handleFindAiImage(e.target.value.trim(), formData.country);
@@ -523,7 +554,20 @@ export default function PopularRoutes() {
                     type="text"
                     required
                     value={formData.country}
-                    onChange={e => setFormData({ ...formData, country: e.target.value })}
+                    onChange={e => {
+                      const newCountry = e.target.value;
+                      const intel = detectRouteIntelligence(newCountry, formData.city);
+                      setFormData(prev => ({
+                        ...prev,
+                        country: newCountry,
+                        flag: intel.countryCode || prev.flag,
+                        currency: intel.currency,
+                        time: intel.time,
+                        flight: intel.flight,
+                        plug: intel.plug,
+                        coords: intel.coords
+                      }));
+                    }}
                     onBlur={e => {
                       if (formData.city && formData.city.trim().length >= 3 && (!formData.image || formData.image.includes('images.unsplash.com/photo-1552832230') || formData.image.includes('photo-1502602898657'))) {
                         handleFindAiImage(formData.city.trim(), e.target.value.trim());
@@ -535,88 +579,94 @@ export default function PopularRoutes() {
                 </div>
               </div>
 
+              {/* Bayrak & Para Birimi (Otomatik ve Kilitli) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '11.5px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '5px' }}>
-                    Bayrak / Ülke Kodu
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.flag}
-                    onChange={e => setFormData({ ...formData, flag: e.target.value })}
-                    placeholder="Örn: IT, JP veya 🇮🇹"
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
-                  />
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: '700', color: '#475569' }}>
+                      Bayrak & Ülke Kodu
+                    </label>
+                    <span style={{ fontSize: '10px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '700' }}>
+                      <Lock size={10} color="#D7147A" /> Otomatik
+                    </span>
+                  </div>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      readOnly
+                      tabIndex={-1}
+                      value={formData.flag || 'IT'}
+                      title="Ülke ve şehir seçimine göre otomatik belirlenir (Değiştirilemez)"
+                      style={{
+                        width: '100%',
+                        padding: '10px 12px 10px 38px',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        background: '#f1f5f9',
+                        color: '#334155',
+                        cursor: 'not-allowed'
+                      }}
+                    />
+                    <div style={{ position: 'absolute', left: '10px', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>
+                      <CountryFlag flag={formData.flag} country={formData.country} size="sm" />
+                    </div>
+                  </div>
                 </div>
 
                 <div>
-                  <label style={{ fontSize: '11.5px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '5px' }}>
-                    Para Birimi
-                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '5px' }}>
+                    <label style={{ fontSize: '11.5px', fontWeight: '700', color: '#475569' }}>
+                      Para Birimi
+                    </label>
+                    <span style={{ fontSize: '10px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '3px', fontWeight: '700' }}>
+                      <Lock size={10} color="#D7147A" /> Otomatik
+                    </span>
+                  </div>
                   <input
                     type="text"
-                    value={formData.currency}
-                    onChange={e => setFormData({ ...formData, currency: e.target.value })}
-                    placeholder="EUR, USD, JPY, GBP..."
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
+                    readOnly
+                    tabIndex={-1}
+                    value={formData.currency || 'EUR'}
+                    title="Ülkeye göre resmi para birimi otomatik atanır (Değiştirilemez)"
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      fontSize: '13px',
+                      fontWeight: '800',
+                      outline: 'none',
+                      boxSizing: 'border-box',
+                      background: '#f1f5f9',
+                      color: '#334155',
+                      cursor: 'not-allowed'
+                    }}
                   />
                 </div>
               </div>
-            </div>
 
-            {/* 2. KART: SEYAHAT PRATİK BİLGİLERİ */}
-            <div style={{
-              background: '#ffffff',
-              borderRadius: '18px',
-              border: '1px solid #e2e8f0',
-              padding: '16px',
-              marginBottom: '16px',
-              boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)'
-            }}>
-              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Clock size={16} color="#D7147A" />
-                <span>Seyahat Pratik Bilgileri</span>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '5px' }}>
-                    Saat Farkı
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.time}
-                    onChange={e => setFormData({ ...formData, time: e.target.value })}
-                    placeholder="-1 Saat, +6 Saat"
-                    style={{ width: '100%', padding: '9px 11px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '12.5px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '5px' }}>
-                    Uçuş Süresi
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.flight}
-                    onChange={e => setFormData({ ...formData, flight: e.target.value })}
-                    placeholder="2.5 Saat, 11 Saat"
-                    style={{ width: '100%', padding: '9px 11px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '12.5px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '11px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '5px' }}>
-                    Priz Tipi
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.plug}
-                    onChange={e => setFormData({ ...formData, plug: e.target.value })}
-                    placeholder="Tip C/F, Tip A/B"
-                    style={{ width: '100%', padding: '9px 11px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '12.5px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
-                  />
-                </div>
+              {/* Bilgilendirme Rozeti (Saat, Priz ve Uçuş Süresi Otomatiktir) */}
+              <div style={{
+                marginTop: '12px',
+                padding: '9px 12px',
+                borderRadius: '10px',
+                background: '#FDF2F8',
+                border: '1px solid #F9BED8',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '11px',
+                color: '#9D174D',
+                fontWeight: '600'
+              }}>
+                <Sparkles size={14} color="#D7147A" style={{ flexShrink: 0 }} />
+                <span>
+                  Saat farkı (<strong>{formatDuration(formData.time) || '-1 Saat'}</strong>), priz standardı (<strong>{formData.plug || 'Tip C/F'}</strong>) ve uçuş süresi (<strong>{formatDuration(formData.flight) || '2.5 Saat'}</strong>) kullanıcının konumuna ve seçilen ülkeye göre otomatik belirlenir.
+                </span>
               </div>
             </div>
 
@@ -815,13 +865,21 @@ export default function PopularRoutes() {
                     <button
                       key={i}
                       type="button"
-                      onClick={() => setFormData({
-                        ...formData,
-                        city: formData.city || p.city,
-                        country: formData.country || p.country,
-                        flag: (!formData.flag || formData.flag === '🌍') ? p.flag : formData.flag,
-                        image: p.url
-                      })}
+                      onClick={() => {
+                        const intel = detectRouteIntelligence(p.country, p.city);
+                        setFormData(prev => ({
+                          ...prev,
+                          city: p.city,
+                          country: p.country,
+                          flag: intel.countryCode || p.flag,
+                          currency: intel.currency,
+                          time: intel.time,
+                          flight: intel.flight,
+                          plug: intel.plug,
+                          coords: intel.coords,
+                          image: p.url
+                        }));
+                      }}
                       style={{
                         padding: '6px 10px',
                         borderRadius: '10px',
