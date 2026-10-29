@@ -19,7 +19,9 @@ import {
   Clock,
   Plane,
   Zap,
-  Coins
+  Coins,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import Header from '../../components/Header';
 import { useSettingsStore, DEFAULT_POPULAR_ROUTES } from '../../store/settingsStore';
@@ -352,45 +354,6 @@ export default function PopularRoutes() {
                       </span>
                     </div>
 
-                    {/* Top Right: Vitrin Durumu Toggle */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleActive(r.id);
-                      }}
-                      title={isFeatured ? "Vitrinden Kaldır (Pasife Al)" : "Vitrine Ekle (Aktif Yap)"}
-                      style={{
-                        position: 'absolute',
-                        top: '10px',
-                        right: '10px',
-                        background: isFeatured ? 'rgba(253, 242, 248, 0.95)' : 'rgba(255, 255, 255, 0.92)',
-                        backdropFilter: 'blur(8px)',
-                        border: `1.5px solid ${isFeatured ? '#F9BED8' : '#e2e8f0'}`,
-                        color: isFeatured ? '#D7147A' : '#64748b',
-                        padding: '4px 10px',
-                        borderRadius: '30px',
-                        fontSize: '11px',
-                        fontWeight: '800',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '5px',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                        zIndex: 2,
-                        transition: 'transform 0.15s'
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-                      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-                    >
-                      <div style={{
-                        width: '7px',
-                        height: '7px',
-                        borderRadius: '50%',
-                        background: isFeatured ? '#D7147A' : '#94a3b8'
-                      }} />
-                      <span>{isFeatured ? 'Vitrinde Aktif' : 'Pasif'}</span>
-                    </button>
-
                     {/* Bottom Left inside cover: Country Name */}
                     <div style={{
                       position: 'absolute',
@@ -498,8 +461,8 @@ export default function PopularRoutes() {
                       </span>
                     </div>
 
-                    {/* Side-by-Side Action Buttons Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px' }}>
+                    {/* Side-by-Side Action Buttons Grid (5 Buton) */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '6px' }}>
                       {/* 1. Düzenle */}
                       <button
                         onClick={() => handleOpenEdit(r)}
@@ -533,7 +496,57 @@ export default function PopularRoutes() {
                         <Edit3 size={18} color="#475569" strokeWidth={2.2} />
                       </button>
 
-                      {/* 2. Sıralamada Yukarı Taşı */}
+                      {/* 2. Vitrinde Aktif / Pasif Toggle */}
+                      <button
+                        onClick={() => handleToggleActive(r.id)}
+                        title={isFeatured ? "Vitrinde Aktif (Pasife Almak için tıklayın)" : "Vitrinde Pasif (Vitrine Eklemek için tıklayın)"}
+                        style={{
+                          aspectRatio: '1',
+                          width: '100%',
+                          background: isFeatured ? '#FDF2F8' : '#f8fafc',
+                          border: `1px solid ${isFeatured ? '#F9BED8' : '#e2e8f0'}`,
+                          borderRadius: '12px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          position: 'relative',
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          outline: 'none'
+                        }}
+                        onMouseEnter={e => {
+                          e.currentTarget.style.background = isFeatured ? '#fce7f3' : '#f1f5f9';
+                          e.currentTarget.style.borderColor = isFeatured ? '#f472b6' : '#cbd5e1';
+                          e.currentTarget.style.boxShadow = isFeatured ? '0 3px 10px rgba(215,20,122,0.2)' : '0 3px 10px rgba(71,85,105,0.15)';
+                          e.currentTarget.style.transform = 'translateY(-2px)';
+                        }}
+                        onMouseLeave={e => {
+                          e.currentTarget.style.background = isFeatured ? '#FDF2F8' : '#f8fafc';
+                          e.currentTarget.style.borderColor = isFeatured ? '#F9BED8' : '#e2e8f0';
+                          e.currentTarget.style.boxShadow = 'none';
+                          e.currentTarget.style.transform = 'translateY(0)';
+                        }}
+                      >
+                        {isFeatured ? (
+                          <Eye size={18} color="#D7147A" strokeWidth={2.2} />
+                        ) : (
+                          <EyeOff size={18} color="#94a3b8" strokeWidth={2.2} />
+                        )}
+                        {isFeatured && (
+                          <span style={{
+                            position: 'absolute',
+                            top: '5px',
+                            right: '5px',
+                            width: '6px',
+                            height: '6px',
+                            borderRadius: '50%',
+                            background: '#D7147A',
+                            boxShadow: '0 0 5px rgba(215,20,122,0.8)'
+                          }} />
+                        )}
+                      </button>
+
+                      {/* 3. Sıralamada Yukarı Taşı */}
                       <button
                         onClick={() => handleMoveOrder(index, 'up')}
                         disabled={index === 0}
@@ -572,7 +585,7 @@ export default function PopularRoutes() {
                         <ArrowUp size={18} color={index === 0 ? '#94a3b8' : '#2563eb'} strokeWidth={2.2} />
                       </button>
 
-                      {/* 3. Sıralamada Aşağı Taşı */}
+                      {/* 4. Sıralamada Aşağı Taşı */}
                       <button
                         onClick={() => handleMoveOrder(index, 'down')}
                         disabled={index === routes.length - 1}
@@ -611,7 +624,7 @@ export default function PopularRoutes() {
                         <ArrowDown size={18} color={index === routes.length - 1 ? '#94a3b8' : '#16a34a'} strokeWidth={2.2} />
                       </button>
 
-                      {/* 4. Sil */}
+                      {/* 5. Sil */}
                       <button
                         onClick={() => handleDelete(r.id)}
                         title="Rotayı Sil"
