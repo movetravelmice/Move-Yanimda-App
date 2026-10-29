@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Compass,
@@ -21,12 +21,17 @@ import {
   Zap,
   Coins,
   Eye,
-  EyeOff
+  EyeOff,
+  Upload,
+  Link2,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
 import Header from '../../components/Header';
 import { useSettingsStore, DEFAULT_POPULAR_ROUTES } from '../../store/settingsStore';
 import CountryFlag, { getCurrencySymbol } from '../../components/CountryFlag';
 import ConfirmModal from '../../components/ConfirmModal';
+import { fetchDestinationPhoto } from '../../services/destinationImageService';
 
 const formatDuration = (val) => val ? String(val).replace(/\bsa\b/gi, 'Saat').trim() : '';
 
@@ -62,6 +67,80 @@ export default function PopularRoutes() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [infoModalMsg, setInfoModalMsg] = useState(null);
 
+  // AI & Manuel Resim Yükleme state
+  const [isAiLoadingImage, setIsAiLoadingImage] = useState(false);
+  const [showManualUrl, setShowManualUrl] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Compress image via Canvas to max 1200px width/height (<100KB)
+  const compressImage = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
+
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', 0.82));
+        };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const compressedDataUrl = await compressImage(file);
+      setFormData(prev => ({ ...prev, image: compressedDataUrl }));
+    } catch (err) {
+      console.error("Resim yükleme hatası:", err);
+      setAlertMsg("Fotoğraf işlenirken bir sorun oluştu. Lütfen tekrar deneyin.");
+    }
+  };
+
+  const handleFindAiImage = async (customCity, customCountry) => {
+    const city = customCity !== undefined ? customCity : formData.city;
+    const country = customCountry !== undefined ? customCountry : formData.country;
+    if (!city || !city.trim()) {
+      setAlertMsg("Lütfen önce bir şehir adı giriniz.");
+      return;
+    }
+    setIsAiLoadingImage(true);
+    setAlertMsg('');
+    try {
+      const photoUrl = await fetchDestinationPhoto(city.trim(), (country || '').trim());
+      if (photoUrl) {
+        setFormData(prev => ({ ...prev, image: photoUrl }));
+      }
+    } catch (err) {
+      console.warn("AI görsel arama hatası:", err);
+    } finally {
+      setIsAiLoadingImage(false);
+    }
+  };
+
   // Form state
   const [formData, setFormData] = useState({
     city: '',
@@ -91,6 +170,7 @@ export default function PopularRoutes() {
       isActive: activeCount < 6
     });
     setAlertMsg('');
+    setShowManualUrl(false);
     setModalOpen(true);
   };
 
@@ -108,6 +188,7 @@ export default function PopularRoutes() {
       isActive: Boolean(route.isActive)
     });
     setAlertMsg('');
+    setShowManualUrl(false);
     setModalOpen(true);
   };
 
@@ -424,6 +505,11 @@ export default function PopularRoutes() {
                     required
                     value={formData.city}
                     onChange={e => setFormData({ ...formData, city: e.target.value })}
+                    onBlur={e => {
+                      if (e.target.value.trim().length >= 3 && (!formData.image || formData.image.includes('images.unsplash.com/photo-1552832230') || formData.image.includes('photo-1502602898657'))) {
+                        handleFindAiImage(e.target.value.trim(), formData.country);
+                      }
+                    }}
                     placeholder="Örn: Roma, Tokyo..."
                     style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
                   />
@@ -438,6 +524,11 @@ export default function PopularRoutes() {
                     required
                     value={formData.country}
                     onChange={e => setFormData({ ...formData, country: e.target.value })}
+                    onBlur={e => {
+                      if (formData.city && formData.city.trim().length >= 3 && (!formData.image || formData.image.includes('images.unsplash.com/photo-1552832230') || formData.image.includes('photo-1502602898657'))) {
+                        handleFindAiImage(formData.city.trim(), e.target.value.trim());
+                      }
+                    }}
                     placeholder="Örn: İtalya, Japonya..."
                     style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: '700', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
                   />
@@ -529,7 +620,7 @@ export default function PopularRoutes() {
               </div>
             </div>
 
-            {/* 3. KART: ŞEHİR GÖRSELİ & HAZIR ŞABLONLAR */}
+            {/* 3. KART: KAPAK GÖRSELİ (AI OTOMATİK + MANUEL YÜKLEME) */}
             <div style={{
               background: '#ffffff',
               borderRadius: '18px',
@@ -538,28 +629,186 @@ export default function PopularRoutes() {
               marginBottom: '16px',
               boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)'
             }}>
-              <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <ImageIcon size={16} color="#D7147A" />
-                <span>Kapak Görseli</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ fontSize: '13px', fontWeight: '800', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Sparkles size={16} color="#D7147A" />
+                  <span>Kapak Görseli</span>
+                </div>
+                <span style={{ fontSize: '11px', color: '#D7147A', fontWeight: '700', background: '#FDF2F8', padding: '2px 8px', borderRadius: '6px', border: '1px solid #F9BED8' }}>
+                  Yapay Zeka Destekli
+                </span>
               </div>
 
+              {/* Görsel Önizleme Thumbnail ve AI / Manuel Butonları */}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', background: '#f8fafc', padding: '12px', borderRadius: '14px', border: '1px solid #e2e8f0', marginBottom: '14px', flexWrap: 'wrap' }}>
+                {/* Thumbnail */}
+                <div style={{
+                  width: '90px',
+                  height: '66px',
+                  borderRadius: '10px',
+                  overflow: 'hidden',
+                  background: '#0f172a',
+                  flexShrink: 0,
+                  position: 'relative',
+                  border: '1px solid #cbd5e1'
+                }}>
+                  {formData.image ? (
+                    <img
+                      src={formData.image}
+                      alt="Kapak"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                      <ImageIcon size={24} />
+                    </div>
+                  )}
+                  {isAiLoadingImage && (
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(15, 23, 42, 0.7)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#ffffff',
+                      gap: '2px'
+                    }}>
+                      <Loader2 size={18} className="animate-spin" />
+                      <span style={{ fontSize: '8px', fontWeight: '700' }}>AI</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Butonlar */}
+                <div style={{ flex: 1, minWidth: '200px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {/* AI ile Şehir Fotoğrafı Bul */}
+                    <button
+                      type="button"
+                      onClick={() => handleFindAiImage()}
+                      disabled={isAiLoadingImage}
+                      style={{
+                        flex: 1,
+                        minWidth: '130px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        background: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)',
+                        color: '#D7147A',
+                        border: '1px solid #F9BED8',
+                        borderRadius: '10px',
+                        padding: '10px 12px',
+                        fontSize: '12px',
+                        fontWeight: '800',
+                        cursor: isAiLoadingImage ? 'wait' : 'pointer',
+                        boxShadow: '0 2px 6px rgba(215, 20, 122, 0.12)',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {isAiLoadingImage ? (
+                        <>
+                          <Loader2 size={14} className="animate-spin" />
+                          <span>AI Aranıyor...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={14} color="#D7147A" />
+                          <span>AI ile Resim Bul</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Manuel Resim Yükle Butonu */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={handleFileUpload}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      style={{
+                        flex: 1,
+                        minWidth: '120px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                        background: '#ffffff',
+                        color: '#1e293b',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '10px',
+                        padding: '10px 12px',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      <Upload size={14} color="#475569" />
+                      <span>Resim Yükle</span>
+                    </button>
+                  </div>
+
+                  <div style={{ fontSize: '10.5px', color: '#64748b' }}>
+                    Yapay zeka şehir ve ülke adına göre en uygun fotoğrafı bulur veya galerinizden seçebilirsiniz.
+                  </div>
+                </div>
+              </div>
+
+              {/* Opsiyonel Manuel URL Akordeon */}
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ fontSize: '11.5px', fontWeight: '700', color: '#475569', display: 'block', marginBottom: '5px' }}>
-                  Şehir Görsel URL *
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={formData.image}
-                  onChange={e => setFormData({ ...formData, image: e.target.value })}
-                  placeholder="https://images.unsplash.com/..."
-                  style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '12px', outline: 'none', boxSizing: 'border-box', background: '#f8fafc' }}
-                />
+                <button
+                  type="button"
+                  onClick={() => setShowManualUrl(!showManualUrl)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#64748b',
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer',
+                    padding: '2px 0'
+                  }}
+                >
+                  <Link2 size={12} />
+                  <span>{showManualUrl ? 'Görsel URL Alanını Kapat' : 'Veya Manuel URL ile Belirle'}</span>
+                </button>
+
+                {showManualUrl && (
+                  <div style={{ marginTop: '6px' }}>
+                    <input
+                      type="url"
+                      value={formData.image}
+                      onChange={e => setFormData({ ...formData, image: e.target.value })}
+                      placeholder="https://images.unsplash.com/..."
+                      style={{
+                        width: '100%',
+                        padding: '9px 11px',
+                        borderRadius: '9px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '12px',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        background: '#f8fafc'
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
+              {/* Hızlı Popüler Şehir Fotoğrafları */}
               <div>
                 <div style={{ fontSize: '11px', fontWeight: '700', color: '#64748b', marginBottom: '6px' }}>
-                  Veya Hazır Popüler Fotoğraflardan Seçin:
+                  Veya Popüler Şehirlerden Seçin:
                 </div>
                 <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '6px' }}>
                   {PHOTO_PRESETS.map((p, i) => (
