@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MapPin, Calendar, Edit3, Eye, MessageCircle, Users, Megaphone, X, Send, Plus, Trash2, Timer, RotateCcw, Phone, ChevronRight, Info, CheckCircle2, ShieldCheck } from 'lucide-react';
 import Header from '../../components/Header';
 import ModeSwitchBanner from '../../components/ModeSwitchBanner';
+import ExpertModal from '../../components/ExpertModal';
 import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive, isTourPast } from '../../store/tourStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { useAuthStore, isUserAdmin } from '../../store/authStore';

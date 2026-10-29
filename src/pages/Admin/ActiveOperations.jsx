@@ -15,6 +15,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import ConfirmModal from '../../components/ConfirmModal';
+import ExpertModal from '../../components/ExpertModal';
 import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 

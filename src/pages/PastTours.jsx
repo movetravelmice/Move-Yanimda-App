@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronLeft, Calendar, Eye, Search, Star, MapPin, X, Users, Info, MessageCircle, UserCheck, Compass, PlaneTakeoff, Phone, Timer } from 'lucide-react';
 import Header from '../components/Header';
+import ExpertModal from '../components/ExpertModal';
 import { useTourStore, calculateDaysAndNights, getTourExperts, isTourPast, getUserTourReview } from '../store/tourStore';
 import { useAuthStore } from '../store/authStore';
 import { useUserStore } from '../store/userStore';

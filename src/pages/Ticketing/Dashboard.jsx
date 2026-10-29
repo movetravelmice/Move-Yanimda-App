@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
+import ExpertModal from '../../components/ExpertModal';
 import { useTourStore, calculateDaysAndNights, getTourExperts, isTourActive } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 import { useNotificationStore } from '../../store/notificationStore';
