@@ -52,14 +52,7 @@ export default function CustomerDashboard() {
   const { tours } = useTourStore();
   const user = useAuthStore(state => state.user);
   const allUsers = useUserStore(state => state.users);
-  const myTours = tours.filter(t => t.participants?.some(p => {
-    if (p.id === user?.id) return true;
-    if (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()) return true;
-    const pPhone = (p.phone || '').replace(/\D/g, '');
-    const uPhone = (user?.phone || '').replace(/\D/g, '');
-    if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) return true;
-    return false;
-  }));
+  const myTours = tours.filter(t => findMatchingParticipant(t.participants, user));
   const activeTours = myTours.filter(isTourActive);
   const pastTours = myTours.filter(isTourPast);
   const [reviewedTours, setReviewedTours] = useState(() => {
@@ -91,7 +84,7 @@ export default function CustomerDashboard() {
 
         {activeTours.map(tour => {
             let checkInWarning = null;
-            const myParticipant = tour.participants?.find(p => p.id === user?.id || p.email === user?.email);
+            const myParticipant = findMatchingParticipant(tour.participants, user);
             const outgoingFlight = myParticipant?.flights?.find(f => f.type === 'Gidiş Uçuşu' || f.type === 'Gidis Ucusu') || myParticipant?.flights?.[0];
 
             if (outgoingFlight && tour.dates) {

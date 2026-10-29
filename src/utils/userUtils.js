@@ -5,8 +5,9 @@
 export const isChildEmail = (email) => {
     if (!email || typeof email !== 'string') return false;
     const lower = email.trim().toLowerCase();
-    if (lower.startsWith('child_')) return true;
-    if (lower.endsWith('.local') || lower.includes('@move.local')) return true;
+    // Only emails explicitly starting with child_ or cocuk_ are child accounts.
+    // Generic placeholder emails (@move.local) for corporate adults without email are NOT children.
+    if (lower.startsWith('child_') || lower.startsWith('cocuk_') || lower.includes('@child.') || lower.includes('.child@')) return true;
     return false;
 };
 
@@ -16,34 +17,128 @@ export const isUserChild = (u, allUsers = []) => {
     const fullUser = (userList.length > 0 ? userList.find(usr => usr.id === u.id || (u.email && usr.email === u.email)) : null) || u;
     if (!fullUser) return false;
 
-    // An adult is someone who is a parent to ANYONE
-    if (userList.length > 0) {
-        const isParent = userList.some(other => {
-            if (!other.linkedTo) return false;
-            if (Array.isArray(other.linkedTo)) return other.linkedTo.includes(fullUser.id) || other.linkedTo.includes(String(fullUser.id));
-            if (typeof other.linkedTo === 'string') return other.linkedTo === String(fullUser.id);
-            return false;
-        });
-        if (isParent) return false;
-    }
-
     // Explicit child profile flag
     if (fullUser.isChildProfile === true) return true;
+    if (fullUser.isChild === true) return true;
+    if (fullUser.type === 'child' || fullUser.userType === 'child') return true;
 
-    // Child email identifier or internal .local placeholder
+    // Explicit child email identifier (child_...)
     if (fullUser.email && isChildEmail(fullUser.email)) {
         return true;
     }
 
-    // Linked to a parent (and not a parent themselves)
-    const lt = fullUser.linkedTo;
-    if (Array.isArray(lt) && lt.length > 0) return true;
-    if (typeof lt === 'string') {
-        const val = lt.trim().toLowerCase();
-        return val !== '' && val !== 'null' && val !== 'undefined' && val !== '[]' && val !== '-';
+    return false;
+};
+
+/**
+ * Normalized string comparison helper for Turkish text
+ */
+export const normalizeTurkish = (str) => {
+    if (!str) return '';
+    return String(str)
+        .toLowerCase()
+        .replace(/i̇/g, 'i')
+        .replace(/ı/g, 'i')
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ş/g, 's')
+        .replace(/ö/g, 'o')
+        .replace(/ç/g, 'c')
+        .trim();
+};
+
+/**
+ * Robust, multi-layered participant matching scoring algorithm.
+ * Prevents phone-sharing or phone typos from showing someone else's ticket.
+ */
+export const getParticipantMatchScore = (p, user) => {
+    if (!p || !user) return 0;
+
+    // 1. Direct ID match (highest certainty)
+    if (p.id && user.id && p.id === user.id) {
+        return 1000;
     }
 
-    return false;
+    // 2. TC Kimlik match (unique personal ID in Turkey)
+    const pTc = String(p.tcNo || p.tc || '').replace(/\D/g, '');
+    const uTc = String(user.tcNo || user.tc || '').replace(/\D/g, '');
+    if (pTc.length === 11 && uTc.length === 11) {
+        if (pTc === uTc) return 950;
+        // Different TC numbers mean strictly different individuals
+        return -1000;
+    }
+
+    let score = 0;
+
+    // 3. Real Email match (excluding system placeholder emails like @move.local)
+    const pEmail = (p.email || '').trim().toLowerCase();
+    const uEmail = (user.email || '').trim().toLowerCase();
+    const isPlaceholder = (em) => !em || em.endsWith('@move.local') || em.endsWith('.local');
+    if (pEmail && uEmail && !isPlaceholder(pEmail) && !isPlaceholder(uEmail)) {
+        if (pEmail === uEmail) {
+            score += 800;
+        } else {
+            score -= 300;
+        }
+    }
+
+    // 4. Name comparison
+    const pName = normalizeTurkish(p.name);
+    const uName = normalizeTurkish(user.name);
+    let nameClashes = false;
+
+    if (pName && uName) {
+        if (pName === uName) {
+            score += 500;
+        } else {
+            const pParts = pName.split(/\s+/).filter(Boolean);
+            const uParts = uName.split(/\s+/).filter(Boolean);
+            const pSurname = pParts[pParts.length - 1];
+            const uSurname = uParts[uParts.length - 1];
+
+            // If surnames are DIFFERENT (e.g. "Ceyhan" vs "Özdoğan"), severe penalty to prevent cross-account leak
+            if (pSurname && uSurname && pSurname !== uSurname) {
+                score -= 600;
+                nameClashes = true;
+            } else if (pParts[0] === uParts[0]) {
+                score += 350;
+            }
+        }
+    }
+
+    // 5. Phone comparison
+    const pPhone = (p.phone || '').replace(/\D/g, '');
+    const uPhone = (user.phone || '').replace(/\D/g, '');
+    if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) {
+        // If surnames clash (different people sharing phone or phone typo), DO NOT match!
+        if (nameClashes) {
+            score -= 200;
+        } else {
+            score += 300;
+        }
+    }
+
+    return score;
+};
+
+export const isUserMatch = (p, user) => {
+    return getParticipantMatchScore(p, user) >= 250;
+};
+
+export const findMatchingParticipant = (participants = [], user) => {
+    if (!Array.isArray(participants) || participants.length === 0 || !user) return null;
+    let best = null;
+    let maxScore = 0;
+
+    for (const p of participants) {
+        const score = getParticipantMatchScore(p, user);
+        if (score >= 250 && score > maxScore) {
+            maxScore = score;
+            best = p;
+        }
+    }
+
+    return best;
 };
 
 export const canUserReceiveEmail = (u, allUsers = []) => {

@@ -17,6 +17,7 @@ import { useAuthStore } from '../store/authStore';
 import { useTourStore } from '../store/tourStore';
 import { useChatStore } from '../store/chatStore';
 import { useNotificationStore } from '../store/notificationStore';
+import { isUserMatch } from '../utils/userUtils';
 
 export default function AppBottomNav() {
   const user = useAuthStore(state => state.user);
@@ -47,15 +48,7 @@ export default function AppBottomNav() {
   let unreadMessagesCount = 0;
   let myUnreadNotificationsCount = 0;
 
-  const isUserInTour = (p) => {
-    if (!p || !user) return false;
-    if (p.id === user.id) return true;
-    if (p.email && user.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()) return true;
-    const pPhone = (p.phone || '').replace(/\D/g, '');
-    const uPhone = (user.phone || '').replace(/\D/g, '');
-    if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) return true;
-    return false;
-  };
+  const isUserInTour = (p) => isUserMatch(p, user);
 
   if (isCorporate) {
     const myTourIds = tours.filter(t => {

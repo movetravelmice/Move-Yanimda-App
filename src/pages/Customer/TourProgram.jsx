@@ -4,6 +4,7 @@ import Header from '../../components/Header';
 import { ChevronLeft, Map, Clock, Camera, Coffee, Bed, Bus, PlaneLanding, Activity, Paperclip, Download } from 'lucide-react';
 import { useTourStore, isTourActive } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
+import { findMatchingParticipant, isUserMatch } from '../../utils/userUtils';
 
 export default function TourProgram() {
   const navigate = useNavigate();
@@ -11,20 +12,10 @@ export default function TourProgram() {
   const { tours } = useTourStore();
   const { user } = useAuthStore();
   
-  const isUserMatch = (p) => {
-    if (!p || !user) return false;
-    if (p.id === user.id) return true;
-    if (p.email && user.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()) return true;
-    const pPhone = (p.phone || '').replace(/\D/g, '');
-    const uPhone = (user.phone || '').replace(/\D/g, '');
-    if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) return true;
-    return false;
-  };
-
-  // Find the tour from all tours first if tourId is provided, fallback to active tour participant check
+  const myTours = tours.filter(t => findMatchingParticipant(t.participants, user));
   const activeTour = tourId 
     ? tours.find(t => t.id === tourId) 
-    : (tours.find(t => isTourActive(t) && t.participants?.some(isUserMatch)) || tours.find(t => t.participants?.some(isUserMatch)));
+    : (myTours.find(isTourActive) || myTours[0]);
 
   const hasProgram = activeTour && activeTour.program && (
       (typeof activeTour.program === 'string' && activeTour.program.trim().length > 0) || 

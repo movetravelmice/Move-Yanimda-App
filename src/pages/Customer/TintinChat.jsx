@@ -44,12 +44,7 @@ export default function TintinChat() {
       return tours.filter(t => t.guideName === user.name || t.expert?.name === user.name || t.expert?.email === user.email);
     }
     // Customer
-    return tours.filter(t => 
-      t.participants?.some(p => 
-        p.id === user.id || 
-        (p.email && user.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase())
-      )
-    );
+    return tours.filter(t => findMatchingParticipant(t.participants, user));
   }, [tours, user]);
 
   // Default welcome message generator
@@ -127,10 +122,7 @@ export default function TintinChat() {
   const buildTravelContext = () => {
     const formattedTours = (userTours || []).map(t => {
       const participantsList = Array.isArray(t?.participants) ? t.participants : [];
-      const myParticipant = participantsList.find(p => 
-        p?.id === user?.id || 
-        (p?.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase())
-      );
+      const myParticipant = findMatchingParticipant(participantsList, user);
 
       return {
         tourId: t?.id || '',

@@ -37,7 +37,7 @@ import { db } from '../../lib/firebase';
 import { useUserStore, formatTitleCase } from '../../store/userStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore, isUserAdmin } from '../../store/authStore';
-import { normalizePhoneNumber, formatPhoneInputWithoutPrefix, checkEmailDomainTypo, toTurkishTitleCase, normalizeTurkishTitleCase } from '../../utils/userUtils';
+import { normalizePhoneNumber, formatPhoneInputWithoutPrefix, checkEmailDomainTypo, toTurkishTitleCase, normalizeTurkishTitleCase, isUserChild as checkUserChild } from '../../utils/userUtils';
 
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState('expert');
@@ -48,30 +48,7 @@ export default function AdminUsers() {
   const deleteUser = useUserStore(state => state.deleteUser);
   const currentUser = useAuthStore(state => state.user);
 
-  const isUserChild = (u) => {
-      const fullUser = allUsers.find(usr => usr.id === u.id) || u;
-      if (!fullUser) return false;
-
-      const isParent = allUsers.some(other => {
-          if (!other.linkedTo) return false;
-          if (Array.isArray(other.linkedTo)) return other.linkedTo.includes(fullUser.id) || other.linkedTo.includes(String(fullUser.id));
-          if (typeof other.linkedTo === 'string') return other.linkedTo === String(fullUser.id);
-          return false;
-      });
-      if (isParent) return false;
-
-      if (fullUser.isChildProfile === true) return true;
-      if (fullUser.email && fullUser.email.startsWith('child_')) return true;
-
-      const lt = fullUser.linkedTo;
-      if (Array.isArray(lt)) return lt.length > 0;
-      if (typeof lt === 'string') {
-          const val = lt.trim().toLowerCase();
-          return val !== '' && val !== 'null' && val !== 'undefined' && val !== '[]' && val !== '-';
-      }
-
-      return false;
-  };
+  const isUserChild = (u) => checkUserChild(u, allUsers);
 
   const getChildParents = (childUser) => {
       if (!childUser) return [];
