@@ -37,41 +37,55 @@ export const useAuthStore = create(persist((set, get) => ({
           return { success: false, message: 'Lütfen e-posta / telefon ve şifrenizi girin.' };
       }
 
-      // 1. Login'i öncelikle RAM'deki (Zustand) kullanıcı listesinde ara
-      let userRecord = useUserStore.getState().findUserByEmail(cleanInput);
-      
-      // 2. Eğer yerel hafızada bulunamadıysa (mobil açılış gecikmesi), doğrudan Firestore'dan çek
+      if (cleanEmail.endsWith('@base44.com')) {
+          return { success: false, message: 'Bu demo hesabı kalıcı olarak kaldırılmıştır.' };
+      }
+
+      const matchCandidate = (u) => {
+          if (!u) return false;
+          const uEmail = (u.email || '').trim().toLowerCase();
+          if (uEmail && uEmail === cleanEmail) return true;
+          if (cleanDigits.length >= 10) {
+              const uPhone = (u.phone || '').replace(/\D/g, '');
+              if (uPhone && (uPhone.endsWith(cleanDigits.slice(-10)) || cleanDigits.endsWith(uPhone.slice(-10)))) return true;
+              if (uEmail && uEmail.includes(cleanDigits.slice(-10))) return true;
+          }
+          if (cleanDigits.length === 11) {
+              const uTc = String(u.tcNo || u.tc || '').replace(/\D/g, '');
+              if (uTc && uTc === cleanDigits) return true;
+          }
+          return false;
+      };
+
+      // 1. RAM'deki (Zustand) kullanıcılar arasında şifresi eşleşen kullanıcıyı bul
+      const memoryUsers = useUserStore.getState().users || [];
+      const memoryCandidates = memoryUsers.filter(matchCandidate);
+      let userRecord = memoryCandidates.find(u => (u.password || '').trim() === cleanPassword);
+
+      // 2. Eğer yerel hafızada şifreyle eşleşen bulunamadıysa, Firestore'dan doğrudan çek
       if (!userRecord) {
           try {
               const usersRef = collection(db, 'users');
-              const q = query(usersRef, where('email', '==', cleanEmail));
-              const snap = await getDocs(q);
-              
-              if (!snap.empty) {
-                  userRecord = { id: snap.docs[0].id, ...snap.docs[0].data() };
-              } else {
-                  // E-posta büyük/küçük harf veya telefon uyumsuzluğuna karşı tüm listeyi tara (Fallback)
-                  const allSnap = await getDocs(usersRef);
-                  allSnap.forEach(docSnap => {
-                      const d = docSnap.data();
-                      if (d.email && d.email.trim().toLowerCase() === cleanEmail) {
-                          userRecord = { id: docSnap.id, ...d };
-                      } else if (cleanDigits.length >= 10) {
-                          const uPhone = (d.phone || '').replace(/\D/g, '');
-                          const uEmail = (d.email || '').replace(/\D/g, '');
-                          if (uPhone && (uPhone.endsWith(cleanDigits.slice(-10)) || cleanDigits.endsWith(uPhone.slice(-10)))) {
-                              userRecord = { id: docSnap.id, ...d };
-                          } else if (uEmail && uEmail.includes(cleanDigits.slice(-10))) {
-                              userRecord = { id: docSnap.id, ...d };
-                          }
-                      }
-                  });
+              const allSnap = await getDocs(usersRef);
+              const firestoreCandidates = [];
+              allSnap.forEach(docSnap => {
+                  const d = { id: docSnap.id, ...docSnap.data() };
+                  if (matchCandidate(d)) {
+                      firestoreCandidates.push(d);
+                  }
+              });
+
+              userRecord = firestoreCandidates.find(u => (u.password || '').trim() === cleanPassword);
+
+              // Eğer aday hesaplar varsa ama şifre uyuşmadıysa hatalı parola dön
+              if (!userRecord && (memoryCandidates.length > 0 || firestoreCandidates.length > 0)) {
+                  return { success: false, message: 'Hatalı Parola girdiniz.' };
               }
 
-              // Bulunan kullanıcıyı yerel state'e de ekle
+              // Bulunan kullanıcıyı yerel state'e ekle
               if (userRecord) {
                   const currentUsers = useUserStore.getState().users;
-                  if (!currentUsers.some(u => u.id === userRecord.id || (u.email && u.email.toLowerCase() === cleanEmail))) {
+                  if (!currentUsers.some(u => u.id === userRecord.id)) {
                       useUserStore.setState({ users: [userRecord, ...currentUsers] });
                   }
               }
@@ -82,10 +96,6 @@ export const useAuthStore = create(persist((set, get) => ({
               }
           }
       }
-      
-      if (cleanEmail.endsWith('@base44.com')) {
-          return { success: false, message: 'Bu demo hesabı kalıcı olarak kaldırılmıştır.' };
-      }
 
       if (!userRecord) {
           return { success: false, message: 'Sistemde kayıtlı kullanıcı hesabı bulunamadı.' };
@@ -95,7 +105,7 @@ export const useAuthStore = create(persist((set, get) => ({
           return { success: false, message: 'Hesabınız askıya alınmıştır. Lütfen yönetici ile iletişime geçin.' };
       }
 
-      // Parola Doğrulaması
+      // Parola Doğrulaması (Çift Güvenlik Kontrolü)
       const recordPassword = (userRecord.password || '').trim();
       if (recordPassword !== cleanPassword) {
           return { success: false, message: 'Hatalı Parola girdiniz.' };

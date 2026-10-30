@@ -73,10 +73,26 @@ function App() {
 
   // Synchronize authenticated session when Firestore user data updates safely
   useEffect(() => {
-    if (user?.id && users.length > 0) {
-      const freshUser = users.find(u => u.id === user.id);
+    if (user && users.length > 0) {
+      let freshUser = users.find(u => u.id === user.id);
+
+      // Self-healing: If user.id changed (e.g. upgraded from customer_... to cust_...), find by verified email, TC or phone+name
+      if (!freshUser) {
+        const uEmail = (user.email || '').trim().toLowerCase();
+        const uTc = (user.tcNo || '').replace(/\D/g, '');
+        const uPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
+
+        freshUser = users.find(u => {
+          if (uEmail && !uEmail.endsWith('@move.local') && u.email?.toLowerCase() === uEmail) return true;
+          if (uTc && uTc.length === 11 && String(u.tcNo).replace(/\D/g, '') === uTc) return true;
+          if (uPhone && uPhone.length === 10 && (u.phone || '').replace(/\D/g, '').endsWith(uPhone) && u.name?.toLowerCase() === user.name?.toLowerCase()) return true;
+          return false;
+        });
+      }
+
       if (freshUser) {
         const hasChanged = 
+          freshUser.id !== user.id ||
           (freshUser.email && freshUser.email !== user.email) ||
           (freshUser.name && freshUser.name !== user.name) ||
           (freshUser.phone && freshUser.phone !== user.phone) ||
@@ -88,6 +104,7 @@ function App() {
 
         if (hasChanged) {
           useAuthStore.getState().syncUserRecord({
+            id: freshUser.id,
             email: freshUser.email || user.email,
             name: freshUser.name || user.name,
             phone: freshUser.phone || user.phone,

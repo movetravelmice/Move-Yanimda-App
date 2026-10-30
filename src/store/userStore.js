@@ -325,6 +325,10 @@ export const useUserStore = create((set, get) => ({
                 const uEmailDigits = (u.email || '').replace(/\D/g, '');
                 if (uEmailDigits.length >= 10 && uEmailDigits.includes(cleanDigits.slice(-10))) return true;
             }
+            if (cleanDigits.length === 11) {
+                const uTc = String(u.tcNo || u.tc || '').replace(/\D/g, '');
+                if (uTc && uTc === cleanDigits) return true;
+            }
             return false;
         });
     }

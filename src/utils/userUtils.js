@@ -68,9 +68,36 @@ export const getParticipantMatchScore = (p, user) => {
         return -1000;
     }
 
+    // 3. Name comparison
+    const pName = normalizeTurkish(p.name);
+    const uName = normalizeTurkish(user.name);
+    const pParts = pName.split(/\s+/).filter(Boolean);
+    const uParts = uName.split(/\s+/).filter(Boolean);
+    const pSurname = pParts[pParts.length - 1] || '';
+    const uSurname = uParts[uParts.length - 1] || '';
+    const pFirst = pParts[0] || '';
+    const uFirst = uParts[0] || '';
+
+    // If both have surnames and they differ: STRICTLY DISALLOW MATCH (-1000)
+    if (pSurname && uSurname && pSurname !== uSurname) {
+        return -1000;
+    }
+
+    // If both have first names and they differ: STRICTLY DISALLOW MATCH (-1000)
+    if (pFirst && uFirst && pFirst !== uFirst) {
+        return -1000;
+    }
+
     let score = 0;
 
-    // 3. Real Email match (excluding system placeholder emails like @move.local)
+    // Full name exact match
+    if (pName && uName && pName === uName) {
+        score += 600;
+    } else if (pParts.length > 0 && uParts.length > 0 && pSurname === uSurname && pFirst === uFirst) {
+        score += 500;
+    }
+
+    // 4. Real Email match (excluding system placeholder emails like @move.local)
     const pEmail = (p.email || '').trim().toLowerCase();
     const uEmail = (user.email || '').trim().toLowerCase();
     const isPlaceholder = (em) => !em || em.endsWith('@move.local') || em.endsWith('.local');
@@ -78,44 +105,15 @@ export const getParticipantMatchScore = (p, user) => {
         if (pEmail === uEmail) {
             score += 800;
         } else {
-            score -= 300;
+            return -1000; // Different real emails cannot be the same person
         }
     }
 
-    // 4. Name comparison
-    const pName = normalizeTurkish(p.name);
-    const uName = normalizeTurkish(user.name);
-    let nameClashes = false;
-
-    if (pName && uName) {
-        if (pName === uName) {
-            score += 500;
-        } else {
-            const pParts = pName.split(/\s+/).filter(Boolean);
-            const uParts = uName.split(/\s+/).filter(Boolean);
-            const pSurname = pParts[pParts.length - 1];
-            const uSurname = uParts[uParts.length - 1];
-
-            // If surnames are DIFFERENT (e.g. "Ceyhan" vs "Özdoğan"), severe penalty to prevent cross-account leak
-            if (pSurname && uSurname && pSurname !== uSurname) {
-                score -= 600;
-                nameClashes = true;
-            } else if (pParts[0] === uParts[0]) {
-                score += 350;
-            }
-        }
-    }
-
-    // 5. Phone comparison
+    // 5. Phone comparison (only adds points if name didn't clash)
     const pPhone = (p.phone || '').replace(/\D/g, '');
     const uPhone = (user.phone || '').replace(/\D/g, '');
     if (pPhone.length >= 7 && uPhone.length >= 7 && (pPhone.endsWith(uPhone.slice(-10)) || uPhone.endsWith(pPhone.slice(-10)))) {
-        // If surnames clash (different people sharing phone or phone typo), DO NOT match!
-        if (nameClashes) {
-            score -= 200;
-        } else {
-            score += 300;
-        }
+        score += 300;
     }
 
     return score;
