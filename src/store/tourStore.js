@@ -852,14 +852,20 @@ export const getTourExperts = (tour, allUsers = [], currentUser = null) => {
     const exp1Email = tour.expert?.email || (currentUser?.role === 'expert' && (trNorm(currentUser.name) === trNorm(exp1Name) || !exp1Name) ? currentUser.email : '');
     const exp1Id = tour.expert?.id || '';
 
-    // Search in allUsers
-    let user1 = allUsers?.find(u => 
-        (exp1Id && u.id === exp1Id) ||
-        (exp1Email && u.email && u.email.toLowerCase() === exp1Email.toLowerCase()) ||
-        (exp1Name && u.name && trNorm(u.name) === trNorm(exp1Name)) ||
-        (tour.guideName && u.name && trNorm(u.name) === trNorm(tour.guideName)) ||
-        (exp1Name && u.name && (trNorm(u.name).includes(trNorm(exp1Name)) || trNorm(exp1Name).includes(trNorm(u.name))))
-    );
+    // Search in allUsers (Prioritize exact ID, then exact email, then staff role match)
+    let user1 = allUsers?.find(u => (exp1Id && u.id === exp1Id));
+    if (!user1 && exp1Email) {
+        user1 = allUsers?.find(u => u.email && u.email.toLowerCase() === exp1Email.toLowerCase());
+    }
+    if (!user1 && exp1Name) {
+        user1 = allUsers?.find(u => {
+            const isStaff = u.role === 'expert' || u.role === 'admin' || u.secondaryRole === 'expert' || u.secondaryRole === 'admin';
+            return isStaff && u.name && trNorm(u.name) === trNorm(exp1Name);
+        });
+    }
+    if (!user1 && exp1Name) {
+        user1 = allUsers?.find(u => u.name && trNorm(u.name) === trNorm(exp1Name));
+    }
 
     // If current logged-in user is expert and matches (or is this tour's expert)
     if (!user1 && currentUser?.role === 'expert') {
@@ -914,12 +920,20 @@ export const getTourExperts = (tour, allUsers = [], currentUser = null) => {
         const exp2Email = tour.expert2?.email || '';
         const exp2Id = tour.expert2?.id || '';
 
-        let user2 = allUsers?.find(u => 
-            (exp2Id && u.id === exp2Id) ||
-            (exp2Email && u.email && u.email.toLowerCase() === exp2Email.toLowerCase()) ||
-            (exp2Name && u.name && trNorm(u.name) === trNorm(exp2Name)) ||
-            (exp2Name && u.name && (trNorm(u.name).includes(trNorm(exp2Name)) || trNorm(exp2Name).includes(trNorm(u.name))))
-        );
+        // Search in allUsers (Prioritize exact ID, then exact email, then staff role match)
+        let user2 = allUsers?.find(u => (exp2Id && u.id === exp2Id));
+        if (!user2 && exp2Email) {
+            user2 = allUsers?.find(u => u.email && u.email.toLowerCase() === exp2Email.toLowerCase());
+        }
+        if (!user2 && exp2Name) {
+            user2 = allUsers?.find(u => {
+                const isStaff = u.role === 'expert' || u.role === 'admin' || u.secondaryRole === 'expert' || u.secondaryRole === 'admin';
+                return isStaff && u.name && trNorm(u.name) === trNorm(exp2Name);
+            });
+        }
+        if (!user2 && exp2Name) {
+            user2 = allUsers?.find(u => u.name && trNorm(u.name) === trNorm(exp2Name));
+        }
 
         let avatar2 = null;
         if (user2?.avatar && !user2.avatar.includes('ui-avatars.com')) {
@@ -939,7 +953,7 @@ export const getTourExperts = (tour, allUsers = [], currentUser = null) => {
             avatar2 = `https://ui-avatars.com/api/?name=${encodeURIComponent(exp2Name || '2')}&background=2563eb&color=fff&bold=true`;
         }
 
-        const phone2 = (user2 && user2.phone && user2.phone !== '-') ? user2.phone : '+905321234568';
+        const phone2 = (user2 && user2.phone && user2.phone !== '-') ? user2.phone : (tour.expert2?.phone || '+905321234568');
         const email2 = exp2Email || user2?.email || '';
 
         expert2 = {

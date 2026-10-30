@@ -246,8 +246,8 @@ export const useUserStore = create((set, get) => ({
             if (targetId) {
                 await setDoc(doc(db, 'users', targetId), { ...dataToUpdate, id: targetId }, { merge: true });
                 
-                // Automatically sync participant details in tours if email, name or phone changed
-                if (dataToUpdate.email || dataToUpdate.name || dataToUpdate.phone) {
+                // Automatically sync participant details and tour experts if email, name, phone or avatar changed
+                if (dataToUpdate.email || dataToUpdate.name || dataToUpdate.phone || dataToUpdate.avatar) {
                     try {
                         const toursRef = collection(db, 'tours');
                         const toursSnap = await getDocs(toursRef);
@@ -255,6 +255,8 @@ export const useUserStore = create((set, get) => ({
                             const tData = tDoc.data();
                             const parts = tData.participants || [];
                             let updated = false;
+                            const tourUpdates = {};
+
                             const newParts = parts.map(p => {
                                 if (p.id === targetId || (existing?.email && p.email?.toLowerCase() === existing.email.toLowerCase())) {
                                     updated = true;
@@ -267,12 +269,36 @@ export const useUserStore = create((set, get) => ({
                                 }
                                 return p;
                             });
-                            if (updated) {
-                                await updateDoc(tDoc.ref, { participants: newParts });
+                            if (updated) tourUpdates.participants = newParts;
+
+                            // Sync assigned tour.expert
+                            if (tData.expert && (tData.expert.id === targetId || (existing?.email && tData.expert.email?.toLowerCase() === existing.email.toLowerCase()))) {
+                                tourUpdates.expert = {
+                                    ...tData.expert,
+                                    name: dataToUpdate.name || tData.expert.name,
+                                    phone: dataToUpdate.phone || tData.expert.phone,
+                                    email: dataToUpdate.email || tData.expert.email,
+                                    avatar: dataToUpdate.avatar || tData.expert.avatar
+                                };
+                            }
+
+                            // Sync assigned tour.expert2
+                            if (tData.expert2 && (tData.expert2.id === targetId || (existing?.email && tData.expert2.email?.toLowerCase() === existing.email.toLowerCase()))) {
+                                tourUpdates.expert2 = {
+                                    ...tData.expert2,
+                                    name: dataToUpdate.name || tData.expert2.name,
+                                    phone: dataToUpdate.phone || tData.expert2.phone,
+                                    email: dataToUpdate.email || tData.expert2.email,
+                                    avatar: dataToUpdate.avatar || tData.expert2.avatar
+                                };
+                            }
+
+                            if (Object.keys(tourUpdates).length > 0) {
+                                await updateDoc(tDoc.ref, tourUpdates);
                             }
                         }
                     } catch (tourSyncErr) {
-                        console.warn("Tour participants auto-sync error:", tourSyncErr);
+                        console.warn("Tour participants & experts auto-sync error:", tourSyncErr);
                     }
                 }
             } else if (normalizedEmail) {
