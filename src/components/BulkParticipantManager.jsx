@@ -46,11 +46,21 @@ const parseExcelDate = (val) => {
     return str;
 };
 
-const cleanHeader = (str) => String(str || '').toLowerCase().replace(/[^a-z0-9öçşığü]/g, '');
+const cleanHeader = (str) => {
+    return String(str || '')
+        .toLocaleLowerCase('tr-TR')
+        .replace(/ı/g, 'i')
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ş/g, 's')
+        .replace(/ö/g, 'o')
+        .replace(/ç/g, 'c')
+        .replace(/[^a-z0-9]/g, '');
+};
 
-const findVal = (row, patterns) => {
+const findVal = (row, patterns, allowSubstring = true) => {
     const keys = Object.keys(row || {});
-    // 1. Exact normalized match
+    // 1. Exact normalized match first
     for (const p of patterns) {
         const cleanP = cleanHeader(p);
         const exactKey = keys.find(k => cleanHeader(k) === cleanP);
@@ -59,13 +69,16 @@ const findVal = (row, patterns) => {
             if (v && v !== 'undefined' && v !== 'null') return v;
         }
     }
-    // 2. Substring match
-    for (const p of patterns) {
-        const cleanP = cleanHeader(p);
-        const matchKey = keys.find(k => cleanHeader(k).includes(cleanP));
-        if (matchKey !== undefined && row[matchKey] !== undefined && row[matchKey] !== null) {
-            const v = String(row[matchKey]).trim();
-            if (v && v !== 'undefined' && v !== 'null') return v;
+    // 2. Substring match only if allowed (skip short keys < 3 chars to prevent collisions)
+    if (allowSubstring) {
+        for (const p of patterns) {
+            const cleanP = cleanHeader(p);
+            if (cleanP.length < 3) continue;
+            const matchKey = keys.find(k => cleanHeader(k).includes(cleanP));
+            if (matchKey !== undefined && row[matchKey] !== undefined && row[matchKey] !== null) {
+                const v = String(row[matchKey]).trim();
+                if (v && v !== 'undefined' && v !== 'null') return v;
+            }
         }
     }
     return '';
@@ -90,8 +103,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         const XLSX = await import('xlsx');
         const templateData = [
             {
-                'Ad': 'Ahmet',
-                'Soyad': 'Yılmaz',
+                'İsim': 'Ahmet',
+                'Soyisim': 'Yılmaz',
                 'E-posta': 'ahmet@ornek.com',
                 'Telefon': '+90 532 999 88 77',
                 'TC Kimlik No': '12345678901',
@@ -105,8 +118,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 'Ebeveyn TC No': ''
             },
             {
-                'Ad': 'Ayşe',
-                'Soyad': 'Kaya',
+                'İsim': 'Ayşe',
+                'Soyisim': 'Kaya',
                 'E-posta': 'ayse@ornek.com',
                 'Telefon': '+90 533 111 22 33',
                 'TC Kimlik No': '98765432109',
@@ -120,8 +133,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 'Ebeveyn TC No': ''
             },
             {
-                'Ad': 'Can',
-                'Soyad': 'Yılmaz',
+                'İsim': 'Can',
+                'Soyisim': 'Yılmaz',
                 'E-posta': '',
                 'Telefon': '',
                 'TC Kimlik No': '11223344556',
@@ -139,8 +152,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "KatilimciSablon");
         ws['!cols'] = [
-            { wch: 18 }, // Ad
-            { wch: 18 }, // Soyad
+            { wch: 18 }, // İsim
+            { wch: 18 }, // Soyisim
             { wch: 24 }, // E-posta
             { wch: 18 }, // Telefon
             { wch: 16 }, // TC Kimlik No
@@ -267,16 +280,26 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         let childrenCount = 0;
 
         for (const row of fileData) {
-            // 1. Name Resolution (Supports combined "Ad Soyad" OR separate "Ad" and "Soyad")
-            const combinedName = findVal(row, ['adsoyad', 'advesoyad', 'isimsoyisim', 'fullname', 'full name', 'musteri', 'katilimci', 'yolcu']);
-            const firstName = findVal(row, ['ad', 'isim', 'firstname', 'first name', 'adi']);
-            const lastName = findVal(row, ['soyad', 'soyisim', 'lastname', 'last name', 'soyadi']);
+            // 1. Name Resolution (Supports separate "İsim" / "Soyisim", "Ad" / "Soyad", or combined "Ad Soyad")
+            const combinedName = findVal(row, [
+                'adsoyad', 'adisoyadi', 'advesoyad', 'adivesoyadi',
+                'isimsoyisim', 'isimvesoyisim', 'fullname', 'full name',
+                'tamad', 'tamadi', 'musteri', 'katilimci', 'yolcu'
+            ]);
+
+            const firstName = findVal(row, ['ad', 'isim', 'adi', 'isimi', 'firstname', 'first name', 'fname'], false) 
+                           || findVal(row, ['firstname', 'first name', 'fname'], true);
+                           
+            const lastName = findVal(row, ['soyad', 'soyisim', 'soyadi', 'soyisimi', 'lastname', 'last name', 'lname', 'surname'], false)
+                          || findVal(row, ['lastname', 'last name', 'surname'], true);
 
             let rawName = '';
-            if (combinedName) {
+            if (firstName && lastName) {
+                rawName = `${firstName} ${lastName}`;
+            } else if (combinedName) {
                 rawName = combinedName;
             } else if (firstName || lastName) {
-                rawName = `${firstName} ${lastName}`.trim();
+                rawName = firstName || lastName;
             }
             const name = formatTitleCase(rawName);
 
@@ -553,7 +576,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                             <div style={{ textAlign: 'left', minWidth: 0 }}>
                                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)' }}>Gelişmiş Excel Şablonunu İndir</div>
                                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    Ad, Soyad, TC, Katılımcı Tipi, Pasaport No, Doğum Tarihi, E-posta
+                                    İsim, Soyisim, TC, Katılımcı Tipi, Pasaport No, Doğum Tarihi, E-posta
                                 </div>
                             </div>
                         </div>
@@ -582,7 +605,12 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                             />
                             <Upload size={34} className="text-muted" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
                             {fileName ? (
-                                <div style={{ fontSize: '13.5px', fontWeight: 'bold', color: 'var(--primary)' }}>{fileName}</div>
+                                <div>
+                                    <div style={{ fontSize: '13.5px', fontWeight: 'bold', color: 'var(--primary)' }}>{fileName}</div>
+                                    <div style={{ fontSize: '11.5px', color: '#16a34a', fontWeight: '600', marginTop: '6px' }}>
+                                        ✓ {fileData?.length || 0} katılımcı satırı algılandı
+                                    </div>
+                                </div>
                             ) : (
                                 <>
                                     <div style={{ fontSize: '13px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px' }}>Dosya Seçin veya Sürükleyin</div>
