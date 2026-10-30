@@ -423,7 +423,7 @@ function PastOperationsContent() {
   }
 
   return (
-    <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
+    <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh' }}>
       <Header title="Tamamlanan Operasyonlar" showBack />
       
       {/* Success Toast */}

@@ -348,7 +348,9 @@ export default function CreateTour() {
     const [selectedExpert2, setSelectedExpert2] = useState(() => {
         if (tourId) {
             const t = tours.find(tour => tour.id === tourId);
-            if (t?.expert2?.email) return t.expert2.email;
+            if (t?.expert2?.email && t.expert2.email.toLowerCase() !== t?.expert?.email?.toLowerCase()) {
+                return t.expert2.email;
+            }
         }
         return '';
     });
@@ -505,9 +507,11 @@ export default function CreateTour() {
                     exp2Match = expertsList.find(e => trNorm(e.name) === trNorm(tExp2Name) || trNorm(e.name).includes(trNorm(tExp2Name)))?.email;
                 }
 
-                if (exp2Match) {
+                if (exp2Match && exp1Match && exp2Match.toLowerCase() === exp1Match.toLowerCase()) {
+                    setSelectedExpert2('');
+                } else if (exp2Match) {
                     setSelectedExpert2(exp2Match);
-                } else if (!tour.expert2 && !tour.guide2Name) {
+                } else {
                     setSelectedExpert2('');
                 }
             }
@@ -645,17 +649,31 @@ export default function CreateTour() {
             phone: currentUser?.phone || '+905321234567'
         });
 
-        const secondExpertObj = expertsList.find(u => 
-            (u.email && (u.email || '').toLowerCase() === (selectedExpert2 || '').toLowerCase()) ||
-            (u.id && u.id === selectedExpert2)
-        );
-        const expert2Data = secondExpertObj ? {
-            id: secondExpertObj.id,
-            name: secondExpertObj.name,
-            avatar: secondExpertObj.avatar,
-            email: (secondExpertObj.email || '').toLowerCase(),
-            phone: secondExpertObj.phone || '+905321234568'
-        } : (selectedExpert2 && existingTour?.expert2 && (existingTour.expert2.email === selectedExpert2 || existingTour.expert2.id === selectedExpert2) ? existingTour.expert2 : null);
+        let expert2Data = null;
+        if (selectedExpert2 && selectedExpert2.trim() !== '' && selectedExpert2 !== selectedExpert1) {
+            const secondExpertObj = expertsList.find(u => 
+                (u.email && (u.email || '').toLowerCase() === (selectedExpert2 || '').toLowerCase()) ||
+                (u.id && u.id === selectedExpert2)
+            );
+            const candidateExp2 = secondExpertObj ? {
+                id: secondExpertObj.id,
+                name: secondExpertObj.name,
+                avatar: secondExpertObj.avatar,
+                email: (secondExpertObj.email || '').toLowerCase(),
+                phone: secondExpertObj.phone || '+905321234568'
+            } : (existingTour?.expert2 && (existingTour.expert2.email === selectedExpert2 || existingTour.expert2.id === selectedExpert2) ? existingTour.expert2 : null);
+
+            // Double check it's not the same person as expert 1
+            if (candidateExp2) {
+                const isSame = 
+                    (expert1Data?.id && candidateExp2.id && expert1Data.id === candidateExp2.id) ||
+                    (expert1Data?.email && candidateExp2.email && expert1Data.email.toLowerCase() === candidateExp2.email.toLowerCase()) ||
+                    (expert1Data?.name && candidateExp2.name && expert1Data.name.trim().toLowerCase() === candidateExp2.name.trim().toLowerCase());
+                if (!isSame) {
+                    expert2Data = candidateExp2;
+                }
+            }
+        }
 
         const finalDestinations = destinations?.trim() || "Belirtilmedi";
 

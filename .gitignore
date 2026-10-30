@@ -8,3 +8,6 @@ android/app/build/
 ios/App/public/
 ios/App/App/public/
 *.log
+scratch/
+*.xlsx
+

@@ -911,57 +911,85 @@ export const getTourExperts = (tour, allUsers = [], currentUser = null) => {
         name: exp1Name,
         avatar: avatar1,
         email: email1,
-        phone: phone1
+        phone: phone1,
+        id: exp1Id || user1?.id || ''
     };
 
     let expert2 = null;
-    if (tour.expert2 || tour.guide2Name) {
-        const exp2Name = tour.expert2?.name || tour.guide2Name;
-        const exp2Email = tour.expert2?.email || '';
-        const exp2Id = tour.expert2?.id || '';
+    const rawExp2Name = tour.expert2?.name || tour.guide2Name;
+    const rawExp2Email = tour.expert2?.email || '';
+    const rawExp2Id = tour.expert2?.id || '';
 
-        // Search in allUsers (Prioritize exact ID, then exact email, then staff role match)
-        let user2 = allUsers?.find(u => (exp2Id && u.id === exp2Id));
-        if (!user2 && exp2Email) {
-            user2 = allUsers?.find(u => u.email && u.email.toLowerCase() === exp2Email.toLowerCase());
-        }
-        if (!user2 && exp2Name) {
-            user2 = allUsers?.find(u => {
-                const isStaff = u.role === 'expert' || u.role === 'admin' || u.secondaryRole === 'expert' || u.secondaryRole === 'admin';
-                return isStaff && u.name && trNorm(u.name) === trNorm(exp2Name);
-            });
-        }
-        if (!user2 && exp2Name) {
-            user2 = allUsers?.find(u => u.name && trNorm(u.name) === trNorm(exp2Name));
-        }
+    const hasValidExp2 = Boolean(
+        rawExp2Name && 
+        typeof rawExp2Name === 'string' &&
+        rawExp2Name.trim().length > 1 &&
+        !rawExp2Name.includes('Yok') &&
+        !rawExp2Name.includes('Seçin') &&
+        !rawExp2Name.includes('Seçiniz')
+    );
 
-        let avatar2 = null;
-        if (user2?.avatar && !user2.avatar.includes('ui-avatars.com')) {
-            avatar2 = user2.avatar;
-        } else if (tour.expert2?.avatar && !tour.expert2.avatar.includes('ui-avatars.com')) {
-            avatar2 = tour.expert2.avatar;
-        } else if (currentUser?.avatar && !currentUser.avatar.includes('ui-avatars.com') && (
-            (currentUser.email && exp2Email && currentUser.email.toLowerCase() === exp2Email.toLowerCase()) ||
-            (currentUser.name && exp2Name && trNorm(currentUser.name) === trNorm(exp2Name))
-        )) {
-            avatar2 = currentUser.avatar;
-        } else if (user2?.avatar) {
-            avatar2 = user2.avatar;
-        } else if (tour.expert2?.avatar) {
-            avatar2 = tour.expert2.avatar;
-        } else {
-            avatar2 = `https://ui-avatars.com/api/?name=${encodeURIComponent(exp2Name || '2')}&background=2563eb&color=fff&bold=true`;
+    if (hasValidExp2) {
+        const exp2Name = rawExp2Name.trim();
+        const exp2Email = rawExp2Email.trim();
+        const exp2Id = rawExp2Id.trim();
+
+        // 2. Uzman 1. Uzman ile AYNI kişi olamaz (ID, e-posta veya normalize edilmiş isim eşleşirse 2. uzman sayılmaz)
+        const isDuplicateOfExp1 = 
+            (exp1Id && exp2Id && exp1Id === exp2Id) ||
+            (email1 && exp2Email && email1.toLowerCase() === exp2Email.toLowerCase()) ||
+            (exp1Name && exp2Name && trNorm(exp1Name) === trNorm(exp2Name));
+
+        if (!isDuplicateOfExp1) {
+            // Search in allUsers (Prioritize exact ID, then exact email, then staff role match)
+            let user2 = allUsers?.find(u => (exp2Id && u.id === exp2Id));
+            if (!user2 && exp2Email) {
+                user2 = allUsers?.find(u => u.email && u.email.toLowerCase() === exp2Email.toLowerCase());
+            }
+            if (!user2 && exp2Name) {
+                user2 = allUsers?.find(u => {
+                    const isStaff = u.role === 'expert' || u.role === 'admin' || u.secondaryRole === 'expert' || u.secondaryRole === 'admin';
+                    return isStaff && u.name && trNorm(u.name) === trNorm(exp2Name);
+                });
+            }
+            if (!user2 && exp2Name) {
+                user2 = allUsers?.find(u => u.name && trNorm(u.name) === trNorm(exp2Name));
+            }
+
+            let avatar2 = null;
+            if (user2?.avatar && !user2.avatar.includes('ui-avatars.com')) {
+                avatar2 = user2.avatar;
+            } else if (tour.expert2?.avatar && !tour.expert2.avatar.includes('ui-avatars.com')) {
+                avatar2 = tour.expert2.avatar;
+            } else if (currentUser?.avatar && !currentUser.avatar.includes('ui-avatars.com') && (
+                (currentUser.email && exp2Email && currentUser.email.toLowerCase() === exp2Email.toLowerCase()) ||
+                (currentUser.name && exp2Name && trNorm(currentUser.name) === trNorm(exp2Name))
+            )) {
+                avatar2 = currentUser.avatar;
+            } else if (user2?.avatar) {
+                avatar2 = user2.avatar;
+            } else if (tour.expert2?.avatar) {
+                avatar2 = tour.expert2.avatar;
+            } else {
+                avatar2 = `https://ui-avatars.com/api/?name=${encodeURIComponent(exp2Name || '2')}&background=2563eb&color=fff&bold=true`;
+            }
+
+            const phone2 = (user2 && user2.phone && user2.phone !== '-') ? user2.phone : (tour.expert2?.phone || '+905321234568');
+            const email2 = exp2Email || user2?.email || '';
+
+            // Fotoğraf ve isim birebir aynı ise görsel ikilemeyi de engelle
+            const isVisualDuplicate = (avatar1 && avatar2 && avatar1 === avatar2) && (exp1Name && exp2Name && trNorm(exp1Name) === trNorm(exp2Name));
+
+            if (!isVisualDuplicate) {
+                expert2 = {
+                    name: exp2Name,
+                    avatar: avatar2,
+                    email: email2,
+                    phone: phone2,
+                    id: exp2Id || user2?.id || ''
+                };
+            }
         }
-
-        const phone2 = (user2 && user2.phone && user2.phone !== '-') ? user2.phone : (tour.expert2?.phone || '+905321234568');
-        const email2 = exp2Email || user2?.email || '';
-
-        expert2 = {
-            name: exp2Name,
-            avatar: avatar2,
-            email: email2,
-            phone: phone2
-        };
     }
 
     return { expert1, expert2 };

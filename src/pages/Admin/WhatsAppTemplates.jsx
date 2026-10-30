@@ -20,7 +20,10 @@ const defaultWaTemplates = {
         ],
         metaName: 'welcome_customer',
         category: 'UTILITY',
-        defaultBody: 'Sayın {{1}}, Move Yanımda sistemine kaydınız başarıyla oluşturulmuştur. Seyahatlerinizi ve bilet detaylarınızı uygulamamız üzerinden takip edebilirsiniz.'
+        defaultBody: 'Sayın {{1}}, Move Yanımda sistemine kaydınız başarıyla oluşturulmuştur. Seyahatlerinizi ve bilet detaylarınızı uygulamamız üzerinden takip edebilirsiniz.',
+        buttons: [
+            { type: 'url', text: 'Uygulamayı Aç', url: 'https://move-yanimda.web.app' }
+        ]
     },
     newTourTemplate: {
         title: 'Seyahat Kaydı Şablonu',
@@ -31,7 +34,10 @@ const defaultWaTemplates = {
         ],
         metaName: 'tour_registration',
         category: 'UTILITY',
-        defaultBody: 'Sayın {{1}}, {{2}} seyahat kaydınız başarıyla tamamlanmıştır. Detayları Move Yanımda uygulamanızdan inceleyebilirsiniz.'
+        defaultBody: 'Sayın {{1}}, {{2}} seyahat kaydınız başarıyla tamamlanmıştır. Detayları Move Yanımda uygulamanızdan inceleyebilirsiniz.',
+        buttons: [
+            { type: 'url', text: 'Seyahati İncele', url: 'https://move-yanimda.web.app' }
+        ]
     },
     passwordResetTemplate: {
         title: 'Doğrulama Kodu / Şifre Sıfırlama (OTP) Şablonu',
@@ -41,7 +47,10 @@ const defaultWaTemplates = {
         ],
         metaName: 'password_reset_otp',
         category: 'AUTHENTICATION',
-        defaultBody: '{{1}} Move Yanımda tek kullanımlık doğrulama kodunuzdur. Güvenliğiniz için bu kodu kimseyle paylaşmayınız.'
+        defaultBody: '{{1}} Move Yanımda tek kullanımlık doğrulama kodunuzdur. Güvenliğiniz için bu kodu kimseyle paylaşmayınız.',
+        buttons: [
+            { type: 'copy_code', text: 'Kodu Kopyala' }
+        ]
     },
     ticketAddedTemplate: {
         title: 'Bilet PDF Yüklendi Şablonu',
@@ -52,7 +61,10 @@ const defaultWaTemplates = {
         ],
         metaName: 'ticket_pdf_ready',
         category: 'UTILITY',
-        defaultBody: 'Sayın {{1}}, {{2}} seyahatiniz için e-bilet PDF belgeniz sisteme yüklenmiştir. Biletinizi ve seyahat detaylarınızı Move Yanımda uygulamanızdan inceleyebilirsiniz.'
+        defaultBody: 'Sayın {{1}}, {{2}} seyahatiniz için e-bilet PDF belgeniz sisteme yüklenmiştir. Biletinizi ve seyahat detaylarınızı Move Yanımda uygulamanızdan inceleyebilirsiniz.',
+        buttons: [
+            { type: 'url', text: 'E-Bileti Görüntüle', url: 'https://move-yanimda.web.app' }
+        ]
     },
     checkInTemplate: {
         title: '48 Saat Check-in Hatırlatması',
@@ -65,7 +77,10 @@ const defaultWaTemplates = {
         ],
         metaName: 'checkin_reminder',
         category: 'UTILITY',
-        defaultBody: 'Sayın {{1}}, {{2}} seyahatinizin uçuşuna {{3}} saat kaldı. {{4}} uçuşunuz için online check-in işlemlerinizi tamamlamayı unutmayınız.'
+        defaultBody: 'Sayın {{1}}, {{2}} seyahatinizin uçuşuna {{3}} saat kaldı. {{4}} uçuşunuz için online check-in işlemlerinizi tamamlamayı unutmayınız.',
+        buttons: [
+            { type: 'url', text: 'Online Check-in Yap', url: 'https://move-yanimda.web.app' }
+        ]
     },
     tourReviewTemplate: {
         title: '24 Saat Sonra Seyahat Puanlama Şablonu',
@@ -77,7 +92,10 @@ const defaultWaTemplates = {
         ],
         metaName: 'tour_review_reminder',
         category: 'UTILITY',
-        defaultBody: 'Sayın {{1}}, {{2}} seyahatinizin tamamlandığını umarız. Deneyiminizi bizimle paylaşmak ve seyahatinizi puanlamak için Move Yanımda uygulamasını ziyaret edebilirsiniz: {{3}} Görüşleriniz bizim için çok değerlidir.'
+        defaultBody: 'Sayın {{1}}, {{2}} seyahatinizin tamamlandığını umarız. Deneyiminizi bizimle paylaşmak ve seyahatinizi puanlamak için Move Yanımda uygulamasını ziyaret edebilirsiniz: {{3}} Görüşleriniz bizim için çok değerlidir.',
+        buttons: [
+            { type: 'url', text: 'Seyahati Değerlendir', url: 'https://move-yanimda.web.app/dashboard' }
+        ]
     }
 };
 
@@ -336,6 +354,16 @@ export default function WhatsAppTemplates() {
 
         preview = preview.replace(/\*(.*?)\*/g, '<strong>$1</strong>');
         preview = preview.replace(/\n/g, '<br/>');
+
+        const buttons = templateMeta?.buttons || [];
+        if (buttons.length > 0) {
+            const btnsHtml = buttons.map(b => `
+                <div style="border-top: 1px solid #f0f2f5; padding: 8px 10px; text-align: center; color: #00a884; font-size: 11.5px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 5px;">
+                    ${b.type === 'copy_code' ? '📋 ' : '🔗 '} <span>${b.text}</span>
+                </div>
+            `).join('');
+            preview += `<div style="margin: 10px -12px -14px -12px; background: #ffffff;">${btnsHtml}</div>`;
+        }
 
         return preview;
     };

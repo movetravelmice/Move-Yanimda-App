@@ -4,7 +4,16 @@ import { X, Phone, MessageCircle, Compass } from 'lucide-react';
 export default function ExpertModal({ data, onClose }) {
   if (!data) return null;
 
-  const experts = [data.expert1, data.expert2].filter(Boolean);
+  const rawExperts = [data.expert1, data.expert2].filter(Boolean);
+  const experts = rawExperts.filter((exp, idx, arr) => {
+    if (idx === 0) return true;
+    const first = arr[0];
+    const isSame = 
+      (exp.id && first.id && exp.id === first.id) ||
+      (exp.email && first.email && exp.email.toLowerCase() === first.email.toLowerCase()) ||
+      (exp.name && first.name && exp.name.trim().toLowerCase() === first.name.trim().toLowerCase());
+    return !isSame;
+  });
   const isMultiple = experts.length > 1;
 
   return (

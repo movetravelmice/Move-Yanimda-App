@@ -130,6 +130,93 @@ app.post('/api/forgot-password', async (req, res) => {
     }
 });
 
+app.post('/api/send-credentials', async (req, res) => {
+    const { host, port, user, pass, to, corporateName, accountName, accountEmail, accountPassword, customSubject, customHtml } = req.body;
+    const senderBrand = corporateName || 'Move Yanımda';
+
+    if (!host || !port || !user || !pass || !to) {
+        return res.status(400).json({ success: false, message: 'SMTP ayarları eksik. Lütfen yapılandırmayı kontrol edin.' });
+    }
+
+    if (isChildEmailAddress(to)) {
+        return res.status(400).json({ success: false, message: 'Çocuk profilleri ve dahili hesaplar için giriş bilgisi e-postası gönderilemez.' });
+    }
+
+    try {
+        const transporter = nodemailer.createTransport({
+            host: host,
+            port: Number(port),
+            secure: Number(port) === 465,
+            auth: { user: user, pass: pass }
+        });
+
+        await transporter.verify();
+
+        const defaultHtml = `
+            <div style="font-family: Arial, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+                <div style="text-align: center; margin-bottom: 24px;">
+                    <div style="width: 52px; height: 52px; background: #D7147A; color: white; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; line-height: 52px; text-align: center; margin: 0 auto;">
+                        M
+                    </div>
+                </div>
+                <h2 style="color: #D7147A; margin-top: 0; text-align: center; font-size: 20px;">Giriş Bilgileriniz</h2>
+                <p>Merhaba Sayın <strong>{{accountName}}</strong>,</p>
+                <p><strong>{{corporateName}}</strong> sistemine giriş yapabilmeniz için kullanıcı adı ve parolanız aşağıda yer almaktadır:</p>
+                
+                <div style="background: #f8fafc; padding: 18px; border-radius: 10px; margin: 20px 0; border: 1px dashed #cbd5e1; text-align: left;">
+                    <div style="margin-bottom: 10px; font-size: 14px;">
+                        <span style="color: #64748b; font-weight: 600;">Kullanıcı Adı (E-Posta):</span><br/>
+                        <strong style="color: #0f172a; font-size: 15px;">{{accountEmail}}</strong>
+                    </div>
+                    <div style="font-size: 14px;">
+                        <span style="color: #64748b; font-weight: 600;">Şifre:</span><br/>
+                        <strong style="color: #D7147A; font-size: 16px; letter-spacing: 1px;">{{accountPassword}}</strong>
+                    </div>
+                </div>
+
+                <p style="font-size: 13px; color: #475569; line-height: 1.5;">
+                    Uygulamaya giriş yaparak seyahatiniz ile ilgili uçuş, otel, transfer, rehber ve acil durum bilgilerine dilediğiniz zaman ulaşabilirsiniz. Güvenliğiniz için sisteme giriş yaptıktan sonra şifrenizi profil ayarlarınızdan değiştirebilirsiniz.
+                </p>
+                
+                <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+                <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
+                    Bu mesaj {{corporateName}} tarafından otomatik olarak gönderilmiştir.
+                </p>
+            </div>
+        `;
+
+        let htmlContent = customHtml || defaultHtml;
+        const targetEmail = accountEmail || to;
+        htmlContent = htmlContent
+            .replace(/{{accountName}}/g, accountName || '')
+            .replace(/{{participantName}}/g, accountName || '')
+            .replace(/{{accountEmail}}/g, targetEmail)
+            .replace(/{{username}}/g, targetEmail)
+            .replace(/{{email}}/g, targetEmail)
+            .replace(/{{accountPassword}}/g, accountPassword || '123456')
+            .replace(/{{password}}/g, accountPassword || '123456')
+            .replace(/{{corporateName}}/g, senderBrand);
+
+        let subjectContent = customSubject || `{{corporateName}}: Giriş Bilgileriniz (Kullanıcı Adı ve Şifre)`;
+        subjectContent = subjectContent
+            .replace(/{{corporateName}}/g, senderBrand)
+            .replace(/{{accountName}}/g, accountName || '');
+
+        await transporter.sendMail({
+            from: `"${senderBrand} Bilgilendirme" <${user}>`,
+            to: to,
+            subject: subjectContent,
+            html: htmlContent
+        });
+
+        return res.json({ success: true, message: `Giriş bilgileri ${to} adresine başarıyla iletildi.` });
+
+    } catch (error) {
+        console.error("SMTP Hata:", error);
+        return res.status(500).json({ success: false, message: `SMTP Hatası: ${error.message}` });
+    }
+});
+
 app.post('/api/send-sms', async (req, res) => {
     const { usercode, password, header, to, message } = req.body;
 

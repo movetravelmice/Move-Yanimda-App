@@ -56,7 +56,7 @@ export default function ActiveOperations() {
   });
 
   return (
-    <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
+    <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh' }}>
       <Header title="Aktif Operasyonlar" showBack />
       
       {/* Toast Bildirimi */}
@@ -234,7 +234,7 @@ export default function ActiveOperations() {
                                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                               />
                             </div>
-                            {expert2 && (
+                            {expert2 && expert2.name && expert2.name !== expert1?.name && (
                               <div style={{ width: '28px', height: '28px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #ffffff', marginLeft: '-10px', boxShadow: '0 1px 4px rgba(0,0,0,0.2)', zIndex: 1, background: '#eff6ff' }}>
                                 <img 
                                   src={expert2.avatar} 
@@ -354,6 +354,8 @@ export default function ActiveOperations() {
                 })
             )}
         </div>
+        {/* Bottom clearance spacer so cards are never covered by floating bottom nav & Tintin button */}
+        <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
       </div>
     </div>
   );

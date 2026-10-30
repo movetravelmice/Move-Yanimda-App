@@ -77,6 +77,47 @@ const defaultTemplates = {
     <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
     <p style="font-size: 11px; color: #94a3b8;">Eğer bu talebi siz yapmadıysanız lütfen kurum yöneticinizle irtibata geçin.</p>
 </div>`
+    },
+    credentials_email: {
+        title: 'Kullanıcı Adı ve Şifre İletim E-postası',
+        description: 'Katılımcı detayından veya operasyon panelinden müşteriye giriş bilgileri (kullanıcı adı ve şifre) tekrar gönderildiğinde kullanılan mail.',
+        variables: [
+            { name: '{{accountName}}', desc: 'Katılımcı / Alıcı Adı' },
+            { name: '{{accountEmail}}', desc: 'Kullanıcı Adı (E-Posta)' },
+            { name: '{{accountPassword}}', desc: 'Güncel Şifre' },
+            { name: '{{corporateName}}', desc: 'Firma / Acente Adı' }
+        ],
+        subject: '{{corporateName}}: Giriş Bilgileriniz (Kullanıcı Adı ve Şifre)',
+        body: `<div style="font-family: Arial, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+    <div style="text-align: center; margin-bottom: 24px;">
+        <div style="width: 52px; height: 52px; background: #D7147A; color: white; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; line-height: 52px; text-align: center; margin: 0 auto;">
+            M
+        </div>
+    </div>
+    <h2 style="color: #D7147A; margin-top: 0; text-align: center; font-size: 20px;">Giriş Bilgileriniz</h2>
+    <p>Merhaba Sayın <strong>{{accountName}}</strong>,</p>
+    <p><strong>{{corporateName}}</strong> sistemine giriş yapabilmeniz için kullanıcı adı ve parolanız aşağıda yer almaktadır:</p>
+    
+    <div style="background: #f8fafc; padding: 18px; border-radius: 10px; margin: 20px 0; border: 1px dashed #cbd5e1; text-align: left;">
+        <div style="margin-bottom: 10px; font-size: 14px;">
+            <span style="color: #64748b; font-weight: 600;">Kullanıcı Adı (E-Posta):</span><br/>
+            <strong style="color: #0f172a; font-size: 15px;">{{accountEmail}}</strong>
+        </div>
+        <div style="font-size: 14px;">
+            <span style="color: #64748b; font-weight: 600;">Şifre:</span><br/>
+            <strong style="color: #D7147A; font-size: 16px; letter-spacing: 1px;">{{accountPassword}}</strong>
+        </div>
+    </div>
+
+    <p style="font-size: 13px; color: #475569; line-height: 1.5;">
+        Uygulamaya giriş yaparak seyahatiniz ile ilgili uçuş, otel, transfer, rehber ve acil durum bilgilerine dilediğiniz zaman ulaşabilirsiniz. Güvenliğiniz için sisteme giriş yaptıktan sonra şifrenizi profil ayarlarınızdan değiştirebilirsiniz.
+    </p>
+    
+    <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
+    <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
+        Bu mesaj {{corporateName}} tarafından otomatik olarak oluşturulmuştur.
+    </p>
+</div>`
     }
 };
 
@@ -199,6 +240,15 @@ export default function EmailTemplates() {
                     accountPassword: 'Pass9988!',
                     corporateName: 'Move Travel & Mice'
                 };
+            } else if (selectedTemplateKey === 'credentials_email') {
+                endpoint = '/api/send-credentials';
+                payload = {
+                    ...payload,
+                    accountName: 'Ahmet Yılmaz',
+                    accountEmail: testEmail,
+                    accountPassword: 'Pass9988!',
+                    corporateName: 'Move Travel & Mice'
+                };
             }
 
             const res = await fetch(`${baseUrl}${endpoint}`, {
@@ -243,6 +293,8 @@ export default function EmailTemplates() {
             .replace(/{{flightsHtml}}/g, mockFlightsHtml)
             .replace(/{{credentialSection}}/g, mockCredentialSection)
             .replace(/{{username}}/g, "ahmet@sirket.com")
+            .replace(/{{accountEmail}}/g, "ahmet@sirket.com")
+            .replace(/{{email}}/g, "ahmet@sirket.com")
             .replace(/{{password}}/g, "Pass1234!")
             .replace(/{{corporateName}}/g, "Move Travel & Mice")
             .replace(/{{accountName}}/g, "Ahmet Yılmaz")

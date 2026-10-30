@@ -488,8 +488,7 @@ export default function AdminUsers() {
           } else if (hasEmail) {
               finalEmail = formData.email.trim().toLowerCase();
           } else {
-              const phoneSlug = cleanPhone.startsWith('90') ? cleanPhone.slice(2) : cleanPhone;
-              finalEmail = `user_${phoneSlug || Date.now()}@move.local`;
+              finalEmail = '';
           }
 
           // Check for duplicate email and email domain typos
@@ -1021,7 +1020,7 @@ export default function AdminUsers() {
                     </label>
                     <input 
                       type="email" 
-                      placeholder="ahmet@mail.com" 
+                      placeholder="Henüz Mail Adresi Tanımlı Değil" 
                       value={formData.email}
                       onChange={e => setFormData({...formData, email: e.target.value.toLowerCase().trim()})}
                       style={{ 
@@ -1875,7 +1874,7 @@ export default function AdminUsers() {
                         background: '#f1f5f9'
                       }}>
                         <img 
-                          src={user.avatar || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=60&w=100"} 
+                          src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name || 'User')}&background=e2e8f0&color=334155&bold=true`} 
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                           alt={user.name} 
                         />
@@ -1930,8 +1929,8 @@ export default function AdminUsers() {
                         {/* Email */}
                         <div style={{ fontSize: '10.5px', fontWeight: '500', color: '#475569', display: 'flex', alignItems: 'center', gap: '4.5px', minWidth: 0, flexWrap: 'wrap' }}>
                           <Mail size={10} color="#64748b" style={{ flexShrink: 0 }} /> 
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {(user.email || '').toLowerCase()}
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontStyle: !user.email ? 'italic' : 'normal', color: !user.email ? '#94a3b8' : '#475569' }}>
+                            {user.email ? user.email.toLowerCase() : 'Henüz Mail Adresi Tanımlı Değil'}
                           </span>
                           {checkEmailDomainTypo(user.email) && (
                             <span 
@@ -2170,7 +2169,7 @@ export default function AdminUsers() {
                               <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
                                 <div style={{ width: '24px', height: '24px', borderRadius: '50%', overflow: 'hidden', background: '#e2e8f0', flexShrink: 0, border: '1px solid #cbd5e1' }}>
                                   <img 
-                                    src={parent.avatar || "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=60&w=100"} 
+                                    src={parent.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(parent.name || 'User')}&background=e2e8f0&color=334155&bold=true`} 
                                     alt={parent.name} 
                                     style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                                   />
@@ -2320,8 +2319,8 @@ export default function AdminUsers() {
               }}>
                 <div>
                   <span style={{ color: '#64748b' }}>E-Posta:</span>
-                  <div style={{ fontWeight: '700', color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {selectedIndividualSummary.email || '-'}
+                  <div style={{ fontWeight: '700', color: selectedIndividualSummary.email ? '#1e293b' : '#94a3b8', fontStyle: selectedIndividualSummary.email ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {selectedIndividualSummary.email || 'Henüz Mail Adresi Tanımlı Değil'}
                   </div>
                 </div>
                 <div>
