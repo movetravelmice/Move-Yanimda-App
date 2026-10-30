@@ -90,7 +90,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         const XLSX = await import('xlsx');
         const templateData = [
             {
-                'Ad Soyad': 'Ahmet Yılmaz',
+                'Ad': 'Ahmet',
+                'Soyad': 'Yılmaz',
                 'E-posta': 'ahmet@ornek.com',
                 'Telefon': '+90 532 999 88 77',
                 'TC Kimlik No': '12345678901',
@@ -104,7 +105,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 'Ebeveyn TC No': ''
             },
             {
-                'Ad Soyad': 'Ayşe Kaya',
+                'Ad': 'Ayşe',
+                'Soyad': 'Kaya',
                 'E-posta': 'ayse@ornek.com',
                 'Telefon': '+90 533 111 22 33',
                 'TC Kimlik No': '98765432109',
@@ -118,7 +120,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 'Ebeveyn TC No': ''
             },
             {
-                'Ad Soyad': 'Can Yılmaz',
+                'Ad': 'Can',
+                'Soyad': 'Yılmaz',
                 'E-posta': '',
                 'Telefon': '',
                 'TC Kimlik No': '11223344556',
@@ -136,7 +139,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "KatilimciSablon");
         ws['!cols'] = [
-            { wch: 22 }, // Ad Soyad
+            { wch: 18 }, // Ad
+            { wch: 18 }, // Soyad
             { wch: 24 }, // E-posta
             { wch: 18 }, // Telefon
             { wch: 16 }, // TC Kimlik No
@@ -282,6 +286,9 @@ export default function BulkParticipantManager({ tourId, onClose }) {
             const tcNoRaw = findVal(row, ['tc', 'kimlik', 'tcno', 'vatandaslikno', 'tckimlikno']);
             const tcNo = tcNoRaw.replace(/\D/g, '');
             const company = (findVal(row, ['firma', 'sirket', 'company', 'kurum', 'bayi']) || '').trim();
+            const rowPassword = (findVal(row, ['sifre', 'password', 'parola']) || '').trim();
+            const ticketUrl = (findVal(row, ['bileturl', 'ticketurl', 'biletlinki', 'ticketlink']) || '').trim();
+            const ticketName = (findVal(row, ['biletdosyaadi', 'biletadi', 'ticketname', 'dosyaadi']) || (name ? `${name} Bilet.pdf` : 'Bilet.pdf')).trim();
 
             // 3. Passenger Type / Child Classification
             const typeRaw = findVal(row, ['katilimcitipi', 'tip', 'rol', 'kullanicitipi', 'yasgrubu', 'type', 'paxtype', 'passengertype']).toLowerCase();
@@ -415,6 +422,16 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                         isChildProfile: isChildExplicit || existingUser.isChildProfile || false,
                         userType: isChildExplicit ? 'child' : (existingUser.userType || 'corporate')
                     };
+                    if (ticketUrl && ticketUrl.startsWith('http')) {
+                        const ticketObj = {
+                            id: `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                            name: ticketName,
+                            url: ticketUrl,
+                            uploadedAt: new Date().toISOString()
+                        };
+                        participantPayload.ticketPdf = ticketObj;
+                        participantPayload.ticketFiles = [ticketObj];
+                    }
                     addParticipantToTour(tourId, participantPayload);
                     if (!isChildExplicit && !isUserChild(existingUser, users) && !isChildEmail(existingUser.email)) {
                         await sendTourAssignmentEmail(existingUser.name, existingUser.email, null, existingUser.phone || phone);
@@ -438,7 +455,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                     finalEmail = correctedEmail || (email ? email.toLowerCase() : `user_${phoneSlug || Date.now()}@move.local`);
                 }
 
-                const newUserPassword = generateSecurePassword(name);
+                const newUserPassword = rowPassword || generateSecurePassword(name);
 
                 const newUser = await addUser({
                     name,
@@ -463,6 +480,17 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                     isChildProfile: isChildExplicit,
                     userType: isChildExplicit ? 'child' : 'corporate'
                 };
+
+                if (ticketUrl && ticketUrl.startsWith('http')) {
+                    const ticketObj = {
+                        id: `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+                        name: ticketName,
+                        url: ticketUrl,
+                        uploadedAt: new Date().toISOString()
+                    };
+                    participantPayload.ticketPdf = ticketObj;
+                    participantPayload.ticketFiles = [ticketObj];
+                }
 
                 addParticipantToTour(tourId, participantPayload);
                 if (!isChildExplicit && !isChildEmail(finalEmail)) {
