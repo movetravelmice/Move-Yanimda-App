@@ -27,6 +27,7 @@ import { useUserStore } from '../../store/userStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useChatStore } from '../../store/chatStore';
 import { useTourStore, getTourExperts, isTourPast } from '../../store/tourStore';
+import { isUserMatch } from '../../utils/userUtils';
 
 export default function ChatList() {
   const navigate = useNavigate();
@@ -129,7 +130,7 @@ export default function ChatList() {
           (tour.expert2?.name === user?.name) || 
           (tour.expert2?.email === user?.email)
       ); 
-      const isCustomerForTour = user?.role === 'customer' && tour.participants?.some(p => p.id === user?.id || (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()));
+      const isCustomerForTour = user?.role === 'customer' && tour.participants?.some(p => isUserMatch(p, user) || p.id === user?.id || (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()));
       
       if (user?.role === 'admin' || isExpertForTour || isCustomerForTour) {
           const isArchive = isTourPast(tour);
@@ -681,7 +682,7 @@ export default function ChatList() {
   const showCustomersSection = (activeTab === 'all' || activeTab === 'customers' || activeTab === 'unread') && filteredCustomers.length > 0;
 
   return (
-    <div style={{ paddingBottom: '90px' }}>
+    <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))' }}>
       <Header title="Sohbetler ve Gruplar" />
       
       <div style={{ padding: '0 14px', marginTop: '12px' }}>
@@ -1002,6 +1003,8 @@ export default function ChatList() {
                  </div>
              </div>
          )}
+         {/* Bottom clearance spacer so chats are never covered by floating bottom nav & Tintin button */}
+         <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
       </div>
     </div>
   );

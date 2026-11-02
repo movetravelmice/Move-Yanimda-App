@@ -769,7 +769,7 @@ function PastOperationsContent() {
 
                     {/* Bottom Info inside Cover */}
                     <div style={{ position: 'absolute', bottom: '10px', left: '12px', right: '12px', color: 'white' }}>
-                      <div style={{ fontWeight: '800', fontSize: '13.5px', marginBottom: '2px', lineHeight: 1.25, letterSpacing: '-0.2px', textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}>
+                      <div style={{ fontWeight: '700', fontSize: '12px', marginBottom: '2px', lineHeight: 1.3, letterSpacing: '-0.1px', textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}>
                         {tour.name || "Bilinmeyen Tur"}
                       </div>
                       <div style={{ fontSize: '10.5px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', opacity: 0.95, textShadow: '0 1px 2px rgba(0,0,0,0.6)' }}>

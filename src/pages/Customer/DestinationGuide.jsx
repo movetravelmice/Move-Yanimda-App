@@ -5,6 +5,8 @@ import Header from '../../components/Header';
 import CountryFlag from '../../components/CountryFlag';
 import { useTourStore } from '../../store/tourStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useAuthStore } from '../../store/authStore';
+import { findMatchingParticipant } from '../../utils/userUtils';
 import PinterestWeatherCard from '../../components/PinterestWeatherCard';
 
 const CITY_TO_COUNTRY = {
@@ -68,8 +70,11 @@ export default function DestinationGuide() {
     const { tourId } = useParams();
     const { tours } = useTourStore();
     const { googlePlacesApiKey } = useSettingsStore();
+    const { user } = useAuthStore();
     
-    const tour = tours.find(t => t.id === tourId);
+    const isStaff = ['admin', 'expert', 'ticketing'].includes(user?.role) || user?.secondaryRole === 'admin';
+    const rawTour = tours.find(t => t.id === tourId);
+    const tour = (isStaff || !rawTour || findMatchingParticipant(rawTour.participants, user)) ? rawTour : null;
     
     const [weather, setWeather] = useState(null);
     const [places, setPlaces] = useState([]);

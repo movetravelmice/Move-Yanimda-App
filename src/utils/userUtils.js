@@ -31,12 +31,35 @@ export const isUserChild = (u, allUsers = []) => {
 };
 
 /**
+ * Normalizes email addresses by handling Turkish character idiosyncrasies (İ, I, ı),
+ * stripping Unicode accents/combining dots, trimming whitespace, and converting to lowercase ASCII.
+ */
+export const normalizeEmail = (email) => {
+    if (!email || typeof email !== 'string') return '';
+    return email
+        .trim()
+        .replace(/İ/g, 'i')
+        .replace(/I/g, 'i')
+        .replace(/ı/g, 'i')
+        .toLocaleLowerCase('tr-TR')
+        .replace(/ı/g, 'i')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim();
+};
+
+/**
  * Normalized string comparison helper for Turkish text
  */
 export const normalizeTurkish = (str) => {
     if (!str) return '';
     return String(str)
+        .replace(/İ/g, 'i')
+        .replace(/I/g, 'i')
         .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
         .replace(/i̇/g, 'i')
         .replace(/ı/g, 'i')
         .replace(/ğ/g, 'g')
@@ -98,14 +121,30 @@ export const getParticipantMatchScore = (p, user) => {
     }
 
     // 4. Real Email match (excluding system placeholder emails like @move.local)
-    const pEmail = (p.email || '').trim().toLowerCase();
-    const uEmail = (user.email || '').trim().toLowerCase();
+    const pEmail = normalizeEmail(p.email);
+    const uEmail = normalizeEmail(user.email);
     const isPlaceholder = (em) => !em || em.endsWith('@move.local') || em.endsWith('.local');
     if (pEmail && uEmail && !isPlaceholder(pEmail) && !isPlaceholder(uEmail)) {
         if (pEmail === uEmail) {
             score += 800;
         } else {
-            return -1000; // Different real emails cannot be the same person
+            // E-postalar farklıysa: Ancak TC Kimlik veya (Telefon + İsim) kesin olarak uyuşuyorsa
+            // kullanıcının şirket e-postası yerine şahsi e-postasını kullanma ihtimaline tolerans tanı
+            const pTcClean = String(p.tcNo || p.tc || '').replace(/\D/g, '');
+            const uTcClean = String(user.tcNo || user.tc || '').replace(/\D/g, '');
+            const hasTcMatch = pTcClean.length === 11 && uTcClean.length === 11 && pTcClean === uTcClean;
+
+            const pPhoneDigits = (p.phone || '').replace(/\D/g, '').slice(-10);
+            const uPhoneDigits = (user.phone || '').replace(/\D/g, '').slice(-10);
+            const hasPhoneMatch = pPhoneDigits.length === 10 && uPhoneDigits.length === 10 && pPhoneDigits === uPhoneDigits;
+            const hasNameMatch = pSurname && uSurname && pSurname === uSurname && pFirst && uFirst && pFirst === uFirst;
+
+            if (hasTcMatch || (hasPhoneMatch && hasNameMatch)) {
+                // Aynı kişi, farklı e-posta (kurumsal / şahsi mail farkı)
+                score -= 100;
+            } else {
+                return -1000; // Farklı gerçek e-postalar ve kimlik doğrulaması yoksa eşleşmeyi engelle
+            }
         }
     }
 
@@ -359,4 +398,51 @@ export const normalizeTurkishTitleCase = (str) => {
     if (!str && str !== 0) return '';
     return toTurkishTitleCase(str).trim().replace(/\s+/g, ' ');
 };
+
+export const getCurrentSessionUser = () => {
+    try {
+        const raw = localStorage.getItem('travel-auth-storage-v4');
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed?.state?.user || null;
+    } catch (e) {
+        return null;
+    }
+};
+
+export const isStaffSessionUser = (u) => {
+    if (!u) return false;
+    return (
+        ['admin', 'expert', 'ticketing'].includes(u.role) ||
+        ['admin', 'expert', 'ticketing'].includes(u.secondaryRole)
+    );
+};
+
+export const isRelatedFamilyOrSelf = (target, currentUser) => {
+    if (!target || !currentUser) return false;
+    if (isUserMatch(target, currentUser)) return true;
+    if (target.parentId && currentUser.id && target.parentId === currentUser.id) return true;
+    if (target.linkedTo && currentUser.id) {
+        if (Array.isArray(target.linkedTo) && target.linkedTo.includes(currentUser.id)) return true;
+        if (target.linkedTo === currentUser.id) return true;
+    }
+
+    // Ebeveyn - çocuk profili eşleşmesi (aynı telefon numarası veya aynı soyisim + çocuk hesabı)
+    if (isUserChild(target)) {
+        const tPhone = (target.phone || '').replace(/\D/g, '').slice(-10);
+        const uPhone = (currentUser.phone || '').replace(/\D/g, '').slice(-10);
+        if (tPhone.length === 10 && uPhone.length === 10 && tPhone === uPhone) {
+            return true;
+        }
+        const tParts = normalizeTurkish(target.name).split(/\s+/).filter(Boolean);
+        const uParts = normalizeTurkish(currentUser.name).split(/\s+/).filter(Boolean);
+        const tSurname = tParts[tParts.length - 1] || '';
+        const uSurname = uParts[uParts.length - 1] || '';
+        if (tSurname && uSurname && tSurname === uSurname && target.company && currentUser.company && normalizeTurkish(target.company) === normalizeTurkish(currentUser.company)) {
+            return true;
+        }
+    }
+    return false;
+};
+
 

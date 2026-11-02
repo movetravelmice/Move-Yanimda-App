@@ -272,7 +272,7 @@ export default function ActiveOperations() {
                       <div style={{ padding: '14px 16px 16px 16px' }}>
                         
                         {/* Tour Title */}
-                        <h2 style={{ fontSize: '13.5px', fontWeight: '700', margin: '0 0 8px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.4', letterSpacing: '-0.2px' }}>
+                        <h2 style={{ fontSize: '12px', fontWeight: '600', margin: '0 0 7px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.35', letterSpacing: '-0.1px' }}>
                             {tour.name}
                         </h2>
 

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { normalizePhoneNumber, toTurkishTitleCase, normalizeTurkishTitleCase } from '../utils/userUtils';
+import { normalizePhoneNumber, toTurkishTitleCase, normalizeTurkishTitleCase, normalizeEmail, getCurrentSessionUser, isStaffSessionUser, isRelatedFamilyOrSelf } from '../utils/userUtils';
 
 const defaultUsers = [];
 
@@ -18,23 +18,63 @@ export const useUserStore = create((set, get) => ({
     users: [],
     companies: ['Move Travel & Mice'],
     isFirebaseInitialized: false,
+    _unsubscribe: null,
+    _activeSessionKey: null,
 
-    initFirestoreUsers: async () => {
-        if (get().isFirebaseInitialized) return;
-        set({ isFirebaseInitialized: true });
+    resetUsers: () => {
+        const unsub = get()._unsubscribe;
+        if (typeof unsub === 'function') {
+            try { unsub(); } catch (e) {}
+        }
+        set({ users: [], isFirebaseInitialized: false, _unsubscribe: null, _activeSessionKey: null });
+    },
+
+    initFirestoreUsers: async (forceRestart = false) => {
+        const sessionUser = getCurrentSessionUser();
+        if (!sessionUser) {
+            get().resetUsers();
+            return;
+        }
+        const sessionKey = `${sessionUser.id || ''}_${sessionUser.role || 'customer'}`;
+        if (!forceRestart && get().isFirebaseInitialized && get()._activeSessionKey === sessionKey) return;
+
+        const prevUnsub = get()._unsubscribe;
+        if (typeof prevUnsub === 'function') {
+            try { prevUnsub(); } catch (e) {}
+        }
+
+        set({ isFirebaseInitialized: true, _activeSessionKey: sessionKey });
         
         try {
             const usersRef = collection(db, 'users');
             
             // Listen
-            onSnapshot(usersRef, (snapshot) => {
+            const unsub = onSnapshot(usersRef, (snapshot) => {
+                const currentSession = getCurrentSessionUser();
+                if (!currentSession) {
+                    set({ users: [] });
+                    return;
+                }
+
+                // Doğrudan Firestore kaydından oturum açmış kullanıcının gerçek yetkisini doğrula (localStorage manipülasyonuna karşı koruma)
+                const rawAuthSnap = snapshot.docs.find(d => {
+                    const dt = d.data() || {};
+                    const dId = dt.id || d.id;
+                    if (currentSession.id && dId === currentSession.id) return true;
+                    if (currentSession.email && dt.email && normalizeEmail(dt.email) === normalizeEmail(currentSession.email)) return true;
+                    return false;
+                });
+                const verifiedAuthData = rawAuthSnap ? { ...rawAuthSnap.data(), id: rawAuthSnap.data()?.id || rawAuthSnap.id } : null;
+                const isVerifiedStaff = isStaffSessionUser(verifiedAuthData);
+                const effectiveSessionUser = verifiedAuthData || currentSession;
+
                 const fetchedUsers = [];
                 const fetchedCompanies = new Set();
                 snapshot.forEach(docSnap => {
                     const data = docSnap.data();
                     const userId = data.id || docSnap.id;
                     const rawEmail = data.email ? String(data.email).trim() : '';
-                    const cleanEmail = rawEmail.toLowerCase();
+                    const cleanEmail = normalizeEmail(rawEmail);
                     const rawName = data.name ? String(data.name).trim() : '';
                     const cleanName = formatTitleCase(rawName);
                     const rawPhone = data.phone ? String(data.phone).trim() : '';
@@ -51,9 +91,11 @@ export const useUserStore = create((set, get) => ({
                         company: cleanCompany || ((data.role || 'customer') === 'customer' ? 'Bireysel' : 'Move Travel & Mice')
                     };
                     
-                    // Kalıcı olarak demo/base44 hesaplarını Firestore'dan temizle
+                    // Kalıcı olarak demo/base44 hesaplarını sadece yetkili personel oturumunda Firestore'dan temizle
                     if (isDemoUser(userRecord, userId)) {
-                        deleteDoc(docSnap.ref).catch(err => console.log("Demo hesap silme hatası:", err));
+                        if (isVerifiedStaff) {
+                            deleteDoc(docSnap.ref).catch(err => console.log("Demo hesap silme hatası:", err));
+                        }
                         return; // UI listesine ekleme
                     }
 
@@ -61,35 +103,62 @@ export const useUserStore = create((set, get) => ({
                     if (cleanEmail && !cleanEmail.endsWith('@move.local')) {
                         const existingIdx = fetchedUsers.findIndex(u => u.email === cleanEmail && u.name?.toLowerCase() === cleanName.toLowerCase());
                         if (existingIdx !== -1) {
-                            deleteDoc(docSnap.ref).catch(err => console.log("Mükerrer doküman temizleme hatası:", err));
+                            if (isVerifiedStaff) {
+                                deleteDoc(docSnap.ref).catch(err => console.log("Mükerrer doküman temizleme hatası:", err));
+                            }
                             return;
                         }
                     }
 
-                    // E-posta, İsim, Telefon ve Firma normalizasyonunu veritabanına da eşitle
-                    const dbUpdates = {};
-                    if (rawEmail && rawEmail !== cleanEmail) {
-                        dbUpdates.email = cleanEmail;
-                    }
-                    if (rawName && rawName !== cleanName) {
-                        dbUpdates.name = cleanName;
-                    }
-                    if (rawPhone && cleanPhone !== '-' && rawPhone !== cleanPhone) {
-                        dbUpdates.phone = cleanPhone;
-                    }
-                    if (rawCompany && cleanCompany && rawCompany !== cleanCompany) {
-                        dbUpdates.company = cleanCompany;
-                    }
-                    if (Object.keys(dbUpdates).length > 0) {
-                        setDoc(doc(db, 'users', userId), dbUpdates, { merge: true }).catch(err => console.log("User normalization sync error:", err));
+                    // Veritabanı normalizasyon yazmalarını sadece yetkili personel oturumunda çalıştır
+                    if (isVerifiedStaff) {
+                        const dbUpdates = {};
+                        if (rawEmail && rawEmail !== cleanEmail) {
+                            dbUpdates.email = cleanEmail;
+                        }
+                        if (rawName && rawName !== cleanName) {
+                            dbUpdates.name = cleanName;
+                        }
+                        if (rawPhone && cleanPhone !== '-' && rawPhone !== cleanPhone) {
+                            dbUpdates.phone = cleanPhone;
+                        }
+                        if (rawCompany && cleanCompany && rawCompany !== cleanCompany) {
+                            dbUpdates.company = cleanCompany;
+                        }
+                        if (Object.keys(dbUpdates).length > 0) {
+                            setDoc(doc(db, 'users', userId), dbUpdates, { merge: true }).catch(err => console.log("User normalization sync error:", err));
+                        }
+
+                        // Sanitize old placeholder or deleted company names
+                        if (userRecord.company && (userRecord.company.includes('Base44') || userRecord.company.toLowerCase().includes('tgundogan'))) {
+                            const fixedCompany = userRecord.role === 'customer' ? 'Bireysel' : 'Move Travel & Mice';
+                            setDoc(doc(db, 'users', userId), { company: fixedCompany }, { merge: true }).catch(err => console.log(err));
+                            userRecord.company = fixedCompany;
+                        }
                     }
 
-                    // Sanitize old placeholder or deleted company names
-                    if (userRecord.company && (userRecord.company.includes('Base44') || userRecord.company.toLowerCase().includes('tgundogan'))) {
-                        const fixedCompany = userRecord.role === 'customer' ? 'Bireysel' : 'Move Travel & Mice';
-                        setDoc(doc(db, 'users', userId), { company: fixedCompany }, { merge: true }).catch(err => console.log(err));
-                        userRecord.company = fixedCompany;
+                    // Müşteri (Customer) oturumlarında veri izolasyonu:
+                    // Başka müşterilerin verilerini belleğe alma; yalnızca kendi/ailesinin kaydını ve personelin genel iletişim bilgisini tut
+                    if (!isVerifiedStaff) {
+                        if (isRelatedFamilyOrSelf(userRecord, effectiveSessionUser)) {
+                            fetchedUsers.push(userRecord);
+                        } else if (isStaffSessionUser(userRecord)) {
+                            fetchedUsers.push({
+                                id: userRecord.id,
+                                name: userRecord.name,
+                                email: userRecord.email,
+                                phone: userRecord.phone,
+                                avatar: userRecord.avatar,
+                                role: userRecord.role,
+                                secondaryRole: userRecord.secondaryRole || null,
+                                company: userRecord.company,
+                                title: userRecord.title || '',
+                                status: userRecord.status || 'Aktif'
+                            });
+                        }
+                        return;
                     }
+
                     fetchedUsers.push(userRecord);
                     if (userRecord.company && !userRecord.company.toLowerCase().includes('tgundogan')) {
                         fetchedCompanies.add(formatTitleCase(userRecord.company));
@@ -102,6 +171,7 @@ export const useUserStore = create((set, get) => ({
                     companies: cleanCompanyList.length > 0 ? cleanCompanyList : ['Move Travel & Mice']
                 });
             });
+            set({ _unsubscribe: unsub });
         } catch (e) {
             console.error("Firebase bağlanamadı, yerel veriler kullanılıyor", e);
         }
@@ -341,10 +411,10 @@ export const useUserStore = create((set, get) => ({
 
     findUserByEmail: (identifier) => {
         if (!identifier) return null;
-        const clean = String(identifier).trim().toLowerCase();
-        const cleanDigits = clean.replace(/\D/g, '');
+        const clean = normalizeEmail(identifier);
+        const cleanDigits = String(identifier).replace(/\D/g, '');
         return get().users.find(u => {
-            if (u.email && u.email.trim().toLowerCase() === clean) return true;
+            if (u.email && normalizeEmail(u.email) === clean) return true;
             if (cleanDigits.length >= 10) {
                 const uPhoneDigits = (u.phone || '').replace(/\D/g, '');
                 if (uPhoneDigits.length >= 10 && (uPhoneDigits.endsWith(cleanDigits.slice(-10)) || cleanDigits.endsWith(uPhoneDigits.slice(-10)))) return true;

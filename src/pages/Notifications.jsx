@@ -4,6 +4,7 @@ import Header from '../components/Header';
 import { useNotificationStore } from '../store/notificationStore';
 import { useTourStore } from '../store/tourStore';
 import { useAuthStore } from '../store/authStore';
+import { isUserMatch } from '../utils/userUtils';
 import { 
   Bell, 
   CheckCheck, 
@@ -32,7 +33,9 @@ export default function Notifications() {
 
   const myTourIds = tours.filter(t => {
     if (user?.role === 'expert') return (t.guideName === user?.name) || (t.expert?.name === user?.name);
-    if (user?.role === 'customer') return t.participants?.some(p => p.id === user?.id || (p.email && user?.email && p.email.toLowerCase() === user.email.toLowerCase()));
+    if (user?.role === 'customer') {
+      return t.participants?.some(p => isUserMatch(p, user) || p.id === user?.id || (p.email && user?.email && p.email.toLowerCase() === user.email.toLowerCase()));
+    }
     return true; // admin sees all
   }).map(t => t.id);
 

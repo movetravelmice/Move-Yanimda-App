@@ -127,7 +127,7 @@ export default function PastTourDetails() {
 
                 <div style={{ position: 'absolute', bottom: '24px', left: '20px', right: '20px', zIndex: 10, color: 'white' }}>
                     <div style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)', padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', display: 'inline-block', marginBottom: '8px', letterSpacing: '1px' }}>TAMAMLANAN TUR</div>
-                    <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 8px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>{tour.name}</h2>
+                    <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: '0 0 8px', textShadow: '0 2px 4px rgba(0,0,0,0.5)', lineHeight: 1.3 }}>{tour.name}</h2>
                     <div style={{ display: 'flex', gap: '16px', fontSize: '13px', opacity: 0.9 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={14} /> {tour.destinations}</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={14} /> {tour.dates}</div>

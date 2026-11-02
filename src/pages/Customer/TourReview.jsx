@@ -4,6 +4,7 @@ import { ChevronLeft, Star, Send, Compass, MessageSquare, CheckCircle2, Heart } 
 import Header from '../../components/Header';
 import { useTourStore, getUserTourReview } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
+import { findMatchingParticipant } from '../../utils/userUtils';
 
 const StarRating = ({ value = 0, onChange, size = 18 }) => {
   const [hoverVal, setHoverVal] = useState(0);
@@ -57,7 +58,9 @@ export default function TourReview() {
   const { tours, addParticipantFeedback, rateTour } = useTourStore();
   const { user } = useAuthStore();
 
-  const tour = tours.find(t => String(t.id) === String(tourId));
+  const isStaff = ['admin', 'expert', 'ticketing'].includes(user?.role) || user?.secondaryRole === 'admin';
+  const rawTour = tours.find(t => String(t.id) === String(tourId));
+  const tour = (isStaff || !rawTour || findMatchingParticipant(rawTour.participants, user)) ? rawTour : null;
   
   // Check if previously reviewed in Firestore or localStorage
   const existingReview = React.useMemo(() => {

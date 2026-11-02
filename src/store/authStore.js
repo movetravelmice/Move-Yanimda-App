@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useSettingsStore } from './settingsStore';
 import { useUserStore } from './userStore';
+import { normalizeEmail } from '../utils/userUtils';
 
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -29,7 +30,7 @@ export const useAuthStore = create(persist((set, get) => ({
   },
   login: async (identifier, password) => {
       const cleanInput = (identifier || '').trim();
-      const cleanEmail = cleanInput.toLowerCase();
+      const cleanEmail = normalizeEmail(cleanInput);
       const cleanPassword = (password || '').trim();
       const cleanDigits = cleanInput.replace(/\D/g, '');
 
@@ -43,7 +44,7 @@ export const useAuthStore = create(persist((set, get) => ({
 
       const matchCandidate = (u) => {
           if (!u) return false;
-          const uEmail = (u.email || '').trim().toLowerCase();
+          const uEmail = normalizeEmail(u.email);
           if (uEmail && uEmail === cleanEmail) return true;
           if (cleanDigits.length >= 10) {
               const uPhone = (u.phone || '').replace(/\D/g, '');

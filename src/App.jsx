@@ -8,6 +8,7 @@ import { useUserStore } from './store/userStore';
 import { useChatStore } from './store/chatStore';
 import { useNotificationStore } from './store/notificationStore';
 import { useAuthStore } from './store/authStore';
+import { normalizeEmail, isStaffSessionUser } from './utils/userUtils';
 
 import WelcomeLanding from './pages/Public/WelcomeLanding';
 import RegisterIndividual from './pages/Public/RegisterIndividual';
@@ -45,8 +46,11 @@ function App() {
   const corporateName = useSettingsStore(state => state.corporateName);
   const deleteTour = useTourStore(state => state.deleteTour);
   const initFirestoreTours = useTourStore(state => state.initFirestoreTours);
+  const resetTours = useTourStore(state => state.resetTours);
   const initFirestoreUsers = useUserStore(state => state.initFirestoreUsers);
+  const resetUsers = useUserStore(state => state.resetUsers);
   const initFirestoreChats = useChatStore(state => state.initFirestoreChats);
+  const resetChats = useChatStore(state => state.resetChats);
   const initFirestoreNotifications = useNotificationStore(state => state.initFirestoreNotifications);
   const initFirestoreSettings = useSettingsStore(state => state.initFirestoreSettings);
 
@@ -59,17 +63,27 @@ function App() {
 
   useEffect(() => {
     document.title = `${corporateName || 'Move Yanımda'} - Seyahat Yönetimi`;
-    
-    // Geçmiş prototip verilerini temizle
-    deleteTour('tour_avrupa_ruyasi');
+    initFirestoreSettings();
+  }, [corporateName, initFirestoreSettings]);
 
-    // Initialize Firebase Database streams
+  // Sadece oturum açmış kullanıcılar için veri akışlarını başlat; oturumsuz ziyaretçilerde belleği izole tut
+  useEffect(() => {
+    if (!user) {
+      resetUsers();
+      resetTours();
+      resetChats();
+      return;
+    }
+
+    if (user.role === 'admin' || user.secondaryRole === 'admin') {
+      deleteTour('tour_avrupa_ruyasi');
+    }
+
     initFirestoreUsers();
     initFirestoreTours();
     initFirestoreChats();
     initFirestoreNotifications();
-    initFirestoreSettings();
-  }, [corporateName, deleteTour, initFirestoreUsers, initFirestoreTours, initFirestoreChats, initFirestoreNotifications, initFirestoreSettings]);
+  }, [user?.id, user?.role, user?.secondaryRole, deleteTour, initFirestoreUsers, initFirestoreTours, initFirestoreChats, initFirestoreNotifications, resetUsers, resetTours, resetChats]);
 
   // Synchronize authenticated session when Firestore user data updates safely
   useEffect(() => {
@@ -78,12 +92,12 @@ function App() {
 
       // Self-healing: If user.id changed (e.g. upgraded from customer_... to cust_...), find by verified email, TC or phone+name
       if (!freshUser) {
-        const uEmail = (user.email || '').trim().toLowerCase();
+        const uEmail = normalizeEmail(user.email);
         const uTc = (user.tcNo || '').replace(/\D/g, '');
         const uPhone = (user.phone || '').replace(/\D/g, '').slice(-10);
 
         freshUser = users.find(u => {
-          if (uEmail && !uEmail.endsWith('@move.local') && u.email?.toLowerCase() === uEmail) return true;
+          if (uEmail && !uEmail.endsWith('@move.local') && normalizeEmail(u.email) === uEmail) return true;
           if (uTc && uTc.length === 11 && String(u.tcNo).replace(/\D/g, '') === uTc) return true;
           if (uPhone && uPhone.length === 10 && (u.phone || '').replace(/\D/g, '').endsWith(uPhone) && u.name?.toLowerCase() === user.name?.toLowerCase()) return true;
           return false;
@@ -91,16 +105,21 @@ function App() {
       }
 
       if (freshUser) {
-        const hasChanged = 
+        const verifiedRole = freshUser.role || 'customer';
+        const verifiedSecondaryRole = freshUser.secondaryRole || null;
+        const identityUpdated =
           freshUser.id !== user.id ||
+          verifiedRole !== user.role ||
+          verifiedSecondaryRole !== (user.secondaryRole || null) ||
+          (freshUser.tcNo !== undefined && freshUser.tcNo !== user.tcNo) ||
+          (freshUser.phone && freshUser.phone !== user.phone);
+
+        const hasChanged = 
+          identityUpdated ||
           (freshUser.email && freshUser.email !== user.email) ||
           (freshUser.name && freshUser.name !== user.name) ||
-          (freshUser.phone && freshUser.phone !== user.phone) ||
           (freshUser.avatar && freshUser.avatar !== user.avatar) ||
-          (freshUser.role && freshUser.role !== user.role) ||
-          (freshUser.secondaryRole !== user.secondaryRole) ||
-          (freshUser.company && freshUser.company !== user.company) ||
-          (freshUser.tcNo !== undefined && freshUser.tcNo !== user.tcNo);
+          (freshUser.company && freshUser.company !== user.company);
 
         if (hasChanged) {
           useAuthStore.getState().syncUserRecord({
@@ -109,18 +128,25 @@ function App() {
             name: freshUser.name || user.name,
             phone: freshUser.phone || user.phone,
             avatar: freshUser.avatar || user.avatar,
-            role: freshUser.role || user.role || 'customer',
-            secondaryRole: freshUser.secondaryRole || null,
+            role: verifiedRole,
+            secondaryRole: verifiedSecondaryRole,
             company: freshUser.company || user.company,
             tcNo: freshUser.tcNo !== undefined ? freshUser.tcNo : user.tcNo
           });
+          if (identityUpdated) {
+            initFirestoreTours(true);
+            initFirestoreChats(true);
+          }
         }
+      } else if (isStaffSessionUser(user)) {
+        // Oturumda personel rolü görünüyor ancak Firestore'da böyle bir personel kaydı yoksa oturumu sonlandır
+        useAuthStore.getState().logout();
       }
     }
-  }, [users, user?.id, user?.email, user?.name, user?.phone, user?.avatar, user?.role, user?.secondaryRole, user?.company, user?.tcNo]);
+  }, [users, user?.id, user?.email, user?.name, user?.phone, user?.avatar, user?.role, user?.secondaryRole, user?.company, user?.tcNo, initFirestoreTours, initFirestoreChats]);
 
   useEffect(() => {
-    if (tours.length > 0 && users.length > 0 && whatsappConfig?.isEnabled) {
+    if (isStaffSessionUser(user) && tours.length > 0 && users.length > 0 && whatsappConfig?.isEnabled) {
       if (checkAndSendFlightReminders) {
         checkAndSendFlightReminders(users, whatsappConfig, sendWhatsAppNotification);
       }
@@ -139,7 +165,7 @@ function App() {
       
       return () => clearInterval(interval);
     }
-  }, [tours, users, checkAndSendFlightReminders, checkAndSendTourReviewReminders, whatsappConfig, sendWhatsAppNotification]);
+  }, [user, tours, users, checkAndSendFlightReminders, checkAndSendTourReviewReminders, whatsappConfig, sendWhatsAppNotification]);
 
   const getRootRedirect = () => {
     if (!user) return <WelcomeLanding />;

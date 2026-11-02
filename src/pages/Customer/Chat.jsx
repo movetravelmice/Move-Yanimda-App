@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Navigate } from 'react-router-dom';
 import { 
   ChevronLeft, 
   Send, 
@@ -38,6 +38,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useChatStore } from '../../store/chatStore';
 import { useTourStore, getTourExperts, isTourActive, isTourPast } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
+import { findMatchingParticipant, isUserMatch } from '../../utils/userUtils';
 import { storage } from '../../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -324,6 +325,33 @@ export default function Chat() {
 
   const isGroupChat = chatId?.startsWith('tour_');
   const isStaffDirectChat = !!(resolvedDirectUser && resolvedDirectUser.role !== 'customer');
+  const isStaffUser = ['admin', 'expert', 'ticketing'].includes(user?.role) || user?.secondaryRole === 'admin';
+
+  // Müşteri rolündeki kullanıcıların başkasının sohbet odasına veya kayıtlı olmadığı turun grup sohbetine girmesini engelle
+  let isUnauthorizedCustomerAccess = false;
+  if (!isStaffUser && tours.length > 0 && chatId !== 'announcement') {
+      if (isGroupChat) {
+          if (!resolvedTour || !findMatchingParticipant(resolvedTour.participants, user)) {
+              isUnauthorizedCustomerAccess = true;
+          }
+      } else if (chatId?.startsWith('direct_admin_') || chatId?.startsWith('direct_ticketing_')) {
+          if (!chatId.includes(user?.id)) {
+              isUnauthorizedCustomerAccess = true;
+          }
+      } else if (isGroupedDirect) {
+          if (chatId !== `direct_grouped_${user?.id}`) {
+              isUnauthorizedCustomerAccess = true;
+          }
+      } else if (chatId?.startsWith('direct_')) {
+          const myParticipant = resolvedTour ? findMatchingParticipant(resolvedTour.participants, user) : null;
+          const prefix = resolvedTour ? `direct_${resolvedTour.id}_` : '';
+          const targetPId = prefix ? chatId.replace(prefix, '').replace('_exp2', '') : '';
+          if (!resolvedTour || !myParticipant || (targetPId !== user?.id && targetPId !== myParticipant.id)) {
+              isUnauthorizedCustomerAccess = true;
+          }
+      }
+  }
+
   if (user?.role === 'admin' && isGroupChat) {
       isReadOnlyArchive = true;
   }
@@ -564,6 +592,7 @@ export default function Chat() {
   };
 
   const confirmClearChat = () => {
+      if (isGroupChat && !isStaffUser) return;
       clearMessages(effectiveChatId);
       setConfirmClearPopup(false);
   };
@@ -592,6 +621,10 @@ export default function Chat() {
     }
     return null;
   };
+
+  if (isUnauthorizedCustomerAccess) {
+      return <Navigate to="/dashboard/chat" replace />;
+  }
 
   return (
       <div style={{ height: '100%', minHeight: '100%', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc', position: 'relative', boxSizing: 'border-box', marginBottom: 'calc(-95px - env(safe-area-inset-bottom, 0px))' }}>
@@ -834,19 +867,23 @@ export default function Chat() {
                             {mutedChats?.includes(effectiveChatId) ? <><Bell size={16} className="text-muted" /> Sesi Aç</> : <><BellOff size={16} className="text-muted" /> Bildirimleri Sessize Al</>}
                         </div>
 
-                        <div style={{ height: '1px', background: '#f1f5f9', margin: '4px 0' }} />
+                        {(!isGroupChat || isStaffUser) && (
+                          <>
+                            <div style={{ height: '1px', background: '#f1f5f9', margin: '4px 0' }} />
 
-                        <div 
-                            onClick={() => { 
-                                setShowOptionsMenu(false);
-                                setConfirmClearPopup(true);
-                            }} 
-                            style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', color: '#ef4444', borderRadius: '10px', transition: 'background 0.15s' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >
-                            <Trash2 size={16} /> Sohbeti Temizle
-                        </div>
+                            <div 
+                                onClick={() => { 
+                                    setShowOptionsMenu(false);
+                                    setConfirmClearPopup(true);
+                                }} 
+                                style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', color: '#ef4444', borderRadius: '10px', transition: 'background 0.15s' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#fef2f2'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                                <Trash2 size={16} /> Sohbeti Temizle
+                            </div>
+                          </>
+                        )}
                     </div>
                 )}
                 

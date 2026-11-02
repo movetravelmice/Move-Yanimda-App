@@ -1262,7 +1262,9 @@ export default function WhatsAppTemplates() {
                         )}
                     </>
                 )}
-            </div>
-        </div>
-    );
+        {/* Bottom clearance spacer so templates are never covered by floating bottom nav & Tintin button */}
+        <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
+      </div>
+    </div>
+  );
 }

@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { formatTitleCase } from './userStore';
-import { isUserChild } from '../utils/userUtils';
+import { formatTitleCase, useUserStore } from './userStore';
+import { isUserChild, getCurrentSessionUser, isStaffSessionUser, isRelatedFamilyOrSelf } from '../utils/userUtils';
 
 const excelSerialToDate = (serial) => {
     const s = Number(serial);
@@ -326,19 +326,73 @@ export const sanitizeForFirestore = (obj) => {
 export const useTourStore = create((set, get) => ({
   tours: [],
   isFirebaseInitialized: false,
+  _unsubscribe: null,
+  _activeSessionKey: null,
 
-  initFirestoreTours: async () => {
-      if (get().isFirebaseInitialized) return;
-      set({ isFirebaseInitialized: true });
+  resetTours: () => {
+      const unsub = get()._unsubscribe;
+      if (typeof unsub === 'function') {
+          try { unsub(); } catch (e) {}
+      }
+      set({ tours: [], isFirebaseInitialized: false, _unsubscribe: null, _activeSessionKey: null });
+  },
+
+  initFirestoreTours: async (forceRestart = false) => {
+      const sessionUser = getCurrentSessionUser();
+      if (!sessionUser) {
+          get().resetTours();
+          return;
+      }
+      const sessionKey = `${sessionUser.id || ''}_${sessionUser.role || 'customer'}`;
+      if (!forceRestart && get().isFirebaseInitialized && get()._activeSessionKey === sessionKey) return;
+
+      const prevUnsub = get()._unsubscribe;
+      if (typeof prevUnsub === 'function') {
+          try { prevUnsub(); } catch (e) {}
+      }
+
+      set({ isFirebaseInitialized: true, _activeSessionKey: sessionKey });
       
       try {
           const toursRef = collection(db, 'tours');
           
-          onSnapshot(toursRef, async (snapshot) => {
+          const unsub = onSnapshot(toursRef, async (snapshot) => {
+              const currentSession = getCurrentSessionUser();
+              if (!currentSession) {
+                  set({ tours: [] });
+                  return;
+              }
+
+              // Personel yetkisini doğrula (localStorage manipülasyonuna karşı koruma)
+              let isVerifiedStaff = false;
+              if (isStaffSessionUser(currentSession)) {
+                  const memStaff = (useUserStore.getState().users || []).find(
+                      u => (currentSession.id && u.id === currentSession.id) || (currentSession.email && u.email && u.email.toLowerCase() === currentSession.email.toLowerCase())
+                  );
+                  if (memStaff) {
+                      isVerifiedStaff = isStaffSessionUser(memStaff);
+                  } else if (currentSession.id) {
+                      try {
+                          const uSnap = await getDoc(doc(db, 'users', currentSession.id));
+                          if (uSnap.exists()) {
+                              isVerifiedStaff = isStaffSessionUser(uSnap.data());
+                          }
+                      } catch (e) {}
+                  }
+              }
+
               const fetchedTours = [];
               for (const docSnap of snapshot.docs) {
                   const tourData = docSnap.data();
                   let tourModified = false;
+
+                  // Müşteri oturumlarında sadece müşterinin (veya aile/çocuk profilinin) katılımcısı olduğu turları belleğe al
+                  if (!isVerifiedStaff) {
+                      const isMyTour = (tourData.participants || []).some(p => isRelatedFamilyOrSelf(p, currentSession));
+                      if (!isMyTour) {
+                          continue;
+                      }
+                  }
                   
                   if (tourData.participants) {
                       const updatedParticipants = tourData.participants.map(p => {
@@ -374,32 +428,53 @@ export const useTourStore = create((set, get) => ({
                               flights: newFlights 
                           };
                       });
-                      if (tourModified) {
+
+                      if (isVerifiedStaff && tourModified) {
                           tourData.participants = updatedParticipants;
                           try {
                               await updateDoc(doc(db, 'tours', docSnap.id), { participants: updatedParticipants });
                           } catch (e) {
                               console.error("Firestore repair failed:", e);
                           }
+                      } else if (!isVerifiedStaff) {
+                          // Müşteri oturumunda diğer katılımcıların hassas kişisel verilerini (TC, pasaport, telefon, e-posta, bilet PDF) bellekten temizle
+                          tourData.participants = updatedParticipants.map(p => {
+                              if (isRelatedFamilyOrSelf(p, currentSession)) {
+                                  return p;
+                              }
+                              return {
+                                  id: p.id,
+                                  name: p.name,
+                                  avatar: p.avatar || null,
+                                  role: 'customer'
+                              };
+                          });
+                      } else {
+                          tourData.participants = updatedParticipants;
                       }
                   }
 
-                  // Auto-sync completed/expired tours to past status in Firestore
+                  // Auto-sync completed/expired tours to past status in Firestore (only write if verified staff)
                   const endDate = parseTourEndDate(tourData.dates);
                   if (tourData.status !== 'past' && tourData.status !== 'cancelled' && endDate && endDate < new Date()) {
                       tourData.status = 'past';
-                      try {
-                          await updateDoc(doc(db, 'tours', docSnap.id), { status: 'past' });
-                      } catch (e) {
-                          console.error("Auto-sync past tour status failed:", e);
+                      if (isVerifiedStaff) {
+                          try {
+                              await updateDoc(doc(db, 'tours', docSnap.id), { status: 'past' });
+                          } catch (e) {
+                              console.error("Auto-sync past tour status failed:", e);
+                          }
                       }
                   }
 
                   fetchedTours.push({ id: docSnap.id, ...tourData });
               }
               set({ tours: fetchedTours.reverse() });
-              get().cleanupExpiredTourAttachments().catch(console.error);
+              if (isVerifiedStaff) {
+                  get().cleanupExpiredTourAttachments().catch(console.error);
+              }
           });
+          set({ _unsubscribe: unsub });
       } catch (e) {
           console.error("Firebase tour dinleyicisi başlatılamadı:", e);
       }
@@ -556,35 +631,41 @@ export const useTourStore = create((set, get) => ({
           return false;
       };
 
-      let found = false;
-      let updatedParticipants = (tour.participants || []).map(p => {
-          if (isMatch(p)) {
-              found = true;
-              return { ...p, feedback: feedbackData };
+      const applyFeedbackToList = (participantsList = []) => {
+          let found = false;
+          const updated = participantsList.map(p => {
+              if (isMatch(p)) {
+                  found = true;
+                  return { ...p, feedback: feedbackData };
+              }
+              return p;
+          });
+          if (!found && updated.length > 0) {
+              const fbEmail = (feedbackData?.email || '').trim().toLowerCase();
+              const fbName = (feedbackData?.customerName || '').trim().toLowerCase();
+              const pIdx = updated.findIndex(p =>
+                  (fbEmail && p.email && p.email.trim().toLowerCase() === fbEmail) ||
+                  (fbName && p.name && p.name.trim().toLowerCase() === fbName)
+              );
+              if (pIdx !== -1) {
+                  updated[pIdx] = { ...updated[pIdx], feedback: feedbackData };
+              }
           }
-          return p;
-      });
+          return updated;
+      };
 
-      if (!found && updatedParticipants.length > 0) {
-          const fbEmail = (feedbackData?.email || '').trim().toLowerCase();
-          const fbName = (feedbackData?.customerName || '').trim().toLowerCase();
-          const pIdx = updatedParticipants.findIndex(p =>
-              (fbEmail && p.email && p.email.trim().toLowerCase() === fbEmail) ||
-              (fbName && p.name && p.name.trim().toLowerCase() === fbName)
-          );
-          if (pIdx !== -1) {
-              found = true;
-              updatedParticipants[pIdx] = { ...updatedParticipants[pIdx], feedback: feedbackData };
-          } else {
-              updatedParticipants[0] = { ...updatedParticipants[0], feedback: feedbackData };
-          }
-      }
-
+      const localUpdated = applyFeedbackToList(tour.participants || []);
       set(state => ({
-          tours: state.tours.map(t => String(t.id) === String(tourId) ? { ...t, participants: updatedParticipants } : t)
+          tours: state.tours.map(t => String(t.id) === String(tourId) ? { ...t, participants: localUpdated } : t)
       }));
-      try { 
-          await updateDoc(doc(db, 'tours', tour.id), { participants: updatedParticipants }); 
+
+      try {
+          // Firestore'dan güncel ve tam (maskelenmemiş) katılımcı listesini okuyarak yalnızca ilgili katılımcının geri bildirimini güncelle
+          const tourRef = doc(db, 'tours', String(tour.id));
+          const freshSnap = await getDoc(tourRef);
+          const freshParticipants = freshSnap.exists() ? (freshSnap.data().participants || []) : (tour.participants || []);
+          const firestoreUpdated = applyFeedbackToList(freshParticipants);
+          await updateDoc(tourRef, { participants: firestoreUpdated }); 
       } catch (e) {
           console.error("addParticipantFeedback update error:", e);
       }
@@ -593,18 +674,26 @@ export const useTourStore = create((set, get) => ({
   rateTour: async (tourId, reviewData) => {
       const tour = get().tours.find(t => String(t.id) === String(tourId));
       if (!tour) return;
-      const otherReviews = (tour.reviews || []).filter(r => {
-          if (reviewData.userId && r.userId && r.userId === reviewData.userId) return false;
-          if (reviewData.email && r.email && r.email.trim().toLowerCase() === reviewData.email.trim().toLowerCase()) return false;
-          if (reviewData.customerName && r.customerName && r.customerName.trim().toLowerCase() === reviewData.customerName.trim().toLowerCase()) return false;
-          return true;
-      });
-      const reviews = [...otherReviews, reviewData];
+
+      const buildReviewsList = (baseReviews = []) => {
+          const otherReviews = baseReviews.filter(r => {
+              if (reviewData.userId && r.userId && r.userId === reviewData.userId) return false;
+              if (reviewData.email && r.email && r.email.trim().toLowerCase() === reviewData.email.trim().toLowerCase()) return false;
+              if (reviewData.customerName && r.customerName && r.customerName.trim().toLowerCase() === reviewData.customerName.trim().toLowerCase()) return false;
+              return true;
+          });
+          return [...otherReviews, reviewData];
+      };
+
+      const localReviews = buildReviewsList(tour.reviews || []);
       set(state => ({
-          tours: state.tours.map(t => String(t.id) === String(tourId) ? { ...t, reviews } : t)
+          tours: state.tours.map(t => String(t.id) === String(tourId) ? { ...t, reviews: localReviews } : t)
       }));
-      try { 
-          await updateDoc(doc(db, 'tours', tour.id), { reviews }); 
+      try {
+          const tourRef = doc(db, 'tours', String(tour.id));
+          const freshSnap = await getDoc(tourRef);
+          const freshReviews = freshSnap.exists() ? (freshSnap.data().reviews || []) : (tour.reviews || []);
+          await updateDoc(tourRef, { reviews: buildReviewsList(freshReviews) }); 
       } catch (e) {
           console.error("rateTour update error:", e);
       }

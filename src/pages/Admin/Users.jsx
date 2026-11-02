@@ -1534,13 +1534,16 @@ export default function AdminUsers() {
             </div>
 
           </form>
+
+          {/* Bottom clearance spacer so form action buttons are never covered by floating bottom nav & Tintin button */}
+          <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh', position: 'relative' }} onClick={() => setOpenDropdownId(null)}>
+    <div style={{ paddingBottom: 'calc(180px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh', position: 'relative' }} onClick={() => setOpenDropdownId(null)}>
       
       {/* Custom Popup Alert Modal */}
       {popupMsg.show && (
@@ -2222,6 +2225,9 @@ export default function AdminUsers() {
             })
           )}
         </div>
+
+        {/* Bottom clearance spacer so cards are never covered by floating bottom nav & Tintin button */}
+        <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
 
       </div>
 

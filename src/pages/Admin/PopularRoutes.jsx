@@ -1446,7 +1446,7 @@ export default function PopularRoutes() {
         </div>
 
         {/* Alt Menü ve Tintin Butonu İçin Ekstra Boşluk */}
-        <div style={{ height: '90px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
+        <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
 
       </div>
 

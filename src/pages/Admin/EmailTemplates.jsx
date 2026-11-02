@@ -327,7 +327,7 @@ export default function EmailTemplates() {
     };
 
     return (
-        <div style={{ paddingBottom: '90px', background: '#f8fafc', minHeight: '100vh' }}>
+        <div style={{ paddingBottom: 'calc(160px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh' }}>
             <Header title="E-Posta Şablon Yönetimi" showBack />
 
             <div style={{ maxWidth: '680px', margin: '0 auto', padding: '14px 12px' }}>
@@ -606,7 +606,9 @@ export default function EmailTemplates() {
                         )}
                     </>
                 )}
-            </div>
-        </div>
-    );
+        {/* Bottom clearance spacer so templates are never covered by floating bottom nav & Tintin button */}
+        <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} aria-hidden="true" />
+      </div>
+    </div>
+  );
 }

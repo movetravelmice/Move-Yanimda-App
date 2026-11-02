@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore } from '../store/userStore';
-import { isUserChild } from '../utils/userUtils';
+import { isUserChild, normalizeEmail } from '../utils/userUtils';
 import { 
   Mail, 
   KeyRound, 
@@ -50,7 +50,7 @@ export default function Login() {
     if (isLoggingIn) return;
     setError('');
     setSuccessMsg('');
-    const cleanEmail = email.trim();
+    const cleanEmail = normalizeEmail(email);
     const cleanPassword = password.trim();
     if (!cleanEmail || !cleanPassword) return;
     
@@ -71,7 +71,7 @@ export default function Login() {
 
   const handleForgotPassword = async () => {
       setError(''); setSuccessMsg('');
-      const cleanEmail = email.trim();
+      const cleanEmail = normalizeEmail(email);
       if (!cleanEmail || !cleanEmail.includes('@')) {
           setError('Lütfen geçerli bir e-posta adresi girin.');
           return;
@@ -83,7 +83,7 @@ export default function Login() {
           try {
               const { collection, query, where, getDocs } = await import('firebase/firestore');
               const { db } = await import('../lib/firebase');
-              const q = query(collection(db, 'users'), where('email', '==', cleanEmail.toLowerCase()));
+              const q = query(collection(db, 'users'), where('email', '==', cleanEmail));
               const snap = await getDocs(q);
               if (!snap.empty) {
                   userRecord = { id: snap.docs[0].id, ...snap.docs[0].data() };
@@ -471,10 +471,31 @@ export default function Login() {
                                 type="text" 
                                 placeholder="E-posta veya telefon"
                                 value={email}
-                                onChange={e => setEmail(e.target.value)}
+                                onChange={e => {
+                                    const val = e.target.value;
+                                    const lowerVal = val
+                                        .replace(/İ/g, 'i')
+                                        .replace(/I/g, 'i')
+                                        .replace(/ı/g, 'i')
+                                        .replace(/i̇/g, 'i')
+                                        .toLowerCase()
+                                        .normalize('NFD')
+                                        .replace(/\u0307/g, '');
+                                    setEmail(lowerVal);
+                                }}
                                 onFocus={() => setEmailFocused(true)}
-                                onBlur={() => setEmailFocused(false)}
+                                onBlur={() => {
+                                    setEmailFocused(false);
+                                    if (email.includes('@')) {
+                                        setEmail(prev => normalizeEmail(prev));
+                                    }
+                                }}
                                 required
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                autoComplete="username"
+                                inputMode="email"
                                 style={{
                                     flex: 1,
                                     border: 'none',
@@ -483,7 +504,8 @@ export default function Login() {
                                     fontSize: '12.5px',
                                     color: '#0f172a',
                                     fontWeight: '500',
-                                    width: '100%'
+                                    width: '100%',
+                                    textTransform: 'lowercase'
                                 }}
                             />
                         </div>
@@ -527,6 +549,10 @@ export default function Login() {
                                 onFocus={() => setPassFocused(true)}
                                 onBlur={() => setPassFocused(false)}
                                 required
+                                autoCapitalize="none"
+                                autoCorrect="off"
+                                spellCheck={false}
+                                autoComplete="current-password"
                                 style={{
                                     flex: 1,
                                     border: 'none',

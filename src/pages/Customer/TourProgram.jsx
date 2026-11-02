@@ -12,9 +12,11 @@ export default function TourProgram() {
   const { tours } = useTourStore();
   const { user } = useAuthStore();
   
+  const isStaff = ['admin', 'expert', 'ticketing'].includes(user?.role) || user?.secondaryRole === 'admin';
   const myTours = tours.filter(t => findMatchingParticipant(t.participants, user));
+  const allowedTours = isStaff ? tours : myTours;
   const activeTour = tourId 
-    ? tours.find(t => t.id === tourId) 
+    ? allowedTours.find(t => t.id === tourId) 
     : (myTours.find(isTourActive) || myTours[0]);
 
   const hasProgram = activeTour && activeTour.program && (

@@ -3,6 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useTourStore } from '../store/tourStore';
 import { useChatStore } from '../store/chatStore';
+import { isUserMatch } from '../utils/userUtils';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
@@ -135,7 +136,7 @@ export function useDeviceNotifications() {
                     const t = tours.find(tour => tour.id === newest.tourId);
                     if (t) {
                        if (t.guideName === user.name || t.expert?.name === user.name) relevant = true;
-                       if (t.participants?.some(p => p.id === user.id || (p.email && user.email && p.email.toLowerCase() === user.email.toLowerCase()))) relevant = true;
+                       if (t.participants?.some(p => isUserMatch(p, user) || p.id === user.id || (p.email && user.email && p.email.toLowerCase() === user.email.toLowerCase()))) relevant = true;
                     }
                 }
 
@@ -160,11 +161,11 @@ export function useDeviceNotifications() {
         if (!user || user.role !== 'customer') return;
         
         tours.forEach(t => {
-            const isParticipant = t.participants?.some(p => p.id === user.id || p.email === user.email);
+            const isParticipant = t.participants?.some(p => isUserMatch(p, user) || p.id === user.id || p.email === user.email);
             if (!isParticipant) return;
 
             const isActive = t.rollCall?.active && (t.rollCall?.endTime > Date.now());
-            const hasMarkedPresent = (t.rollCall?.attendees || []).some(p => p.id === user.id || p.email === user.email);
+            const hasMarkedPresent = (t.rollCall?.attendees || []).some(p => isUserMatch(p, user) || p.id === user.id || p.email === user.email);
             
             const prevActiveState = prevRollCallStates.current[t.id];
 

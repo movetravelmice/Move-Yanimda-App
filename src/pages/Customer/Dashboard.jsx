@@ -269,7 +269,7 @@ export default function CustomerDashboard() {
 
                 {/* Card Body */}
                 <div style={{ padding: '14px 16px 16px 16px' }}>
-                  <h2 style={{ fontSize: '13.5px', fontWeight: '700', margin: '0 0 8px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.4', letterSpacing: '-0.2px' }}>{tour.name}</h2>
+                  <h2 style={{ fontSize: '12px', fontWeight: '600', margin: '0 0 7px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.35', letterSpacing: '-0.1px' }}>{tour.name}</h2>
 
                   {/* Date & Duration Strip */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#f8fafc', padding: '8px 10px', borderRadius: '10px', border: '1px solid #f1f5f9', marginBottom: '12px', gap: '8px', overflow: 'hidden', flexWrap: 'nowrap' }}>
@@ -429,7 +429,7 @@ export default function CustomerDashboard() {
 
               {/* Card Body */}
               <div style={{ padding: '14px 16px 16px 16px' }}>
-                <h2 style={{ fontSize: '13.5px', fontWeight: '700', margin: '0 0 8px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.4', letterSpacing: '-0.2px' }}>
+                <h2 style={{ fontSize: '12px', fontWeight: '600', margin: '0 0 7px 0', padding: '0 2px', color: '#1e293b', lineHeight: '1.35', letterSpacing: '-0.1px' }}>
                     {tour.name}
                 </h2>
 

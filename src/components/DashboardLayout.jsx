@@ -58,9 +58,13 @@ export default function DashboardLayout() {
     return <Navigate to="/login" replace />;
   }
 
-  const renderDashboard = () => {
-    const isAdmin = isUserAdmin(user) || user?.role === 'admin' || user?.secondaryRole === 'admin';
+  const isAdmin = isUserAdmin(user) || user?.role === 'admin' || user?.secondaryRole === 'admin';
+  const isStaff = isAdmin || user?.role === 'expert' || user?.role === 'ticketing';
 
+  const requireAdmin = (element) => (isAdmin ? element : <Navigate to="/dashboard" replace />);
+  const requireStaff = (element) => (isStaff ? element : <Navigate to="/dashboard" replace />);
+
+  const renderDashboard = () => {
     if (isAdmin) {
       const currentRole = activeStaffRole || 'admin';
       if (currentRole === 'expert') return <ExpertDashboard />;
@@ -84,9 +88,9 @@ export default function DashboardLayout() {
     <>
       <Routes>
         <Route path="/" element={renderDashboard()} />
-        <Route path="admin" element={<AdminDashboard />} />
-        <Route path="expert" element={<ExpertDashboard />} />
-        <Route path="ticketing" element={<TicketingDashboard />} />
+        <Route path="admin" element={requireAdmin(<AdminDashboard />)} />
+        <Route path="expert" element={requireStaff(<ExpertDashboard />)} />
+        <Route path="ticketing" element={requireStaff(<TicketingDashboard />)} />
         <Route path="currency" element={<Currency />} />
         <Route path="transfers" element={<Transfers />} />
         <Route path="transfers/:tourId" element={<Transfers />} />
@@ -95,28 +99,28 @@ export default function DashboardLayout() {
         <Route path="chat" element={<ChatList />} />
         <Route path="chat/:chatId" element={<Chat />} />
         <Route path="notifications" element={<Notifications />} />
-        <Route path="participants/:tourId" element={<ParticipantsList />} />
-        <Route path="program-edit/:tourId" element={<EditProgram />} />
+        <Route path="participants/:tourId" element={requireStaff(<ParticipantsList />)} />
+        <Route path="program-edit/:tourId" element={requireStaff(<EditProgram />)} />
         <Route path="profile" element={<ProfileSettings />} />
-        <Route path="create-tour" element={<CreateTour />} />
-        <Route path="create-tour/:tourId" element={<CreateTour />} />
-        <Route path="past-tour/:tourId" element={<PastTourDetails />} />
+        <Route path="create-tour" element={requireStaff(<CreateTour />)} />
+        <Route path="create-tour/:tourId" element={requireStaff(<CreateTour />)} />
+        <Route path="past-tour/:tourId" element={requireStaff(<PastTourDetails />)} />
         <Route path="past-tours" element={<PastTours />} />
         <Route path="guide/:tourId" element={<DestinationGuide />} />
         <Route path="review/:tourId" element={<TourReview />} />
         <Route path="tintin" element={<TintinChat />} />
         {/* Admin specific standalone routes */}
-        <Route path="admin-active-operations" element={<ActiveOperations />} />
-        <Route path="admin-settings" element={<AdminSettings />} />
-        <Route path="admin-users" element={<AdminUsers />} />
-        <Route path="admin-past-operations" element={<PastOperations />} />
-        <Route path="admin-email-templates" element={<EmailTemplates />} />
-        <Route path="admin-whatsapp-templates" element={<WhatsAppTemplates />} />
-        <Route path="admin-popular-routes" element={<PopularRoutes />} />
-        <Route path="popular-routes" element={<PopularRoutes />} />
-        <Route path="broadcast" element={<BroadcastNotification />} />
-        <Route path="admin-broadcast" element={<BroadcastNotification />} />
-        <Route path="push-notifications" element={<BroadcastNotification />} />
+        <Route path="admin-active-operations" element={requireAdmin(<ActiveOperations />)} />
+        <Route path="admin-settings" element={requireAdmin(<AdminSettings />)} />
+        <Route path="admin-users" element={requireAdmin(<AdminUsers />)} />
+        <Route path="admin-past-operations" element={requireAdmin(<PastOperations />)} />
+        <Route path="admin-email-templates" element={requireAdmin(<EmailTemplates />)} />
+        <Route path="admin-whatsapp-templates" element={requireAdmin(<WhatsAppTemplates />)} />
+        <Route path="admin-popular-routes" element={requireAdmin(<PopularRoutes />)} />
+        <Route path="popular-routes" element={requireAdmin(<PopularRoutes />)} />
+        <Route path="broadcast" element={requireStaff(<BroadcastNotification />)} />
+        <Route path="admin-broadcast" element={requireStaff(<BroadcastNotification />)} />
+        <Route path="push-notifications" element={requireStaff(<BroadcastNotification />)} />
       </Routes>
       
       {/* Global Roll Call Modal for active customers */}

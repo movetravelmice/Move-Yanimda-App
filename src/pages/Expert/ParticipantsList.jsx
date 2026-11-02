@@ -7,7 +7,8 @@ import ParticipantTransferManager from '../../components/ParticipantTransferMana
 import BulkParticipantManager from '../../components/BulkParticipantManager';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
-import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, normalizeTurkish } from '../../utils/userUtils';
+import { useNotificationStore } from '../../store/notificationStore';
+import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, normalizeTurkish, normalizeEmail } from '../../utils/userUtils';
 
 const generateSecurePassword = (fullName) => {
     const nameStr = (fullName || '').replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, '');
@@ -160,6 +161,14 @@ export default function ParticipantsList() {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    // Güvenlik: Sadece yetkili personel (admin, expert, ticketing) bu sayfaya erişebilir
+    useEffect(() => {
+        const isStaff = ['admin', 'expert', 'ticketing'].includes(user?.role) || ['admin', 'expert', 'ticketing'].includes(user?.secondaryRole);
+        if (!isStaff) {
+            navigate('/dashboard', { replace: true });
+        }
+    }, [user, navigate]);
 
     const [customWaTemplates, setCustomWaTemplates] = useState({});
 
@@ -348,6 +357,24 @@ export default function ParticipantsList() {
                 }
                 
                 sentCount++;
+            }
+
+            // Sistemsel uygulama içi bildirimi tüm tur katılımcılarına oluştur
+            try {
+                const addNotif = useNotificationStore.getState().addNotification;
+                if (addNotif && tour?.id) {
+                    await addNotif({
+                        type: 'info',
+                        title: `✈️ Biletleriniz Yüklendi`,
+                        message: `${tour.name || 'Seyahatiniz'} için uçuş detayları ve biletleriniz sisteme tanımlanmıştır. Uçuş & Transfer sekmesinden veya profilinizden detaylara hızlıca ulaşabilirsiniz.`,
+                        tourId: tour.id,
+                        target: 'tour',
+                        senderName: user?.name || 'Biletleme Ekibi',
+                        senderRole: user?.role || 'staff'
+                    });
+                }
+            } catch (notifErr) {
+                console.warn("Could not create in-app ticket notification:", notifErr);
             }
             
             alert(`Başarılı! Biletleme bilgilendirmesi ${sentCount} katılımcıya gönderildi.`);
@@ -1184,10 +1211,11 @@ export default function ParticipantsList() {
         if (!emailQuery.trim()) return;
         setSearchError('');
 
-        const query = emailQuery.trim().toLowerCase();
-        const cleanPhoneQuery = query.replace(/\D/g, '');
+        const rawQuery = emailQuery.trim();
+        const query = normalizeEmail(rawQuery);
+        const cleanPhoneQuery = rawQuery.replace(/\D/g, '');
 
-        let existing = findUserByEmail(query);
+        let existing = findUserByEmail(query || rawQuery);
         if (!existing && cleanPhoneQuery.length >= 7) {
             existing = users.find(u => {
                 const uPhone = (u.phone || '').replace(/\D/g, '');
