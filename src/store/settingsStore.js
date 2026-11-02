@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { doc, setDoc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getApiBaseUrl } from '../utils/apiConfig';
+import { getCurrentSessionUser, isStaffSessionUser } from '../utils/userUtils';
 
 export const DEFAULT_POPULAR_ROUTES = [
   {
@@ -205,6 +206,10 @@ export const useSettingsStore = create((set, get) => ({
   },
 
   updateSetting: async (key, val) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) {
+          console.warn("Yetkisiz sistem ayarı değiştirme girişimi engellendi.");
+          return;
+      }
       try { await updateDoc(doc(db, 'settings', 'global'), { [key]: val }); } catch (e) {}
   },
 

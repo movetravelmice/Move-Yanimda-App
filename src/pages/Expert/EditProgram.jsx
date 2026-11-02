@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
+import { sanitizeHtml } from '../../utils/securityUtils';
 import ConfirmModal from '../../components/ConfirmModal';
 import Header from '../../components/Header';
 
@@ -53,8 +54,9 @@ const RichTextEditor = ({ value, onChange, placeholder }) => {
     };
 
     React.useEffect(() => {
-        if (editorRef.current && editorRef.current.innerHTML !== value) {
-            editorRef.current.innerHTML = value || '';
+        const safeValue = sanitizeHtml(value || '');
+        if (editorRef.current && editorRef.current.innerHTML !== safeValue) {
+            editorRef.current.innerHTML = safeValue;
         }
     }, [value]);
 
@@ -504,7 +506,7 @@ export default function EditProgram() {
   };
 
   const saveGlobalProgram = () => {
-      updateTourProgram(tourId, programText);
+      updateTourProgram(tourId, sanitizeHtml(programText));
       setShowSuccessPopup(true);
       setTimeout(() => {
           setShowSuccessPopup(false);
@@ -556,7 +558,7 @@ export default function EditProgram() {
       <div style={{ padding: '0 16px', marginTop: '16px' }}>
           {isReadOnly ? (
               <div>
-                  <div className="card rich-text-content customer-program-content" style={{ padding: '20px 16px', borderRadius: '16px', boxShadow: '0 4px 18px rgba(0,0,0,0.04)', border: '1px solid #edf2f7', background: 'white' }} dangerouslySetInnerHTML={{ __html: programText || '<p style="text-align:center;color:var(--text-muted);">Bu seyahatin programı henüz girilmemiş.</p>' }} />
+                  <div className="card rich-text-content customer-program-content" style={{ padding: '20px 16px', borderRadius: '16px', boxShadow: '0 4px 18px rgba(0,0,0,0.04)', border: '1px solid #edf2f7', background: 'white' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(programText || '<p style="text-align:center;color:var(--text-muted);">Bu seyahatin programı henüz girilmemiş.</p>') }} />
                   {renderAttachments(false)}
               </div>
           ) : (

@@ -141,7 +141,8 @@ export const useUserStore = create((set, get) => ({
                     // Başka müşterilerin verilerini belleğe alma; yalnızca kendi/ailesinin kaydını ve personelin genel iletişim bilgisini tut
                     if (!isVerifiedStaff) {
                         if (isRelatedFamilyOrSelf(userRecord, effectiveSessionUser)) {
-                            fetchedUsers.push(userRecord);
+                            const { password: _removedPass, ...safeUserRecord } = userRecord;
+                            fetchedUsers.push(safeUserRecord);
                         } else if (isStaffSessionUser(userRecord)) {
                             fetchedUsers.push({
                                 id: userRecord.id,
@@ -259,12 +260,22 @@ export const useUserStore = create((set, get) => ({
     },
 
     updateUser: async (id, updatedData) => {
+        const authUser = useAuthStore.getState()?.user;
+        const isStaffCaller = isStaffSessionUser(authUser);
+
         const dataToUpdate = {};
         Object.keys(updatedData).forEach(k => {
             if (updatedData[k] !== undefined) {
                 dataToUpdate[k] = updatedData[k];
             }
         });
+
+        // Yetkisiz rol yükseltmeyi (Privilege Escalation) engelle:
+        // Personel olmayan kullanıcılar role veya secondaryRole alanlarını değiştiremez
+        if (!isStaffCaller) {
+            delete dataToUpdate.role;
+            delete dataToUpdate.secondaryRole;
+        }
 
         if (dataToUpdate.name) {
             dataToUpdate.name = formatTitleCase(dataToUpdate.name);
@@ -292,6 +303,15 @@ export const useUserStore = create((set, get) => ({
             targetId = existing.id;
         }
 
+        // Oturum açmış personel olmayan kullanıcı yalnızca kendi veya ailesinin kaydını güncelleyebilir
+        if (authUser && !isStaffCaller) {
+            const targetRecord = existing || { id: targetId, email: normalizedEmail };
+            if (!isRelatedFamilyOrSelf(targetRecord, authUser)) {
+                console.warn("Yetkisiz kullanıcı güncelleme girişimi engellendi.");
+                return;
+            }
+        }
+
         // Optimistic UI update
         set({
             users: currentUsers.map(u => {
@@ -304,9 +324,10 @@ export const useUserStore = create((set, get) => ({
         try {
             const authState = useAuthStore.getState();
             if (authState?.user) {
-                const authUser = authState.user;
-                if ((targetId && authUser.id === targetId) || (normalizedEmail && authUser.email?.toLowerCase() === normalizedEmail)) {
-                    useAuthStore.setState({ user: { ...authUser, ...dataToUpdate } });
+                const currentAuthUser = authState.user;
+                if ((targetId && currentAuthUser.id === targetId) || (normalizedEmail && currentAuthUser.email?.toLowerCase() === normalizedEmail)) {
+                    const { password: _ignoredPass, ...safeSyncData } = dataToUpdate;
+                    useAuthStore.setState({ user: { ...currentAuthUser, ...safeSyncData } });
                 }
             }
         } catch (e) {}
@@ -389,6 +410,11 @@ export const useUserStore = create((set, get) => ({
     },
 
     deleteUser: async (id) => {
+        const authUser = useAuthStore.getState()?.user;
+        if (!isStaffSessionUser(authUser)) {
+            console.warn("Yetkisiz kullanıcı silme girişimi engellendi.");
+            return;
+        }
         // Optimistic delete
         const currentUsers = get().users;
         set({ users: currentUsers.filter(u => u.id !== id) });

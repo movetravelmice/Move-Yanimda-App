@@ -220,7 +220,16 @@ export const useIndividualStore = create((set, get) => ({
       console.error("Checklists query init error:", e);
     }
 
-    // C. Budgets Stream (Owner OR Member)
+    // C. Budgets & D. Expenses Streams (Isolated per Owner OR Member)
+    let latestRawExpenses = [];
+    const applyIsolatedExpenses = (currentBudgets) => {
+      const allowedBudgetIds = new Set((currentBudgets || get().budgets || []).map(b => b.id));
+      const filteredExpenses = latestRawExpenses.filter(
+        exp => exp.userId === userId || (exp.budgetId && allowedBudgetIds.has(exp.budgetId))
+      );
+      set({ expenses: filteredExpenses });
+    };
+
     try {
       const budgetsRef = collection(db, 'travel_budgets');
       const unsubBudgets = onSnapshot(budgetsRef, (snapshot) => {
@@ -236,21 +245,23 @@ export const useIndividualStore = create((set, get) => ({
           }
         });
         set({ budgets: list });
+        applyIsolatedExpenses(list);
       }, (err) => console.error("Budgets stream error:", err));
       unsubs.push(unsubBudgets);
     } catch (e) {
       console.error("Budgets query init error:", e);
     }
 
-    // D. Expenses Stream
+    // D. Expenses Stream (Strictly filtered to user's own or shared budgets)
     try {
       const expensesRef = collection(db, 'budget_expenses');
       const unsubExpenses = onSnapshot(expensesRef, (snapshot) => {
-        const list = [];
+        const rawList = [];
         snapshot.forEach(docSnap => {
-          list.push({ id: docSnap.id, ...docSnap.data() });
+          rawList.push({ id: docSnap.id, ...docSnap.data() });
         });
-        set({ expenses: list });
+        latestRawExpenses = rawList;
+        applyIsolatedExpenses(get().budgets);
       }, (err) => console.error("Expenses stream error:", err));
       unsubs.push(unsubExpenses);
     } catch (e) {
@@ -394,6 +405,11 @@ export const useIndividualStore = create((set, get) => ({
   },
 
   updateTravel: async (travelId, updateData) => {
+    const ownedTravel = get().travels.find(t => t.id === travelId);
+    if (!ownedTravel) {
+      console.warn("Yetkisiz seyahat güncelleme girişimi engellendi.");
+      return;
+    }
     set(state => ({
       travels: state.travels.map(t => t.id === travelId ? { ...t, ...updateData } : t),
       budgets: updateData.title 
@@ -416,6 +432,11 @@ export const useIndividualStore = create((set, get) => ({
   },
 
   deleteTravel: async (travelId) => {
+    const ownedTravel = get().travels.find(t => t.id === travelId);
+    if (!ownedTravel) {
+      console.warn("Yetkisiz seyahat silme girişimi engellendi.");
+      return;
+    }
     const relatedBudget = get().budgets.find(b => b.travelId === travelId);
     set(state => ({
       travels: state.travels.filter(t => t.id !== travelId),
@@ -555,6 +576,11 @@ export const useIndividualStore = create((set, get) => ({
   },
 
   deleteChecklist: async (checklistId) => {
+    const ownedList = get().checklists.find(c => c.id === checklistId);
+    if (!ownedList) {
+      console.warn("Yetkisiz liste silme girişimi engellendi.");
+      return;
+    }
     set(state => ({
       checklists: state.checklists.filter(c => c.id !== checklistId)
     }));
@@ -650,6 +676,11 @@ export const useIndividualStore = create((set, get) => ({
   },
 
   updateBudget: async (budgetId, data) => {
+    const accessibleBudget = get().budgets.find(b => b.id === budgetId);
+    if (!accessibleBudget) {
+      console.warn("Yetkisiz bütçe güncelleme girişimi engellendi.");
+      return;
+    }
     set(state => ({
       budgets: state.budgets.map(b => b.id === budgetId ? { ...b, ...data } : b)
     }));
@@ -663,6 +694,11 @@ export const useIndividualStore = create((set, get) => ({
   },
 
   deleteBudget: async (budgetId) => {
+    const accessibleBudget = get().budgets.find(b => b.id === budgetId);
+    if (!accessibleBudget) {
+      console.warn("Yetkisiz bütçe silme girişimi engellendi.");
+      return;
+    }
     set(state => ({
       budgets: state.budgets.filter(b => b.id !== budgetId),
       expenses: state.expenses.filter(e => e.budgetId !== budgetId)
@@ -702,6 +738,11 @@ export const useIndividualStore = create((set, get) => ({
   },
 
   updateExpense: async (expenseId, updateData) => {
+    const accessibleExpense = get().expenses.find(e => e.id === expenseId);
+    if (!accessibleExpense) {
+      console.warn("Yetkisiz harcama güncelleme girişimi engellendi.");
+      return;
+    }
     set(state => ({
       expenses: state.expenses.map(e => e.id === expenseId ? { ...e, ...updateData } : e)
     }));
@@ -715,6 +756,11 @@ export const useIndividualStore = create((set, get) => ({
   },
 
   deleteExpense: async (expenseId) => {
+    const accessibleExpense = get().expenses.find(e => e.id === expenseId);
+    if (!accessibleExpense) {
+      console.warn("Yetkisiz harcama silme girişimi engellendi.");
+      return;
+    }
     set(state => ({
       expenses: state.expenses.filter(e => e.id !== expenseId)
     }));

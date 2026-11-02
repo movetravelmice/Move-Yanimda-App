@@ -5,6 +5,7 @@ import { ChevronLeft, Map, Clock, Camera, Coffee, Bed, Bus, PlaneLanding, Activi
 import { useTourStore, isTourActive } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
 import { findMatchingParticipant, isUserMatch } from '../../utils/userUtils';
+import { sanitizeHtml } from '../../utils/securityUtils';
 
 export default function TourProgram() {
   const navigate = useNavigate();
@@ -31,7 +32,7 @@ export default function TourProgram() {
       <div style={{ padding: '16px 16px 0 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
           {hasProgram ? (
               typeof activeTour.program === 'string' ? (
-                  <div className="card rich-text-content customer-program-content" style={{ padding: '20px 16px', borderRadius: '16px', boxShadow: '0 4px 14px rgba(0,0,0,0.04)', background: 'white', border: '1px solid #e2e8f0' }} dangerouslySetInnerHTML={{ __html: activeTour.program }} />
+                  <div className="card rich-text-content customer-program-content" style={{ padding: '20px 16px', borderRadius: '16px', boxShadow: '0 4px 14px rgba(0,0,0,0.04)', background: 'white', border: '1px solid #e2e8f0' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(activeTour.program) }} />
               ) : Array.isArray(activeTour.program) ? (
                   <div style={{ position: 'relative' }}>
                       <div style={{ position: 'absolute', left: '16px', top: '10px', bottom: '20px', width: '2px', backgroundColor: 'var(--border-color)', zIndex: 0 }}></div>
@@ -46,7 +47,7 @@ export default function TourProgram() {
                                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{day.date}</span>
                                   </div>
                                   <h3 style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: 'var(--text-main)', lineHeight: '1.35' }}>{day.title}</h3>
-                                  <div className="rich-text-content customer-program-content" style={{ color: 'var(--text-main)', marginBottom: '16px' }} dangerouslySetInnerHTML={{ __html: day.description || '' }} />
+                                  <div className="rich-text-content customer-program-content" style={{ color: 'var(--text-main)', marginBottom: '16px' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(day.description || '') }} />
                                   
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                       {Array.isArray(day.activities) && day.activities.filter(Boolean).map((act, i) => {

@@ -11,7 +11,52 @@ const app = express();
 
 // Middleware
 app.use(cors({ origin: true }));
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+
+// Güvenlik Başlıkları (Security Headers) & Rate Limiting (Brute-Force / Spam Koruması)
+const httpRateLimitBuckets = new Map();
+const checkHttpRateLimit = (key, maxRequests, windowMs) => {
+    const now = Date.now();
+    const record = httpRateLimitBuckets.get(key);
+    if (!record || now > record.resetAt) {
+        httpRateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+        return true;
+    }
+    record.count += 1;
+    return record.count <= maxRequests;
+};
+
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+    const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+    if (req.path === '/api/forgot-password') {
+        const targetKey = `${clientIp}:${String(req.body?.to || '').toLowerCase()}`;
+        if (!checkHttpRateLimit(`fp_${targetKey}`, 5, 5 * 60 * 1000)) {
+            return res.status(429).json({
+                success: false,
+                message: 'Çok fazla parola sıfırlama talebi gönderildi. Lütfen 5 dakika sonra tekrar deneyin.'
+            });
+        }
+    } else if (req.path.startsWith('/api/')) {
+        if (!checkHttpRateLimit(`api_${clientIp}`, 60, 60 * 1000)) {
+            return res.status(429).json({
+                success: false,
+                message: 'Çok fazla istek gönderildi. Lütfen biraz bekleyip tekrar deneyin.'
+            });
+        }
+    }
+    next();
+});
+
+const escapeHtml = (str) => String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
 const isChildEmailAddress = (email) => {
     if (!email || typeof email !== 'string') return false;
@@ -107,9 +152,9 @@ app.post('/api/forgot-password', async (req, res) => {
 
         let htmlContent = customHtml || defaultHtml;
         htmlContent = htmlContent
-            .replace(/{{accountName}}/g, accountName || '')
-            .replace(/{{accountPassword}}/g, accountPassword || '123456')
-            .replace(/{{corporateName}}/g, senderBrand);
+            .replace(/{{accountName}}/g, escapeHtml(accountName || ''))
+            .replace(/{{accountPassword}}/g, escapeHtml(accountPassword || '123456'))
+            .replace(/{{corporateName}}/g, escapeHtml(senderBrand));
 
         let subjectContent = customSubject || `{{corporateName}}: Parola Sıfırlama / Hatırlatma Talebi`;
         subjectContent = subjectContent

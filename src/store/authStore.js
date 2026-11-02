@@ -16,13 +16,61 @@ export const getUserSecondaryRole = (u) => {
 };
 export const hasDualRole = (u) => Boolean(isUserAdmin(u) && getUserSecondaryRole(u));
 
+const LOGIN_GUARD_KEY = 'travel_login_guard_v1';
+const MAX_FAILED_ATTEMPTS = 5;
+const LOCKOUT_DURATION_MS = 3 * 60 * 1000; // 3 minutes
+
+const getLoginGuardState = () => {
+  try {
+    const raw = localStorage.getItem(LOGIN_GUARD_KEY);
+    if (!raw) return { count: 0, lockUntil: 0 };
+    const parsed = JSON.parse(raw);
+    return {
+      count: Number(parsed.count) || 0,
+      lockUntil: Number(parsed.lockUntil) || 0
+    };
+  } catch (e) {
+    return { count: 0, lockUntil: 0 };
+  }
+};
+
+const recordFailedLoginAttempt = () => {
+  try {
+    const current = getLoginGuardState();
+    const now = Date.now();
+    const baseCount = current.lockUntil && now >= current.lockUntil ? 0 : current.count;
+    const nextCount = baseCount + 1;
+    const lockUntil = nextCount >= MAX_FAILED_ATTEMPTS ? now + LOCKOUT_DURATION_MS : 0;
+    localStorage.setItem(LOGIN_GUARD_KEY, JSON.stringify({ count: nextCount, lockUntil }));
+    return { count: nextCount, lockUntil };
+  } catch (e) {
+    return { count: 1, lockUntil: 0 };
+  }
+};
+
+const resetLoginGuard = () => {
+  try {
+    localStorage.removeItem(LOGIN_GUARD_KEY);
+  } catch (e) {
+    // Ignore storage errors
+  }
+};
+
+const stripSensitiveAuthFields = (userObj) => {
+  if (!userObj || typeof userObj !== 'object') return userObj;
+  const { password: _removedPassword, ...safeUser } = userObj;
+  return safeUser;
+};
+
 export const useAuthStore = create(persist((set, get) => ({
   user: null, 
   activeMode: null, // 'corporate' | 'individual'
   activeStaffRole: null, // 'admin' | 'expert' | 'ticketing'
   setActiveMode: (mode) => set({ activeMode: mode }),
   setActiveStaffRole: (role) => set({ activeStaffRole: role }),
-  syncUserRecord: (freshData) => set(state => ({ user: state.user ? { ...state.user, ...freshData } : state.user })),
+  syncUserRecord: (freshData) => set(state => ({
+    user: state.user ? stripSensitiveAuthFields({ ...state.user, ...freshData }) : state.user
+  })),
   getActiveMode: () => {
     const state = get();
     if (state.activeMode) return state.activeMode;
@@ -33,6 +81,17 @@ export const useAuthStore = create(persist((set, get) => ({
       const cleanEmail = normalizeEmail(cleanInput);
       const cleanPassword = (password || '').trim();
       const cleanDigits = cleanInput.replace(/\D/g, '');
+
+      // Brute-force / parola kırma koruması kontrolü
+      const guard = getLoginGuardState();
+      const now = Date.now();
+      if (guard.lockUntil && now < guard.lockUntil) {
+          const remainingSec = Math.ceil((guard.lockUntil - now) / 1000);
+          return {
+              success: false,
+              message: `Çok fazla hatalı giriş denemesi yaptınız. Güvenliğiniz için lütfen ${remainingSec} saniye sonra tekrar deneyin.`
+          };
+      }
 
       if (!cleanInput || !cleanPassword) {
           return { success: false, message: 'Lütfen e-posta / telefon ve şifrenizi girin.' };
@@ -80,15 +139,14 @@ export const useAuthStore = create(persist((set, get) => ({
 
               // Eğer aday hesaplar varsa ama şifre uyuşmadıysa hatalı parola dön
               if (!userRecord && (memoryCandidates.length > 0 || firestoreCandidates.length > 0)) {
-                  return { success: false, message: 'Hatalı Parola girdiniz.' };
-              }
-
-              // Bulunan kullanıcıyı yerel state'e ekle
-              if (userRecord) {
-                  const currentUsers = useUserStore.getState().users;
-                  if (!currentUsers.some(u => u.id === userRecord.id)) {
-                      useUserStore.setState({ users: [userRecord, ...currentUsers] });
+                  const nextGuard = recordFailedLoginAttempt();
+                  if (nextGuard.lockUntil > Date.now()) {
+                      return {
+                          success: false,
+                          message: 'Çok fazla hatalı parola denemesi yaptınız. Hesabınız geçici olarak 3 dakika korumaya alındı.'
+                      };
                   }
+                  return { success: false, message: 'Hatalı Parola girdiniz.' };
               }
           } catch (err) {
               console.error("Giriş esnasında Firestore kullanıcı sorgulama hatası:", err);
@@ -99,6 +157,7 @@ export const useAuthStore = create(persist((set, get) => ({
       }
 
       if (!userRecord) {
+          recordFailedLoginAttempt();
           return { success: false, message: 'Sistemde kayıtlı kullanıcı hesabı bulunamadı.' };
       }
 
@@ -109,18 +168,29 @@ export const useAuthStore = create(persist((set, get) => ({
       // Parola Doğrulaması (Çift Güvenlik Kontrolü)
       const recordPassword = (userRecord.password || '').trim();
       if (recordPassword !== cleanPassword) {
+          const nextGuard = recordFailedLoginAttempt();
+          if (nextGuard.lockUntil > Date.now()) {
+              return {
+                  success: false,
+                  message: 'Çok fazla hatalı parola denemesi yaptınız. Hesabınız geçici olarak 3 dakika korumaya alındı.'
+              };
+          }
           return { success: false, message: 'Hatalı Parola girdiniz.' };
       }
+
+      // Başarılı girişte brute-force sayacını sıfırla
+      resetLoginGuard();
 
       // Uzman login olduğunda, isim senkronizasyonu
       if (userRecord.role === 'expert') {
           useSettingsStore.getState().setExpertName(userRecord.name);
       }
       
-      const normalizedUser = {
+      // Parolayı localStorage oturum verisinden arındır
+      const normalizedUser = stripSensitiveAuthFields({
           ...userRecord,
           userType: 'corporate'
-      };
+      });
       const isAdmin = userRecord.role === 'admin' || userRecord.secondaryRole === 'admin';
       const initialStaffRole = isAdmin ? 'admin' : (userRecord.role || 'customer');
       set({ user: normalizedUser, activeMode: 'corporate', activeStaffRole: initialStaffRole });
@@ -129,7 +199,7 @@ export const useAuthStore = create(persist((set, get) => ({
   logout: () => set({ user: null, activeMode: null, activeStaffRole: null }),
   updateProfile: (data) => set(state => {
       if (!state.user) return state;
-      const updatedUser = { ...state.user, ...data };
+      const updatedUser = stripSensitiveAuthFields({ ...state.user, ...data });
       if (updatedUser.role === 'expert' && data.name) {
           useSettingsStore.getState().setExpertName(data.name);
       }

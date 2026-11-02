@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { getCurrentSessionUser, isStaffSessionUser } from '../utils/userUtils';
+import { findMatchingParticipant, getCurrentSessionUser, isStaffSessionUser } from '../utils/userUtils';
+import { useTourStore } from './tourStore';
 
 export const useChatStore = create((set, get) => ({
   messages: [],
   mutedChats: [],
   isFirebaseInitialized: false,
   _unsubscribe: null,
+  _unsubscribeTourSync: null,
   _activeSessionKey: null,
 
   resetChats: () => {
@@ -15,7 +17,11 @@ export const useChatStore = create((set, get) => ({
       if (typeof unsub === 'function') {
           try { unsub(); } catch (e) {}
       }
-      set({ messages: [], isFirebaseInitialized: false, _unsubscribe: null, _activeSessionKey: null });
+      const unsubTour = get()._unsubscribeTourSync;
+      if (typeof unsubTour === 'function') {
+          try { unsubTour(); } catch (e) {}
+      }
+      set({ messages: [], isFirebaseInitialized: false, _unsubscribe: null, _unsubscribeTourSync: null, _activeSessionKey: null });
   },
 
   initFirestoreChats: async (forceRestart = false) => {
@@ -31,49 +37,118 @@ export const useChatStore = create((set, get) => ({
       if (typeof prevUnsub === 'function') {
           try { prevUnsub(); } catch (e) {}
       }
+      const prevTourUnsub = get()._unsubscribeTourSync;
+      if (typeof prevTourUnsub === 'function') {
+          try { prevTourUnsub(); } catch (e) {}
+      }
 
       set({ isFirebaseInitialized: true, _activeSessionKey: sessionKey });
       
       try {
           const messagesRef = collection(db, 'messages');
-          
-          const unsub = onSnapshot(messagesRef, (snapshot) => {
+          let latestRawDocs = [];
+
+          const filterAndApplyMessages = () => {
               const currentSession = getCurrentSessionUser();
               if (!currentSession) {
                   set({ messages: [] });
                   return;
               }
               const isStaff = isStaffSessionUser(currentSession);
-              const myId = String(currentSession.id || '');
+              const myId = String(currentSession.id || '').trim().toLowerCase();
               const myEmail = String(currentSession.email || '').trim().toLowerCase();
 
+              // Kullanıcının katılımcısı olduğu turları ve o turlardaki katılımcı ID'lerini belirle
+              const allowedTourIds = new Set();
+              const allowedParticipantIds = new Set();
+              if (myId) allowedParticipantIds.add(myId);
+              if (myEmail) allowedParticipantIds.add(myEmail);
+
+              if (!isStaff) {
+                  const currentTours = useTourStore.getState().tours || [];
+                  currentTours.forEach(t => {
+                      const matchedP = findMatchingParticipant(t.participants, currentSession);
+                      if (matchedP) {
+                          if (t.id) allowedTourIds.add(String(t.id));
+                          if (matchedP.id) allowedParticipantIds.add(String(matchedP.id).trim().toLowerCase());
+                      }
+                  });
+              }
+
               const fetchedMessages = [];
-              snapshot.forEach(docSnap => {
-                  const data = docSnap.data() || {};
+              latestRawDocs.forEach(docItem => {
+                  const data = docItem.data || {};
                   const cid = String(data.chatId || '');
 
-                  // Müşteri oturumlarında başka müşterilerin 1:1 özel (admin veya expert) mesajlarını belleğe alma
+                  // Müşteri oturumlarında sıkı veri izolasyonu:
+                  // Yalnızca genel duyuru, kendi turunun grup sohbeti ve kendisine ait 1:1 uzman sohbetlerini belleğe al
                   if (!isStaff) {
-                      if (cid.startsWith('admin_')) {
+                      if (cid === 'announcement') {
+                          // Genel duyurular herkese açık
+                      } else if (cid.startsWith('group_')) {
+                          const tourId = cid.slice('group_'.length);
+                          if (!allowedTourIds.has(tourId)) {
+                              return;
+                          }
+                      } else if (cid.startsWith('direct_')) {
+                          // Personel kendi arasındaki özel sohbetler (direct_admin_..., direct_ticketing_...) müşteriye kapalıdır
+                          if (cid.startsWith('direct_admin_') || cid.startsWith('direct_ticketing_')) {
+                              return;
+                          }
+                          // Format: direct_${tourId}_${participantId} veya direct_${tourId}_${participantId}_exp2
+                          const withoutPrefix = cid.slice('direct_'.length);
+                          const normalizedTarget = withoutPrefix.endsWith('_exp2')
+                              ? withoutPrefix.slice(0, -'_exp2'.length)
+                              : withoutPrefix;
+
+                          let isMyDirectChat = false;
+                          allowedParticipantIds.forEach(pid => {
+                              if (pid && normalizedTarget.toLowerCase().endsWith(`_${pid}`)) {
+                                  isMyDirectChat = true;
+                              }
+                          });
+                          if (!isMyDirectChat) {
+                              return;
+                          }
+                      } else if (cid.startsWith('admin_')) {
                           const targetKey = cid.slice('admin_'.length).toLowerCase();
-                          if (targetKey !== myId.toLowerCase() && (!myEmail || targetKey !== myEmail)) {
+                          if (!allowedParticipantIds.has(targetKey)) {
                               return;
                           }
                       } else if (cid.includes('_expert_') || cid.includes('_expert2_')) {
                           const parts = cid.split(/_expert2?_/);
                           const targetKey = (parts[1] || '').toLowerCase();
-                          if (targetKey !== myId.toLowerCase() && (!myEmail || targetKey !== myEmail)) {
+                          if (!allowedParticipantIds.has(targetKey)) {
                               return;
                           }
+                      } else {
+                          // Tanımsız veya başka bir kullanıcıya ait oda formatlarını reddet
+                          return;
                       }
                   }
 
-                  fetchedMessages.push({ dbId: docSnap.id, ...data });
+                  fetchedMessages.push({ dbId: docItem.id, ...data });
               });
               
               set({ messages: fetchedMessages.sort((a,b) => a.id - b.id) });
+          };
+          
+          const unsub = onSnapshot(messagesRef, (snapshot) => {
+              latestRawDocs = [];
+              snapshot.forEach(docSnap => {
+                  latestRawDocs.push({ id: docSnap.id, data: docSnap.data() || {} });
+              });
+              filterAndApplyMessages();
           });
-          set({ _unsubscribe: unsub });
+
+          // Tur listesi güncellendiğinde mesaj filtrelemesini yeniden çalıştır
+          const unsubTourSync = useTourStore.subscribe(() => {
+              if (latestRawDocs.length > 0) {
+                  filterAndApplyMessages();
+              }
+          });
+
+          set({ _unsubscribe: unsub, _unsubscribeTourSync: unsubTourSync });
       } catch (e) {
           console.error("Firebase chat dinleyicisi başlatılamadı:", e);
       }
@@ -111,6 +186,11 @@ export const useChatStore = create((set, get) => ({
   })),
 
   clearMessages: (chatId) => {
+      const currentSession = getCurrentSessionUser();
+      if (!isStaffSessionUser(currentSession)) {
+          console.warn("Yetkisiz sohbet geçmişi silme girişimi engellendi.");
+          return;
+      }
       get().messages.forEach(async (m) => {
           if (m.chatId === chatId && m.dbId) {
               try { await deleteDoc(doc(db, 'messages', m.dbId)); } catch (e) {}

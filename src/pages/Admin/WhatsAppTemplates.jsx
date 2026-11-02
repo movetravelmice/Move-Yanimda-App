@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../../store/settingsStore';
+import { sanitizeHtml } from '../../utils/securityUtils';
 
 const defaultWaTemplates = {
     newUserTemplate: {
@@ -1006,7 +1007,7 @@ export default function WhatsAppTemplates() {
                                         lineHeight: '1.45',
                                         wordBreak: 'break-word'
                                     }}>
-                                        <div dangerouslySetInnerHTML={{ __html: getPreviewHtml() }} />
+                                        <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(getPreviewHtml()) }} />
                                         <span style={{
                                             position: 'absolute',
                                             right: '6px',

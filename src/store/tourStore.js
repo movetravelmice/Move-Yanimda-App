@@ -481,10 +481,12 @@ export const useTourStore = create((set, get) => ({
   },
 
   setTourStatus: async (tourId, newStatus) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       try { await updateDoc(doc(db, 'tours', tourId), { status: newStatus }); } catch (e) {}
   },
 
   addTour: async (newTour) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       const tourId = 'tour_' + Date.now();
       const tourData = {
           ...newTour,
@@ -501,6 +503,7 @@ export const useTourStore = create((set, get) => ({
   },
   
   addParticipantToTour: async (tourId, userObj) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       const tour = get().tours.find(t => t.id === tourId);
       if (!tour) return;
       const cleanEmail = (userObj.email || '').trim().toLowerCase();
@@ -520,6 +523,7 @@ export const useTourStore = create((set, get) => ({
   },
 
   removeParticipantFromTour: async (tourId, participantId) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       const tour = get().tours.find(t => t.id === tourId);
       if (!tour) return;
       const newParticipants = (tour.participants || []).filter(p => p.id !== participantId);
@@ -533,6 +537,7 @@ export const useTourStore = create((set, get) => ({
   },
 
   updateParticipantTransfers: async (tourId, participantId, flights, transfers, ticketPdf = null, ticketFiles = null) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) throw new Error("Yetkisiz işlem.");
       const tour = get().tours.find(t => t.id === tourId);
       if (!tour) throw new Error("Tur bulunamadı.");
 
@@ -561,6 +566,7 @@ export const useTourStore = create((set, get) => ({
   },
 
   updateParticipantTicket: async (tourId, participantId, ticketPdf, ticketFiles = []) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) throw new Error("Yetkisiz işlem.");
       const tour = get().tours.find(t => t.id === tourId);
       if (!tour) throw new Error("Tur bulunamadı.");
 
@@ -581,6 +587,7 @@ export const useTourStore = create((set, get) => ({
   },
 
   updateTourProgram: async (tourId, newProgram) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       set(state => ({
           tours: state.tours.map(t => t.id === tourId ? { ...t, program: newProgram } : t)
       }));
@@ -588,6 +595,7 @@ export const useTourStore = create((set, get) => ({
   },
 
   editTour: async (tourId, newData) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) throw new Error("Yetkisiz işlem.");
       set(state => ({
           tours: state.tours.map(t => t.id === tourId ? { ...t, ...newData } : t)
       }));
@@ -700,16 +708,19 @@ export const useTourStore = create((set, get) => ({
   },
 
   deleteTour: async (tourId) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       try { await deleteDoc(doc(db, 'tours', tourId)); } catch (e) {}
   },
     
   clearAllTours: async () => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       get().tours.forEach(async (t) => {
           try { await deleteDoc(doc(db, 'tours', t.id)); } catch (e) {}
       });
   },
 
   startRollCall: async (tourId, durationMinutes = 3) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       try {
           await updateDoc(doc(db, 'tours', tourId), {
               rollCall: {
@@ -723,6 +734,7 @@ export const useTourStore = create((set, get) => ({
   },
 
   endRollCall: async (tourId) => {
+      if (!isStaffSessionUser(getCurrentSessionUser())) return;
       try {
           await updateDoc(doc(db, 'tours', tourId), {
               'rollCall.active': false
