@@ -406,6 +406,68 @@ app.post('/api/users/delete', async (req, res) => {
     }
 });
 
+// ==========================================
+// GÜVENLİ SİSTEM VE KURUMSAL AYARLAR SERVİSİ
+// ==========================================
+
+// 1. Genel kullanıcı arayüzü ayarları (Sadece logo, şirket adı, avatar - ŞİFRELER & PROMPT'LAR KESİNLİKLE YOKTUR!)
+app.get('/api/settings/public', async (req, res) => {
+    try {
+        const db = admin.firestore();
+        const snap = await db.collection('settings').doc('global').get();
+        if (!snap.exists) {
+            return res.json({ success: true, settings: {} });
+        }
+        const data = snap.data();
+        const publicSettings = {
+            corporateName: data.corporateName || 'Move Yanımda',
+            corporateLogo: data.corporateLogo || '',
+            expertName: data.expertName || '',
+            expertProfileAvatar: data.expertProfileAvatar || '',
+            systemAnnouncementAvatar: data.systemAnnouncementAvatar || '',
+            tourGroupAvatar: data.tourGroupAvatar || '',
+            customerAvatar: data.customerAvatar || '',
+            expertStatus: data.expertStatus || 'online'
+        };
+        return res.json({ success: true, settings: publicSettings });
+    } catch (e) {
+        return res.status(500).json({ success: false, message: 'Ayarlar yüklenemedi.' });
+    }
+});
+
+// 2. Yönetici ayarları getirme (Yalnızca yetkili yönetici oturumu ile okunabilir)
+app.post('/api/settings/get', async (req, res) => {
+    try {
+        const session = verifySessionToken(req);
+        if (!session || (session.role !== 'admin' && session.secondaryRole !== 'admin')) {
+            return res.status(403).json({ success: false, message: 'Yetkisiz erişim. Yalnızca yöneticiler sistem ayarlarını görebilir.' });
+        }
+        const db = admin.firestore();
+        const snap = await db.collection('settings').doc('global').get();
+        const data = snap.exists ? snap.data() : {};
+        return res.json({ success: true, settings: data });
+    } catch (e) {
+        return res.status(500).json({ success: false, message: 'Ayarlar yüklenemedi.' });
+    }
+});
+
+// 3. Yönetici ayarları güncelleme (Yalnızca yetkili yönetici oturumu ile kaydedilebilir)
+app.post('/api/settings/update', async (req, res) => {
+    try {
+        const session = verifySessionToken(req);
+        if (!session || (session.role !== 'admin' && session.secondaryRole !== 'admin')) {
+            return res.status(403).json({ success: false, message: 'Yetkisiz erişim.' });
+        }
+        const { key, val, updates } = req.body || {};
+        const payload = updates || (key ? { [key]: val } : {});
+        const db = admin.firestore();
+        await db.collection('settings').doc('global').set(payload, { merge: true });
+        return res.json({ success: true });
+    } catch (e) {
+        return res.status(500).json({ success: false, message: 'Ayar kaydedilemedi.' });
+    }
+});
+
 // Hassas şifreleri server_settings koleksiyonuna taşıyan ve settings/global'i maskeleyen güvenli taşıma endpoint'i
 app.post('/api/migrate-secrets', async (req, res) => {
     try {

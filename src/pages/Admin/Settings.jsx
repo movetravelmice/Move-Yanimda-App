@@ -28,6 +28,10 @@ export default function AdminSettings() {
   } = useSettingsStore();
 
   const [activeTab, setActiveTab] = useState('all');
+
+  useEffect(() => {
+    useSettingsStore.getState().loadAdminSettings?.();
+  }, []);
   const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [isTestingGemini, setIsTestingGemini] = useState(false);
   const [geminiTestResult, setGeminiTestResult] = useState(null);

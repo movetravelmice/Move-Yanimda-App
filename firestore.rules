@@ -54,17 +54,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 5. Sistem ve Kurumsal Ayarlar (Silinmeye ve dışarıdan bozulmaya karşı korumalı)
+    // 5. Sistem ve Kurumsal Ayarlar (DIŞ DÜNYADAN VE REST API'DEN OKUMA/YAZMA KESİNLİKLE YASAKLANDI!)
+    // Yalnızca Cloud Functions Backend (Admin SDK) erişebilir.
     match /settings/{docId} {
-      allow read: if true;
-      allow create, update: if isValidPayloadSize();
-      allow delete: if false;
+      allow read, write: if false;
     }
 
     match /system_settings/{docId} {
-      allow read: if true;
-      allow create, update: if isValidPayloadSize();
-      allow delete: if false;
+      allow read, write: if false;
     }
 
     // 6. E-Posta ve WhatsApp Şablonları (Silinmeye karşı korumalı)

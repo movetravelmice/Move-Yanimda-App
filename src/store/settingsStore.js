@@ -3,6 +3,7 @@ import { doc, setDoc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import { getCurrentSessionUser, isStaffSessionUser } from '../utils/userUtils';
+import { useAuthStore } from './authStore';
 
 export const DEFAULT_POPULAR_ROUTES = [
   {
@@ -190,29 +191,67 @@ export const useSettingsStore = create((set, get) => ({
       set({ isFirebaseInitialized: true });
       
       try {
-          const docRef = doc(db, 'settings', 'global');
-          const snap = await getDoc(docRef);
-          
-          if (!snap.exists()) {
-              await setDoc(docRef, defaultSettings);
-          }
-          
-          onSnapshot(docRef, (docSnap) => {
-              if (docSnap.exists()) {
-                  set({ ...docSnap.data() });
+          const baseUrl = getApiBaseUrl();
+          const res = await fetch(`${baseUrl}/api/settings/public`);
+          if (res.ok) {
+              const data = await res.json();
+              if (data.success && data.settings) {
+                  set({ ...data.settings });
               }
-          });
+          }
       } catch (e) {
-          console.error("Firebase settings dinleyicisi başlatılamadı:", e);
+          console.warn("Public settings API üzerinden alınamadı:", e);
+      }
+  },
+
+  loadAdminSettings: async () => {
+      try {
+          const baseUrl = getApiBaseUrl();
+          let token = useAuthStore.getState().token;
+          if (!token) {
+              await useAuthStore.getState().refreshTokenIfNeeded();
+              token = useAuthStore.getState().token;
+          }
+          const res = await fetch(`${baseUrl}/api/settings/get`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': token ? `Bearer ${token}` : ''
+              },
+              body: JSON.stringify({ token })
+          });
+          if (res.ok) {
+              const data = await res.json();
+              if (data.success && data.settings) {
+                  set({ ...data.settings });
+              }
+          }
+      } catch (e) {
+          console.warn("Admin settings API üzerinden alınamadı:", e);
       }
   },
 
   updateSetting: async (key, val) => {
-      if (!isStaffSessionUser(getCurrentSessionUser())) {
-          console.warn("Yetkisiz sistem ayarı değiştirme girişimi engellendi.");
-          return;
+      // Optimistic update
+      set({ [key]: val });
+      try {
+          const baseUrl = getApiBaseUrl();
+          let token = useAuthStore.getState().token;
+          if (!token) {
+              await useAuthStore.getState().refreshTokenIfNeeded();
+              token = useAuthStore.getState().token;
+          }
+          await fetch(`${baseUrl}/api/settings/update`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': token ? `Bearer ${token}` : ''
+              },
+              body: JSON.stringify({ token, key, val })
+          });
+      } catch (e) {
+          console.warn("Ayar kaydedilemedi:", e);
       }
-      try { await updateDoc(doc(db, 'settings', 'global'), { [key]: val }); } catch (e) {}
   },
 
   setExpertName: (name) => get().updateSetting('expertName', name),
