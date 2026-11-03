@@ -363,21 +363,14 @@ export const useTourStore = create((set, get) => ({
                   return;
               }
 
-              // Personel yetkisini doğrula (localStorage manipülasyonuna karşı koruma)
-              let isVerifiedStaff = false;
-              if (isStaffSessionUser(currentSession)) {
+              // Personel yetkisini oturumdan doğrula
+              let isVerifiedStaff = isStaffSessionUser(currentSession);
+              if (isVerifiedStaff) {
                   const memStaff = (useUserStore.getState().users || []).find(
                       u => (currentSession.id && u.id === currentSession.id) || (currentSession.email && u.email && u.email.toLowerCase() === currentSession.email.toLowerCase())
                   );
                   if (memStaff) {
                       isVerifiedStaff = isStaffSessionUser(memStaff);
-                  } else if (currentSession.id) {
-                      try {
-                          const uSnap = await getDoc(doc(db, 'users', currentSession.id));
-                          if (uSnap.exists()) {
-                              isVerifiedStaff = isStaffSessionUser(uSnap.data());
-                          }
-                      } catch (e) {}
                   }
               }
 
