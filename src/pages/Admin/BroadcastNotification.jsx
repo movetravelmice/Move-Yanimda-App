@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../../components/Header';
 import { 
@@ -22,7 +22,8 @@ import {
   CheckCheck,
   ChevronDown,
   Check,
-  Trash2
+  Trash2,
+  Search
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTourStore } from '../../store/tourStore';
@@ -124,9 +125,12 @@ export default function BroadcastNotification() {
   // Dropdown states
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [notifTypeOpen, setNotifTypeOpen] = useState(false);
+  const [tourDropdownOpen, setTourDropdownOpen] = useState(false);
+  const [tourSearchQuery, setTourSearchQuery] = useState('');
 
   const audienceDropdownRef = useRef(null);
   const notifTypeDropdownRef = useRef(null);
+  const tourDropdownRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -136,6 +140,9 @@ export default function BroadcastNotification() {
       if (notifTypeDropdownRef.current && !notifTypeDropdownRef.current.contains(event.target)) {
         setNotifTypeOpen(false);
       }
+      if (tourDropdownRef.current && !tourDropdownRef.current.contains(event.target)) {
+        setTourDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('touchstart', handleClickOutside);
@@ -144,6 +151,30 @@ export default function BroadcastNotification() {
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, []);
+
+  const sortedTours = useMemo(() => {
+    return (tours || [])
+      .slice()
+      .sort((a, b) => {
+        const isMyA = (a.guideName === user?.name) || (a.expert?.name === user?.name);
+        const isMyB = (b.guideName === user?.name) || (b.expert?.name === user?.name);
+        if (isMyA && !isMyB) return -1;
+        if (!isMyA && isMyB) return 1;
+        return 0;
+      });
+  }, [tours, user?.name]);
+
+  const filteredTours = useMemo(() => {
+    if (!tourSearchQuery.trim()) return sortedTours;
+    const q = tourSearchQuery.trim().toLowerCase();
+    return sortedTours.filter(t => 
+      (t.name && t.name.toLowerCase().includes(q)) ||
+      (t.dates && t.dates.toLowerCase().includes(q)) ||
+      (t.guideName && t.guideName.toLowerCase().includes(q))
+    );
+  }, [sortedTours, tourSearchQuery]);
+
+  const selectedTour = tours.find(t => t.id === selectedTourId) || sortedTours[0];
 
   const currentAudience = AUDIENCE_OPTIONS.find(a => a.key === targetAudience) || AUDIENCE_OPTIONS[0];
   const currentNotifType = NOTIF_TYPE_OPTIONS.find(t => t.key === notifType) || NOTIF_TYPE_OPTIONS[0];
@@ -351,7 +382,7 @@ export default function BroadcastNotification() {
               style={{ 
                 marginBottom: '18px', 
                 position: 'relative', 
-                zIndex: audienceOpen ? 40 : 20 
+                zIndex: audienceOpen || tourDropdownOpen ? 45 : 20 
               }}
             >
               <label style={{ fontSize: '12px', fontWeight: '800', color: '#334155', display: 'block', marginBottom: '8px' }}>
@@ -522,13 +553,17 @@ export default function BroadcastNotification() {
 
               {/* Tur Seçici (Yalnızca tur seçilmişse) */}
               {targetAudience === 'tour' && (
-                <div style={{
-                  marginTop: '10px',
-                  padding: '12px 14px',
-                  background: '#FDF2F8',
-                  borderRadius: '14px',
-                  border: '1.2px solid #FBCFE8'
-                }}>
+                <div 
+                  ref={tourDropdownRef}
+                  style={{
+                    marginTop: '12px',
+                    padding: '14px',
+                    background: '#FDF2F8',
+                    borderRadius: '16px',
+                    border: '1.2px solid #FBCFE8',
+                    position: 'relative'
+                  }}
+                >
                   <div style={{
                     fontSize: '11.5px',
                     fontWeight: '700',
@@ -541,40 +576,269 @@ export default function BroadcastNotification() {
                     <Users size={14} />
                     <span>Bildirimin Gönderileceği Tur</span>
                   </div>
-                  <select
-                    value={selectedTourId}
-                    onChange={e => setSelectedTourId(e.target.value)}
+
+                  {/* Custom Trigger */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTourDropdownOpen(!tourDropdownOpen);
+                      setAudienceOpen(false);
+                      setNotifTypeOpen(false);
+                    }}
                     style={{
                       width: '100%',
                       padding: '10px 12px',
-                      borderRadius: '10px',
-                      border: '1.5px solid #F472B6',
+                      borderRadius: '12px',
+                      border: tourDropdownOpen ? '1.5px solid #D7147A' : '1.5px solid #F472B6',
                       background: '#ffffff',
-                      fontSize: '12.5px',
-                      fontWeight: '600',
-                      outline: 'none',
-                      color: '#1e293b',
-                      cursor: 'pointer'
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s ease',
+                      boxShadow: tourDropdownOpen ? '0 0 0 3px rgba(215, 20, 122, 0.12)' : '0 1px 3px rgba(0,0,0,0.02)'
                     }}
                   >
-                    {tours
-                      .slice()
-                      .sort((a, b) => {
-                        const isMyA = (a.guideName === user?.name) || (a.expert?.name === user?.name);
-                        const isMyB = (b.guideName === user?.name) || (b.expert?.name === user?.name);
-                        if (isMyA && !isMyB) return -1;
-                        if (!isMyA && isMyB) return 1;
-                        return 0;
-                      })
-                      .map(t => {
-                        const isMy = (t.guideName === user?.name) || (t.expert?.name === user?.name);
-                        return (
-                          <option key={t.id} value={t.id}>
-                            {isMy ? '⭐ [Turum] ' : ''}{t.name} ({t.dates || 'Tarih Yok'})
-                          </option>
-                        );
-                      })}
-                  </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        width: '34px',
+                        height: '34px',
+                        borderRadius: '9px',
+                        background: '#FDF2F8',
+                        color: '#D7147A',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        overflow: 'hidden',
+                        border: '1px solid #FCE7F3'
+                      }}>
+                        {selectedTour?.avatar ? (
+                          <img src={selectedTour.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <Luggage size={17} />
+                        )}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ 
+                          fontSize: '12.5px', 
+                          fontWeight: '700', 
+                          color: '#1e293b', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap' 
+                        }}>
+                          {selectedTour?.name || 'Bir Tur Seçin'}
+                        </div>
+                        <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>📅 {selectedTour?.dates || 'Tarih Belirtilmedi'}</span>
+                          {selectedTour?.participants?.length > 0 && (
+                            <span style={{ background: '#f1f5f9', color: '#475569', padding: '1px 5px', borderRadius: '4px', fontWeight: '600' }}>
+                              👥 {selectedTour.participants.length} Katılımcı
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{
+                      width: '26px',
+                      height: '26px',
+                      borderRadius: '7px',
+                      background: tourDropdownOpen ? '#FDF2F8' : '#f8fafc',
+                      color: tourDropdownOpen ? '#D7147A' : '#94a3b8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      marginLeft: '6px'
+                    }}>
+                      <ChevronDown size={15} style={{ transform: tourDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s ease' }} />
+                    </div>
+                  </button>
+
+                  {/* Custom Dropdown Popup */}
+                  {tourDropdownOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      left: 0,
+                      right: 0,
+                      background: '#ffffff',
+                      borderRadius: '16px',
+                      border: '1.2px solid #e2e8f0',
+                      boxShadow: '0 12px 30px -4px rgba(15, 23, 42, 0.18), 0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+                      padding: '8px',
+                      zIndex: 60,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      {/* Search Bar inside dropdown */}
+                      <div style={{
+                        padding: '4px 6px 8px 6px',
+                        borderBottom: '1px solid #f1f5f9',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          background: '#f8fafc',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '10px',
+                          padding: '6px 10px',
+                          width: '100%'
+                        }}>
+                          <Search size={14} color="#94a3b8" />
+                          <input 
+                            type="text"
+                            placeholder="Tur veya rota ara..."
+                            value={tourSearchQuery}
+                            onChange={(e) => setTourSearchQuery(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              border: 'none',
+                              outline: 'none',
+                              background: 'transparent',
+                              fontSize: '12px',
+                              width: '100%',
+                              color: '#1e293b'
+                            }}
+                          />
+                          {tourSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setTourSearchQuery(''); }}
+                              style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, display: 'flex', color: '#94a3b8' }}
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Tour Options List */}
+                      <div style={{ overflowY: 'auto', maxHeight: '240px', display: 'flex', flexDirection: 'column', gap: '3px', paddingRight: '2px' }}>
+                        {filteredTours.length === 0 ? (
+                          <div style={{ fontSize: '11.5px', color: '#94a3b8', textAlign: 'center', padding: '16px 8px' }}>
+                            Aramanızla eşleşen tur bulunamadı.
+                          </div>
+                        ) : (
+                          filteredTours.map((t) => {
+                            const isSelected = selectedTourId === t.id;
+                            const isMy = (t.guideName === user?.name) || (t.expert?.name === user?.name);
+
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedTourId(t.id);
+                                  setTourDropdownOpen(false);
+                                  setTourSearchQuery('');
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '8px 10px',
+                                  borderRadius: '12px',
+                                  border: isSelected ? '1px solid #FCE7F3' : '1px solid transparent',
+                                  background: isSelected ? '#FDF2F8' : 'transparent',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  transition: 'background 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                                  <div style={{
+                                    width: '32px',
+                                    height: '32px',
+                                    borderRadius: '8px',
+                                    background: isSelected ? '#FCE7F3' : '#f1f5f9',
+                                    color: isSelected ? '#D7147A' : '#64748b',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    overflow: 'hidden'
+                                  }}>
+                                    {t.avatar ? (
+                                      <img src={t.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                      <Luggage size={16} />
+                                    )}
+                                  </div>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{
+                                      fontSize: '12px',
+                                      fontWeight: isSelected ? '700' : '600',
+                                      color: isSelected ? '#D7147A' : '#1e293b',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '5px'
+                                    }}>
+                                      <span>{t.name}</span>
+                                      {isMy && (
+                                        <span style={{
+                                          fontSize: '9px',
+                                          background: '#ecfdf5',
+                                          color: '#059669',
+                                          padding: '1px 5px',
+                                          borderRadius: '4px',
+                                          fontWeight: '700',
+                                          flexShrink: 0
+                                        }}>
+                                          ⭐ Turum
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <span>{t.dates || 'Tarih Belirtilmedi'}</span>
+                                      {t.participants?.length > 0 && (
+                                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                          • {t.participants.length} Kişi
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <div style={{
+                                    width: '20px',
+                                    height: '20px',
+                                    borderRadius: '50%',
+                                    background: '#D7147A',
+                                    color: '#ffffff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    marginLeft: '8px'
+                                  }}>
+                                    <Check size={12} strokeWidth={3} />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
