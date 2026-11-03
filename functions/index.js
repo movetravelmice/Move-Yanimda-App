@@ -321,11 +321,12 @@ app.post('/api/users/list', async (req, res) => {
         const usersList = [];
         snap.forEach(docSnap => {
             const d = { id: docSnap.id, ...docSnap.data() };
-            const safe = stripSensitiveFields(d);
 
             if (isStaff) {
-                usersList.push(safe);
+                // Giriş yapmış yetkili yönetici / personele kullanıcının gerçek şifresi iletilir
+                usersList.push(d);
             } else {
+                const safe = stripSensitiveFields(d);
                 if (safe.id === session.id || normalizeUserEmail(safe.email) === normalizeUserEmail(session.email)) {
                     usersList.push(safe);
                 } else if (safe.role === 'admin' || safe.role === 'expert' || safe.role === 'ticketing') {

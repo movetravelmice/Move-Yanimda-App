@@ -47,7 +47,12 @@ export default function AdminUsers() {
   const addUser = useUserStore(state => state.addUser);
   const updateUser = useUserStore(state => state.updateUser);
   const deleteUser = useUserStore(state => state.deleteUser);
+  const initFirestoreUsers = useUserStore(state => state.initFirestoreUsers);
   const currentUser = useAuthStore(state => state.user);
+
+  useEffect(() => {
+    initFirestoreUsers(true);
+  }, []);
 
   const isUserChild = (u) => checkUserChild(u, allUsers);
 
@@ -370,7 +375,7 @@ export default function AdminUsers() {
           phone: user.phone ? formatPhoneInputWithoutPrefix(user.phone) : '',
           company: isStaff ? 'Move Travel & Mice' : normalizeTurkishTitleCase(user.company || ''),
           password: '',
-          currentPassword: user.password || '123456',
+          currentPassword: user.password || '',
           parentIds: isChildUser ? existingLinkedTo : [],
           childrenIds: childrenIds,
           tcNo: user.tcNo || ''
@@ -382,17 +387,6 @@ export default function AdminUsers() {
       setParentSearchQuery('');
       setEditingUserId(user.id);
       setShowAddModal(true);
-
-      // Veritabanındaki en güncel şifreyi canlı doğrula
-      if (user.id) {
-          import('firebase/firestore').then(async ({ doc, getDoc }) => {
-              const { db } = await import('../../lib/firebase');
-              const snap = await getDoc(doc(db, 'users', user.id));
-              if (snap.exists() && snap.data().password) {
-                  setFormData(prev => ({ ...prev, currentPassword: snap.data().password }));
-              }
-          }).catch(e => console.warn("Admin fetch user password error:", e));
-      }
   };
 
   const handleToggleStatus = (user) => {
@@ -1257,7 +1251,7 @@ export default function AdminUsers() {
                     display: 'flex',
                     alignItems: 'center'
                   }}>
-                    {showCurrentPassword ? (formData.currentPassword || '123456') : '••••••••'}
+                    {showCurrentPassword ? (formData.currentPassword || 'Belirlenmedi') : '••••••••'}
                   </div>
 
                   {/* Sadece Göz Simgesi */}
