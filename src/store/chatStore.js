@@ -67,10 +67,16 @@ export const useChatStore = create((set, get) => ({
               if (!isStaff) {
                   const currentTours = useTourStore.getState().tours || [];
                   currentTours.forEach(t => {
+                      if (t.id) {
+                          const sId = String(t.id);
+                          allowedTourIds.add(sId);
+                          allowedTourIds.add(sId.replace(/^tour_/, ''));
+                          allowedTourIds.add(`tour_${sId.replace(/^tour_/, '')}`);
+                      }
                       const matchedP = findMatchingParticipant(t.participants, currentSession);
                       if (matchedP) {
-                          if (t.id) allowedTourIds.add(String(t.id));
                           if (matchedP.id) allowedParticipantIds.add(String(matchedP.id).trim().toLowerCase());
+                          if (matchedP.email) allowedParticipantIds.add(String(matchedP.email).trim().toLowerCase());
                       }
                   });
               }
@@ -83,11 +89,15 @@ export const useChatStore = create((set, get) => ({
                   // Müşteri oturumlarında sıkı veri izolasyonu:
                   // Yalnızca genel duyuru, kendi turunun grup sohbeti ve kendisine ait 1:1 uzman sohbetlerini belleğe al
                   if (!isStaff) {
-                      if (cid === 'announcement') {
-                          // Genel duyurular herkese açık
-                      } else if (cid.startsWith('group_')) {
-                          const tourId = cid.slice('group_'.length);
-                          if (!allowedTourIds.has(tourId)) {
+                      if (cid === 'announcement' || cid === 'expert_direct') {
+                          // Genel duyurular ve demo sohbeti herkese açık
+                      } else if (cid.startsWith('tour_') || cid.startsWith('group_')) {
+                          const rawTourId = cid.replace(/^(tour_|group_)/, '');
+                          const isAllowedTour = allowedTourIds.has(cid) || 
+                                                allowedTourIds.has(rawTourId) || 
+                                                allowedTourIds.has(`tour_${rawTourId}`) || 
+                                                allowedTourIds.has(`group_${rawTourId}`);
+                          if (!isAllowedTour) {
                               return;
                           }
                       } else if (cid.startsWith('direct_')) {
@@ -103,7 +113,7 @@ export const useChatStore = create((set, get) => ({
 
                           let isMyDirectChat = false;
                           allowedParticipantIds.forEach(pid => {
-                              if (pid && normalizedTarget.toLowerCase().endsWith(`_${pid}`)) {
+                              if (pid && (normalizedTarget.toLowerCase().endsWith(`_${pid}`) || normalizedTarget.toLowerCase().includes(pid))) {
                                   isMyDirectChat = true;
                               }
                           });
@@ -130,7 +140,7 @@ export const useChatStore = create((set, get) => ({
                   fetchedMessages.push({ dbId: docItem.id, ...data });
               });
               
-              set({ messages: fetchedMessages.sort((a,b) => a.id - b.id) });
+              set({ messages: fetchedMessages.sort((a,b) => (Number(a.id || a.dbId) || 0) - (Number(b.id || b.dbId) || 0)) });
           };
           
           const unsub = onSnapshot(messagesRef, (snapshot) => {

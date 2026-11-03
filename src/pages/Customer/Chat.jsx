@@ -563,6 +563,7 @@ export default function Chat() {
       chatId: effectiveChatId,
       sender: senderKey,
       senderName: sName,
+      senderId: user?.id || null,
       timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
       status: 'sent', 
       ...data
@@ -914,7 +915,11 @@ export default function Chat() {
             </div>
 
             {roomMessages.map((msg) => {
-                const isMe = msg.sender === (user?.role === 'expert' ? 'expert' : (user?.role === 'admin' ? 'admin' : (user?.role === 'ticketing' ? 'ticketing' : 'customer')));
+                const isMe = msg.senderId 
+                    ? (msg.senderId === user?.id) 
+                    : (msg.senderName && user?.name 
+                        ? (msg.senderName.trim().toLowerCase() === user.name.trim().toLowerCase()) 
+                        : (msg.sender === (user?.role === 'expert' ? 'expert' : (user?.role === 'admin' ? 'admin' : (user?.role === 'ticketing' ? 'ticketing' : 'customer')))));
                 const isSystem = msg.sender === 'system';
                 
                 if (isSystem) {
