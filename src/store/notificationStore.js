@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { collection, doc, setDoc, updateDoc, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 const defaultNotifications = [
@@ -89,5 +89,36 @@ export const useNotificationStore = create((set, get) => ({
                try { await updateDoc(doc(db, 'notifications', n.dbId), { deletedBy: [...currentDeletedBy, userId] }); } catch (e) {}
           }
       });
+  },
+
+  deleteNotificationForUser: async (id, userId) => {
+      const notif = get().notifications.find(n => n.id === id || n.dbId === id);
+      if (!notif || !userId) return;
+      const currentDeletedBy = Array.isArray(notif.deletedBy) ? notif.deletedBy : [];
+      if (!currentDeletedBy.includes(userId)) {
+          const updatedDeletedBy = [...currentDeletedBy, userId];
+          const targetId = notif.dbId || notif.id;
+          try {
+              await updateDoc(doc(db, 'notifications', targetId), { deletedBy: updatedDeletedBy });
+              set(state => ({
+                  notifications: state.notifications.map(n => (n.id === id || n.dbId === id) ? { ...n, deletedBy: updatedDeletedBy } : n)
+              }));
+          } catch (e) {
+              console.error("Bildirim silinemedi (kullanıcı):", e);
+          }
+      }
+  },
+
+  deleteNotificationCompletely: async (id) => {
+      const notif = get().notifications.find(n => n.id === id || n.dbId === id);
+      const targetId = notif?.dbId || id;
+      try {
+          await deleteDoc(doc(db, 'notifications', targetId));
+          set(state => ({
+              notifications: state.notifications.filter(n => n.id !== id && n.dbId !== id && n.id !== targetId && n.dbId !== targetId)
+          }));
+      } catch (e) {
+          console.error("Bildirim tamamen silinemedi:", e);
+      }
   }
 }));

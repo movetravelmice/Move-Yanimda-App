@@ -47,11 +47,9 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 4. Bildirimler (Silme YASAKLANDI!)
+    // 4. Bildirimler
     match /notifications/{notifId} {
-      allow read: if true;
-      allow create, update: if isValidPayloadSize();
-      allow delete: if false;
+      allow read, write: if true;
     }
 
     // 5. Sistem ve Kurumsal Ayarlar (DIŞ DÜNYADAN VE REST API'DEN OKUMA/YAZMA KESİNLİKLE YASAKLANDI!)

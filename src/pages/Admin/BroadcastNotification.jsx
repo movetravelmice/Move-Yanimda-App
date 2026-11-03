@@ -21,7 +21,8 @@ import {
   Calendar,
   CheckCheck,
   ChevronDown,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTourStore } from '../../store/tourStore';
@@ -106,7 +107,8 @@ export default function BroadcastNotification() {
   const navigate = useNavigate();
   const user = useAuthStore(state => state.user);
   const tours = useTourStore(state => state.tours);
-  const { notifications, addNotification } = useNotificationStore();
+  const { notifications, addNotification, deleteNotificationCompletely } = useNotificationStore();
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Form states
   const [targetAudience, setTargetAudience] = useState('all'); // 'all', 'individual', 'corporate', 'tour'
@@ -1058,9 +1060,33 @@ export default function BroadcastNotification() {
                         {n.senderName || 'Yetkili'}
                       </span>
                     </div>
-                    <span style={{ fontSize: '9.5px', color: '#94a3b8' }}>
-                      {n.date ? new Date(n.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '9.5px', color: '#94a3b8' }}>
+                        {n.date ? new Date(n.date).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setDeleteTarget(n)}
+                        title="Toplu Bildirimi Sil"
+                        style={{
+                          background: '#fee2e2',
+                          border: 'none',
+                          color: '#ef4444',
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '6px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#fecaca'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#fee2e2'}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                   <div style={{ fontSize: '12px', fontWeight: '700', color: '#1e293b', marginBottom: '2px' }}>
                     {n.title}
@@ -1077,6 +1103,39 @@ export default function BroadcastNotification() {
         {/* Bottom clearance spacer so card is 100% visible above floating bottom nav & Tintin button */}
         <div style={{ height: '180px', minHeight: '180px', width: '100%', flexShrink: 0, pointerEvents: 'none' }} />
       </div>
+
+      {/* Delete Confirmation Popup */}
+      {deleteTarget && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(4px)' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '330px', padding: '24px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+              <Trash2 size={24} color="#ef4444" />
+            </div>
+            <h2 style={{ fontSize: '15px', fontWeight: 'bold', margin: '0 0 6px 0', color: 'var(--text-main)', textAlign: 'center' }}>Toplu Bildirimi Sil</h2>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', margin: 0, marginBottom: '20px', lineHeight: 1.4 }}>
+              <strong style={{ color: '#0f172a' }}>"{deleteTarget.title}"</strong> bildirimini tüm sistemden ve kullanıcılardan kalıcı olarak silmek istediğinize emin misiniz?
+            </p>
+            
+            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+              <button 
+                onClick={() => setDeleteTarget(null)} 
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: '#f1f5f9', color: '#64748b', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                Vazgeç
+              </button>
+              <button 
+                onClick={async () => {
+                  await deleteNotificationCompletely(deleteTarget.id || deleteTarget.dbId);
+                  setDeleteTarget(null);
+                }} 
+                style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: '#ef4444', color: 'white', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}
+              >
+                Evet, Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

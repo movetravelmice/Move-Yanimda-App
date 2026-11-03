@@ -23,12 +23,25 @@ export default function Notifications() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const { tours } = useTourStore();
-  const { notifications, markAsRead, markAllAsRead, clearNotifications } = useNotificationStore();
+  const { notifications, markAsRead, markAllAsRead, clearNotifications, deleteNotificationForUser, deleteNotificationCompletely } = useNotificationStore();
   const [confirmPopup, setConfirmPopup] = useState(false);
+  const [deleteModalTarget, setDeleteModalTarget] = useState(null);
+  const isAdmin = user?.role === 'admin' || user?.secondaryRole === 'admin';
 
   const confirmClear = () => {
     clearNotifications(user?.email || 'mock_user');
     setConfirmPopup(false);
+  };
+
+  const handleDeleteItem = (n, e) => {
+    if (e && typeof e.stopPropagation === 'function') {
+      e.stopPropagation();
+    }
+    if (isAdmin) {
+      setDeleteModalTarget(n);
+    } else {
+      deleteNotificationForUser(n.id || n.dbId, user?.email || 'mock_user');
+    }
   };
 
   const myTourIds = tours.filter(t => {
@@ -85,6 +98,50 @@ export default function Notifications() {
               </button>
               <button onClick={confirmClear} style={{ flex: 1, padding: '10px', borderRadius: '10px', border: 'none', background: '#ef4444', color: 'white', fontSize: '12.5px', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
                 Evet, Temizle
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Delete Notification Choice Popup */}
+      {deleteModalTarget && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px', backdropFilter: 'blur(4px)' }}>
+          <div className="card" style={{ width: '100%', maxWidth: '340px', padding: '22px 18px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', animation: 'scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+              <Trash2 size={22} color="#ef4444" />
+            </div>
+            <h2 style={{ fontSize: '15px', fontWeight: 'bold', margin: '0 0 6px 0', color: 'var(--text-main)', textAlign: 'center' }}>Bildirimi Sil</h2>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', margin: 0, marginBottom: '18px', lineHeight: 1.4 }}>
+              <strong style={{ color: '#0f172a' }}>"{deleteModalTarget.title}"</strong> bildirimini nasıl silmek istersiniz?
+            </p>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+              <button 
+                onClick={() => {
+                  deleteNotificationCompletely(deleteModalTarget.id || deleteModalTarget.dbId);
+                  setDeleteModalTarget(null);
+                }} 
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: 'none', background: '#ef4444', color: 'white', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}
+              >
+                <Trash2 size={14} /> Tüm Sistemden Sil (Herkes İçin)
+              </button>
+
+              <button 
+                onClick={() => {
+                  deleteNotificationForUser(deleteModalTarget.id || deleteModalTarget.dbId, user?.email || 'mock_user');
+                  setDeleteModalTarget(null);
+                }} 
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '10px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
+              >
+                Sadece Benim Ekranımdan Kaldır
+              </button>
+
+              <button 
+                onClick={() => setDeleteModalTarget(null)} 
+                style={{ width: '100%', padding: '9px 14px', borderRadius: '10px', border: 'none', background: 'transparent', color: '#64748b', fontSize: '12px', fontWeight: '600', cursor: 'pointer' }}
+              >
+                Vazgeç
               </button>
             </div>
           </div>
@@ -268,7 +325,32 @@ export default function Notifications() {
                       >
                         {n.title}
                       </h3>
-                      {isUnread && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#D7147A', flexShrink: 0 }} />}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                        {isUnread && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#D7147A', flexShrink: 0 }} />}
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteItem(n, e)}
+                          title="Bildirimi Sil"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#94a3b8',
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            padding: 0,
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = '#fee2e2'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = '#94a3b8'; e.currentTarget.style.background = 'transparent'; }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
                     </div>
 
                     <p style={{ fontSize: '11px', color: '#475569', margin: 0, lineHeight: 1.4, wordBreak: 'break-word' }}>
