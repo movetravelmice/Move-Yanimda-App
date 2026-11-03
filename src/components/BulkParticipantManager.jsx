@@ -10,6 +10,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore, formatTitleCase } from '../store/userStore';
 import { isUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, checkEmailDomainTypo, normalizeTurkish } from '../utils/userUtils';
 import { getApiBaseUrl } from '../utils/apiConfig';
+import { sendWelcomeAndActivationWhatsApp, createPasswordSetupLink } from '../services/authLinkService';
 
 /**
  * Excel Date Serial / String Parser
@@ -243,16 +244,29 @@ export default function BulkParticipantManager({ tourId, onClose }) {
 
         if (phone && phone !== '-' && phone.trim().length > 6) {
             if (password) {
-                useSettingsStore.getState().sendWhatsAppNotification(
-                    phone,
-                    'newUserTemplate',
-                    [participantName]
-                );
-                useSettingsStore.getState().sendWhatsAppNotification(
-                    phone,
-                    'newTourTemplate',
-                    [participantName, tour.name]
-                );
+                // Yeni kullanıcı eklendiğinde sırasıyla:
+                // 1) welcome_customer
+                // 2) welcome_account_activation
+                sendWelcomeAndActivationWhatsApp(targetUser || {
+                    id: targetUser?.id || participantEmail,
+                    name: participantName,
+                    phone: phone,
+                    email: participantEmail
+                }).then(() => {
+                    // 3) tour_registration
+                    useSettingsStore.getState().sendWhatsAppNotification(
+                        phone,
+                        'newTourTemplate',
+                        [participantName, tour.name]
+                    );
+                }).catch(err => {
+                    console.warn("sendWelcomeAndActivationWhatsApp in bulk error:", err);
+                    useSettingsStore.getState().sendWhatsAppNotification(
+                        phone,
+                        'newTourTemplate',
+                        [participantName, tour.name]
+                    );
+                });
             } else {
                 useSettingsStore.getState().sendWhatsAppNotification(
                     phone,
@@ -264,6 +278,30 @@ export default function BulkParticipantManager({ tourId, onClose }) {
 
         if (smtpConfig?.host && smtpConfig?.user && canUserReceiveEmail(participantEmail, users) && !isInternalPlaceholder) {
             try {
+                let setupLinkInfo = null;
+                const userObj = targetUser || users.find(u => u.email === participantEmail);
+                if (userObj && userObj.id) {
+                    try {
+                        setupLinkInfo = await createPasswordSetupLink(userObj);
+                    } catch (lnkErr) {
+                        console.warn("Could not create setup link in bulk email:", lnkErr);
+                    }
+                }
+
+                let customSubject = null;
+                let customHtml = null;
+                try {
+                    const { doc, getDoc } = await import('firebase/firestore');
+                    const { db } = await import('../lib/firebase');
+                    const docSnap = await getDoc(doc(db, 'email_templates', 'tour_email'));
+                    if (docSnap.exists()) {
+                        customSubject = docSnap.data().subject;
+                        customHtml = docSnap.data().body;
+                    }
+                } catch (templateErr) {
+                    console.error("Error loading tour email template:", templateErr);
+                }
+
                 const baseUrl = getApiBaseUrl();
                 await fetch(`${baseUrl}/api/send-tour-email`, {
                     method: 'POST',
@@ -274,7 +312,9 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                         corporateName: corporateName,
                         participantName: participantName,
                         tourName: tour.name,
-                        password: password
+                        setupUrl: setupLinkInfo?.url || `${baseUrl}/set-password`,
+                        customSubject,
+                        customHtml
                     })
                 });
             } catch(e) {

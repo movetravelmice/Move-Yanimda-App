@@ -75,7 +75,12 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
               const file = pdfFiles[i];
               setUploadProgress({ current: i + 1, total: pdfFiles.length, fileName: file.name });
 
-              const safeFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+              // Güvenlik ve Gizlilik: Dosya adında yolcu ismi/soyadı barındırmayan, tahmin edilmesi imkansız kriptografik UUID kullanımı
+              const fileExt = (file.name.split('.').pop() || 'pdf').toLowerCase().replace(/[^a-z0-9]/g, '');
+              const secureRandomId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+                  ? crypto.randomUUID() 
+                  : `${Date.now()}_${Math.random().toString(36).substring(2, 12)}_${Math.random().toString(36).substring(2, 12)}`;
+              const safeFileName = `ticket_${secureRandomId}.${fileExt || 'pdf'}`;
               const storageRef = ref(storage, `tours/${tourId}/tickets/${participant.id}/${safeFileName}`);
               
               const snapshot = await uploadBytes(storageRef, file);

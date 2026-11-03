@@ -38,6 +38,7 @@ import { useUserStore, formatTitleCase } from '../../store/userStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useAuthStore, isUserAdmin } from '../../store/authStore';
 import { normalizePhoneNumber, formatPhoneInputWithoutPrefix, checkEmailDomainTypo, toTurkishTitleCase, normalizeTurkishTitleCase, isUserChild as checkUserChild } from '../../utils/userUtils';
+import { createPasswordSetupLink, sendWelcomeAndActivationWhatsApp } from '../../services/authLinkService';
 
 export default function AdminUsers() {
   const [activeTab, setActiveTab] = useState('expert');
@@ -381,6 +382,17 @@ export default function AdminUsers() {
       setParentSearchQuery('');
       setEditingUserId(user.id);
       setShowAddModal(true);
+
+      // Veritabanındaki en güncel şifreyi canlı doğrula
+      if (user.id) {
+          import('firebase/firestore').then(async ({ doc, getDoc }) => {
+              const { db } = await import('../../lib/firebase');
+              const snap = await getDoc(doc(db, 'users', user.id));
+              if (snap.exists() && snap.data().password) {
+                  setFormData(prev => ({ ...prev, currentPassword: snap.data().password }));
+              }
+          }).catch(e => console.warn("Admin fetch user password error:", e));
+      }
   };
 
   const handleToggleStatus = (user) => {
@@ -449,7 +461,7 @@ export default function AdminUsers() {
 
   const pStrength = getPasswordStrength(formData.password);
   const isPasswordValid = pStrength.upper && pStrength.lower && pStrength.number && pStrength.special;
-  const canSubmit = editingUserId ? (formData.password === '' || isPasswordValid) : isPasswordValid;
+  const canSubmit = editingUserId ? (!formData.password || formData.password.trim() === '' || isPasswordValid) : isPasswordValid;
 
   const handleSubmit = async (e) => {
       try {
@@ -576,9 +588,89 @@ export default function AdminUsers() {
           }
           
           if (editingUserId) {
-              updateUser(editingUserId, userPayload);
+              const existingUser = allUsers.find(u => u.id === editingUserId);
+              const oldPhoneDigits = String(existingUser?.phone || '').replace(/\D/g, '').slice(-10);
+              const newPhoneDigits = String(userPayload.phone || '').replace(/\D/g, '').slice(-10);
+              const isPhoneChanged = (newPhoneDigits.length === 10) && (newPhoneDigits !== oldPhoneDigits);
+
+              const oldEmail = String(existingUser?.email || '').trim().toLowerCase();
+              const newEmail = String(userPayload.email || '').trim().toLowerCase();
+              const isOldPlaceholder = !oldEmail || oldEmail.endsWith('@move.local') || oldEmail.endsWith('.local') || oldEmail.startsWith('user_');
+              const isNewPlaceholder = !newEmail || newEmail.endsWith('@move.local') || newEmail.endsWith('.local') || newEmail.startsWith('user_');
+              const isEmailChanged = !isNewPlaceholder && newEmail.includes('@') && (newEmail !== oldEmail);
+
+              await updateUser(editingUserId, userPayload);
               if (currentUser && currentUser.id === editingUserId) {
                   useAuthStore.getState().updateProfile(userPayload);
+              }
+
+              // 1. Telefon Değiştiyse Yeni Numaraya Sırasıyla welcome_customer ardından welcome_account_activation Gönder
+              if (isPhoneChanged && userPayload.phone && userPayload.phone !== '-' && !isChild) {
+                  try {
+                      await sendWelcomeAndActivationWhatsApp({
+                          id: editingUserId,
+                          name: userPayload.name || 'Değerli Misafirimiz',
+                          phone: userPayload.phone,
+                          email: userPayload.email
+                      });
+                  } catch (waErr) {
+                      console.warn("Admin WhatsApp notification error on phone change:", waErr);
+                  }
+              }
+
+              // 2. Telefon veya E-posta Değiştiyse Yeni Mail Adresine Giriş ve Bilgi Güncelleme E-postası
+              const targetEmail = (!isNewPlaceholder && newEmail) ? newEmail : (!isOldPlaceholder && oldEmail ? oldEmail : null);
+              const smtp = useSettingsStore.getState().smtpConfig;
+              if ((isPhoneChanged || isEmailChanged) && targetEmail && !isChild && smtp?.host && smtp?.user && smtp?.pass) {
+                  try {
+                      const activePass = userPayload.password || existingUser?.password || '123456';
+                      let customSubject = null;
+                      let customHtml = null;
+                      try {
+                          const { doc, getDoc } = await import('firebase/firestore');
+                          const { db } = await import('../../lib/firebase');
+                          let tSnap = await getDoc(doc(db, 'email_templates', 'account_updated_email'));
+                          if (!tSnap.exists()) {
+                              tSnap = await getDoc(doc(db, 'email_templates', 'credentials_email'));
+                          }
+                          if (tSnap.exists()) {
+                              customSubject = tSnap.data().subject;
+                              customHtml = tSnap.data().body;
+                          }
+                      } catch (tErr) {}
+
+                      const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                      
+                      let setupLinkInfo = null;
+                      try {
+                          setupLinkInfo = await createPasswordSetupLink({
+                              id: editingUserId,
+                              name: userPayload.name || targetEmail,
+                              email: targetEmail,
+                              phone: userPayload.phone !== '-' ? userPayload.phone : (existingUser?.phone || '-')
+                          });
+                      } catch (linkErr) {
+                          console.warn("Could not create setup link in admin update:", linkErr);
+                      }
+
+                      fetch(`${baseUrl}/api/send-account-update`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                              ...smtp,
+                              to: targetEmail,
+                              corporateName: useSettingsStore.getState().corporateName || 'Move Yanımda',
+                              accountName: userPayload.name || targetEmail,
+                              accountEmail: targetEmail,
+                              accountPhone: userPayload.phone !== '-' ? userPayload.phone : (existingUser?.phone || '-'),
+                              accountPassword: activePass,
+                              setupUrl: setupLinkInfo?.url || `${baseUrl}/login`,
+                              loginUrl: `${baseUrl}/login`,
+                              customSubject,
+                              customHtml
+                          })
+                      }).catch(err => console.warn("Admin auto update email error:", err));
+                  } catch (e) {}
               }
               
               if (formData.role === 'customer' && customerType === 'parent') {
@@ -612,11 +704,10 @@ export default function AdminUsers() {
               const newUser = await addUser(userPayload);
 
               if (newUser && formData.role === 'customer' && !isChild && newUser.phone && newUser.phone !== '-' && newUser.phone.trim().length > 6) {
-                  useSettingsStore.getState().sendWhatsAppNotification(
-                      newUser.phone,
-                      'newUserTemplate',
-                      [newUser.name]
-                  );
+                  // Kullanıcı eklendiğinde sırasıyla welcome_customer ardından welcome_account_activation gönder
+                  sendWelcomeAndActivationWhatsApp(newUser).catch(err => {
+                      console.warn("New user WhatsApp welcome & activation error:", err);
+                  });
               }
               
               if (newUser && newUser.id && formData.role === 'customer' && customerType === 'parent' && formData.childrenIds.length > 0) {
@@ -1087,7 +1178,7 @@ export default function AdminUsers() {
                         placeholder="5XX XXX XX XX" 
                         value={formData.phone}
                         onChange={e => setFormData({...formData, phone: formatPhoneInputWithoutPrefix(e.target.value)})}
-                        maxLength={14}
+                        maxLength={20}
                         style={{ flex: 1, padding: '10px 12px', border: 'none', outline: 'none', fontSize: '12px', background: 'transparent', boxSizing: 'border-box' }}
                       />
                     </div>
@@ -1213,6 +1304,7 @@ export default function AdminUsers() {
                       type={showNewPassword ? "text" : "password"} 
                       placeholder={editingUserId ? "Değiştirmek için yeni şifre yazın..." : "••••••••"} 
                       value={formData.password}
+                      autoComplete="new-password"
                       onChange={e => setFormData({...formData, password: e.target.value})}
                       style={{ width: '100%', padding: '10px 34px 10px 12px', borderRadius: '10px', border: '1px solid #cbd5e1', outline: 'none', fontSize: '12px', background: '#f8fafc', boxSizing: 'border-box' }}
                     />

@@ -6,6 +6,7 @@ const express = require('express');
 const cors = require('cors');
 const nodemailer = require('nodemailer');
 const https = require('https');
+const crypto = require('crypto');
 
 const app = express();
 
@@ -66,8 +67,419 @@ const isChildEmailAddress = (email) => {
     return false;
 };
 
+
+// ==================== GÜVENLİK VE GİZLİ AYARLAR YÖNETİMİ ====================
+// Hassas şifreler (SMTP, WhatsApp, NetGSM, Gemini vb.) client'a ASLA gönderilmez.
+// server_settings koleksiyonunda güvenle saklanır ve yalnızca Cloud Functions tarafından okunur.
+const getServerSecrets = async () => {
+    try {
+        const db = admin.firestore();
+        const snap = await db.collection('server_settings').doc('global').get();
+        if (snap.exists) return snap.data() || {};
+        const fallSnap = await db.collection('settings').doc('global').get();
+        if (fallSnap.exists) return fallSnap.data() || {};
+    } catch (e) {
+        console.error("getServerSecrets error:", e);
+    }
+    return {};
+};
+
+const resolveSmtpConfig = async (reqBody) => {
+    let host = reqBody?.host;
+    let port = reqBody?.port;
+    let user = reqBody?.user;
+    let pass = reqBody?.pass;
+
+    if (!host || !user || !pass || pass === '********') {
+        const secrets = await getServerSecrets();
+        const sc = secrets?.smtpConfig;
+        if (sc?.host && sc?.user) {
+            host = host || sc.host;
+            port = port || sc.port;
+            user = user || sc.user;
+            pass = (pass && pass !== '********') ? pass : sc.pass;
+        }
+    }
+    return { host, port: Number(port || 465), user, pass };
+};
+
+const resolveWhatsAppConfig = async (reqBody) => {
+    let phoneId = reqBody?.phoneId;
+    let accessToken = reqBody?.accessToken;
+    let wabaId = reqBody?.wabaId;
+
+    if (!phoneId || !accessToken || accessToken === '********' || !wabaId) {
+        const secrets = await getServerSecrets();
+        const wc = secrets?.whatsappConfig;
+        if (wc) {
+            phoneId = phoneId || wc.phoneId;
+            accessToken = (accessToken && accessToken !== '********') ? accessToken : wc.accessToken;
+            wabaId = wabaId || wc.wabaId;
+        }
+    }
+    return { phoneId, accessToken, wabaId };
+};
+
+// ==========================================
+// GÜVENLİ KULLANICI KİMLİK VE OTURUM YÖNETİMİ
+// ==========================================
+const normalizeUserEmail = (val) => String(val || '').toLowerCase().trim();
+const normalizeUserTurkish = (str) => {
+    if (!str) return '';
+    return String(str)
+        .replace(/Ğ/g, 'g').replace(/ğ/g, 'g')
+        .replace(/Ü/g, 'u').replace(/ü/g, 'u')
+        .replace(/Ş/g, 's').replace(/ş/g, 's')
+        .replace(/İ/g, 'i').replace(/I/g, 'i').replace(/ı/g, 'i')
+        .replace(/Ö/g, 'o').replace(/ö/g, 'o')
+        .replace(/Ç/g, 'c').replace(/ç/g, 'c')
+        .trim().toLowerCase();
+};
+
+const isAuthPasswordMatch = (actualPass, inputPass) => {
+    const a = (actualPass || '').trim();
+    const b = (inputPass || '').trim();
+    if (!a || !b) return false;
+    if (a === b) return true;
+    if (a.toLowerCase() === b.toLowerCase()) return true;
+    const aClean = a.replace(/[!?]+$/, '');
+    const bClean = b.replace(/[!?]+$/, '');
+    if (aClean && aClean === bClean) return true;
+    if (aClean && aClean.toLowerCase() === bClean.toLowerCase()) return true;
+    return false;
+};
+
+const SESSION_SECRET = 'MOVE_YANIMDA_SESSION_SECRET_KEY_2026';
+
+const generateSessionToken = (userRecord) => {
+    const payload = {
+        id: userRecord.id,
+        email: userRecord.email || '',
+        name: userRecord.name || '',
+        role: userRecord.role || 'customer',
+        secondaryRole: userRecord.secondaryRole || null,
+        company: userRecord.company || 'Move Travel & Mice',
+        exp: Date.now() + (30 * 24 * 60 * 60 * 1000) // 30 Gün
+    };
+    const jsonStr = JSON.stringify(payload);
+    const b64 = Buffer.from(jsonStr).toString('base64url');
+    const signature = crypto.createHmac('sha256', SESSION_SECRET).update(b64).digest('base64url');
+    return `${b64}.${signature}`;
+};
+
+const verifySessionToken = (req) => {
+    try {
+        const authHeader = req.headers['authorization'] || '';
+        let token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : (req.body?.token || req.query?.token || '');
+        if (!token || typeof token !== 'string' || !token.includes('.')) return null;
+        const [b64, signature] = token.split('.');
+        const expectedSig = crypto.createHmac('sha256', SESSION_SECRET).update(b64).digest('base64url');
+        if (signature !== expectedSig) return null;
+        const jsonStr = Buffer.from(b64, 'base64url').toString('utf8');
+        const payload = JSON.parse(jsonStr);
+        if (payload.exp && Date.now() > payload.exp) return null;
+        return payload;
+    } catch (e) {
+        return null;
+    }
+};
+
+const stripSensitiveFields = (userRecord) => {
+    if (!userRecord || typeof userRecord !== 'object') return userRecord;
+    const { password: _removed, ...safe } = userRecord;
+    return safe;
+};
+
+// 1. GÜVENLİ GİRİŞ (LOGIN) ENDPOINT'İ
+app.post('/api/login', async (req, res) => {
+    try {
+        const { identifier, password } = req.body || {};
+        const cleanInput = (identifier || '').trim();
+        const cleanEmail = normalizeUserEmail(cleanInput);
+        const cleanPassword = (password || '').trim();
+        const cleanDigits = cleanInput.replace(/\D/g, '');
+
+        if (!cleanInput || !cleanPassword) {
+            return res.status(400).json({ success: false, message: 'Lütfen e-posta / telefon ve şifrenizi girin.' });
+        }
+
+        const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+        const rateKey = `login_${clientIp}_${cleanEmail}`;
+        if (!checkHttpRateLimit(rateKey, 10, 3 * 60 * 1000)) {
+            return res.status(429).json({
+                success: false,
+                message: 'Çok fazla hatalı giriş denemesi yaptınız. Güvenliğiniz için lütfen 3 dakika sonra tekrar deneyin.'
+            });
+        }
+
+        const db = admin.firestore();
+        const snap = await db.collection('users').get();
+
+        const matchCandidate = (u) => {
+            if (!u) return false;
+            const uEmail = normalizeUserEmail(u.email);
+            if (uEmail && uEmail === cleanEmail) return true;
+            if (!cleanInput.includes('@') && uEmail && uEmail.split('@')[0] === cleanEmail) return true;
+            if (u.name && normalizeUserTurkish(u.name) === normalizeUserTurkish(cleanInput)) return true;
+            if (cleanDigits.length >= 10) {
+                const uPhone = (u.phone || '').replace(/\D/g, '');
+                if (uPhone && (uPhone.endsWith(cleanDigits.slice(-10)) || cleanDigits.endsWith(uPhone.slice(-10)))) return true;
+                if (uEmail && uEmail.includes(cleanDigits.slice(-10))) return true;
+            }
+            if (cleanDigits.length === 11) {
+                const uTc = String(u.tcNo || u.tc || '').replace(/\D/g, '');
+                if (uTc && uTc === cleanDigits) return true;
+            }
+            return false;
+        };
+
+        const candidates = [];
+        snap.forEach(docSnap => {
+            const d = { id: docSnap.id, ...docSnap.data() };
+            if (matchCandidate(d)) {
+                candidates.push(d);
+            }
+        });
+
+        console.log("LOGIN ATTEMPT:", { cleanEmail, snapCount: snap.size, candidatesCount: candidates.length, candidates: candidates.map(c => ({ id: c.id, email: c.email, hasPass: Boolean(c.password) })) });
+        if (candidates.length > 0) {
+            console.log("PASS DEBUG:", {
+                inputPass: cleanPassword,
+                inputCodes: Array.from(cleanPassword).map(c => c.charCodeAt(0)),
+                dbPass: candidates[0].password,
+                dbCodes: Array.from(candidates[0].password || '').map(c => c.charCodeAt(0)),
+                match: isAuthPasswordMatch(candidates[0].password, cleanPassword)
+            });
+        }
+
+        const matchedUser = candidates.find(u => isAuthPasswordMatch(u.password, cleanPassword));
+
+        if (!matchedUser) {
+            return res.status(401).json({ success: false, message: 'E-posta, telefon veya şifre hatalı.' });
+        }
+
+        if (matchedUser.status === 'Pasif') {
+            return res.status(403).json({ success: false, message: 'Hesabınız askıya alınmıştır. Lütfen yönetici ile iletişime geçin.' });
+        }
+
+        const token = generateSessionToken(matchedUser);
+        const safeUser = stripSensitiveFields(matchedUser);
+
+        return res.json({
+            success: true,
+            user: safeUser,
+            token
+        });
+    } catch (err) {
+        console.error("Login endpoint error:", err);
+        return res.status(500).json({ success: false, message: 'Giriş yapılırken sunucu hatası oluştu.' });
+    }
+});
+
+// 2. OTURUM YENİLEME / SENKRONİZASYON (REFRESH SESSION)
+app.post('/api/refresh-session', async (req, res) => {
+    try {
+        const { userId, email } = req.body || {};
+        if (!userId && !email) {
+            return res.status(400).json({ success: false, message: 'Eksik parametre.' });
+        }
+        const db = admin.firestore();
+        let userDoc = null;
+        if (userId) {
+            const snap = await db.collection('users').doc(userId).get();
+            if (snap.exists) userDoc = { id: snap.id, ...snap.data() };
+        }
+        if (!userDoc && email) {
+            const snap = await db.collection('users').where('email', '==', normalizeUserEmail(email)).limit(1).get();
+            if (!snap.empty) userDoc = { id: snap.docs[0].id, ...snap.docs[0].data() };
+        }
+
+        if (!userDoc || userDoc.status === 'Pasif') {
+            return res.status(401).json({ success: false, message: 'Kullanıcı bulunamadı veya pasif.' });
+        }
+
+        const token = generateSessionToken(userDoc);
+        const safeUser = stripSensitiveFields(userDoc);
+        return res.json({ success: true, user: safeUser, token });
+    } catch (err) {
+        return res.status(500).json({ success: false, message: 'Oturum yenileme hatası.' });
+    }
+});
+
+// 3. GÜVENLİ KULLANICI LİSTESİ ALMA (YALNIZCA YETKİLİ OTURUM VEYA SINIRLI PROFİL)
+app.post('/api/users/list', async (req, res) => {
+    try {
+        const session = verifySessionToken(req);
+        if (!session) {
+            return res.status(401).json({ success: false, message: 'Yetkisiz erişim. Lütfen tekrar giriş yapın.' });
+        }
+
+        const db = admin.firestore();
+        const snap = await db.collection('users').get();
+        const isStaff = session.role === 'admin' || session.role === 'expert' || session.role === 'ticketing' || session.secondaryRole === 'admin';
+
+        const usersList = [];
+        snap.forEach(docSnap => {
+            const d = { id: docSnap.id, ...docSnap.data() };
+            const safe = stripSensitiveFields(d);
+
+            if (isStaff) {
+                usersList.push(safe);
+            } else {
+                if (safe.id === session.id || normalizeUserEmail(safe.email) === normalizeUserEmail(session.email)) {
+                    usersList.push(safe);
+                } else if (safe.role === 'admin' || safe.role === 'expert' || safe.role === 'ticketing') {
+                    usersList.push({
+                        id: safe.id,
+                        name: safe.name,
+                        email: safe.email,
+                        phone: safe.phone,
+                        avatar: safe.avatar,
+                        role: safe.role,
+                        secondaryRole: safe.secondaryRole || null,
+                        company: safe.company,
+                        title: safe.title || '',
+                        status: safe.status || 'Aktif'
+                    });
+                }
+            }
+        });
+
+        return res.json({ success: true, users: usersList });
+    } catch (err) {
+        console.error("Users list API error:", err);
+        return res.status(500).json({ success: false, message: 'Kullanıcı listesi alınamadı.' });
+    }
+});
+
+// 4. GÜVENLİ KULLANICI KAYDET / GÜNCELLE
+app.post('/api/users/save', async (req, res) => {
+    try {
+        const session = verifySessionToken(req);
+        if (!session) {
+            return res.status(401).json({ success: false, message: 'Yetkisiz erişim.' });
+        }
+        const { user: userToSave } = req.body || {};
+        if (!userToSave || !userToSave.id) {
+            return res.status(400).json({ success: false, message: 'Geçersiz kullanıcı verisi.' });
+        }
+
+        const isStaff = session.role === 'admin' || session.role === 'expert' || session.secondaryRole === 'admin';
+        const isSelf = session.id === userToSave.id;
+
+        if (!isStaff && !isSelf) {
+            return res.status(403).json({ success: false, message: 'Bu kullanıcıyı güncelleme yetkiniz yok.' });
+        }
+
+        const db = admin.firestore();
+        const docRef = db.collection('users').doc(userToSave.id);
+        
+        if (!isStaff) {
+            delete userToSave.role;
+            delete userToSave.secondaryRole;
+        }
+
+        await docRef.set(userToSave, { merge: true });
+        return res.json({ success: true });
+    } catch (err) {
+        console.error("Users save API error:", err);
+        return res.status(500).json({ success: false, message: 'Kullanıcı kaydedilemedi.' });
+    }
+});
+
+// 5. GÜVENLİ KULLANICI SİL (YALNIZCA ADMİN)
+app.post('/api/users/delete', async (req, res) => {
+    try {
+        const session = verifySessionToken(req);
+        if (!session || (session.role !== 'admin' && session.secondaryRole !== 'admin')) {
+            return res.status(403).json({ success: false, message: 'Yalnızca yöneticiler kullanıcı silebilir.' });
+        }
+        const { id } = req.body || {};
+        if (!id) return res.status(400).json({ success: false, message: 'Eksik kullanıcı ID.' });
+
+        const db = admin.firestore();
+        await db.collection('users').doc(id).delete();
+        return res.json({ success: true });
+    } catch (err) {
+        console.error("Users delete API error:", err);
+        return res.status(500).json({ success: false, message: 'Kullanıcı silinemedi.' });
+    }
+});
+
+// Hassas şifreleri server_settings koleksiyonuna taşıyan ve settings/global'i maskeleyen güvenli taşıma endpoint'i
+app.post('/api/migrate-secrets', async (req, res) => {
+    try {
+        const db = admin.firestore();
+        const globalSnap = await db.collection('settings').doc('global').get();
+        if (!globalSnap.exists) {
+            return res.status(404).json({ success: false, message: 'settings/global bulunamadı.' });
+        }
+        const data = globalSnap.data();
+
+        // 1. Orijinal şifreleri koruyarak server_settings koleksiyonuna yaz
+        const serverSnap = await db.collection('server_settings').doc('global').get();
+        const currentServer = serverSnap.exists ? serverSnap.data() : {};
+        const unmaskedSmtpPass = (data.smtpConfig?.pass && data.smtpConfig.pass !== '********') ? data.smtpConfig.pass : currentServer.smtpConfig?.pass;
+        const unmaskedWaToken = (data.whatsappConfig?.accessToken && data.whatsappConfig.accessToken !== '********') ? data.whatsappConfig.accessToken : currentServer.whatsappConfig?.accessToken;
+        const unmaskedNetgsmPass = (data.netgsmConfig?.password && data.netgsmConfig.password !== '********') ? data.netgsmConfig.password : currentServer.netgsmConfig?.password;
+        const unmaskedGeminiKey = (data.geminiConfig?.apiKey && data.geminiConfig.apiKey !== '********') ? data.geminiConfig.apiKey : currentServer.geminiConfig?.apiKey;
+        const unmaskedPlacesKey = (data.googlePlacesApiKey && data.googlePlacesApiKey !== '********') ? data.googlePlacesApiKey : currentServer.googlePlacesApiKey;
+
+        const serverData = {
+            ...data,
+            smtpConfig: { ...(data.smtpConfig || {}), pass: unmaskedSmtpPass || '' },
+            whatsappConfig: { ...(data.whatsappConfig || {}), accessToken: unmaskedWaToken || '' },
+            netgsmConfig: { ...(data.netgsmConfig || {}), password: unmaskedNetgsmPass || '' },
+            geminiConfig: { ...(data.geminiConfig || {}), apiKey: unmaskedGeminiKey || '' },
+            googlePlacesApiKey: unmaskedPlacesKey || ''
+        };
+        await db.collection('server_settings').doc('global').set(serverData, { merge: true });
+
+        // 2. settings/global dokümanında hassas alanları maskele (********)
+        const maskedData = { ...data };
+        if (maskedData.smtpConfig) {
+            maskedData.smtpConfig = {
+                ...maskedData.smtpConfig,
+                pass: maskedData.smtpConfig.user ? '********' : ''
+            };
+        }
+        if (maskedData.whatsappConfig) {
+            maskedData.whatsappConfig = {
+                ...maskedData.whatsappConfig,
+                accessToken: maskedData.whatsappConfig.phoneId ? '********' : ''
+            };
+        }
+        if (maskedData.netgsmConfig) {
+            maskedData.netgsmConfig = {
+                ...maskedData.netgsmConfig,
+                password: maskedData.netgsmConfig.usercode ? '********' : ''
+            };
+        }
+        if (maskedData.geminiConfig) {
+            maskedData.geminiConfig = {
+                ...maskedData.geminiConfig,
+                apiKey: maskedData.geminiConfig.isEnabled ? '********' : ''
+            };
+        }
+        if (maskedData.googlePlacesApiKey) {
+            maskedData.googlePlacesApiKey = '********';
+        }
+
+        await db.collection('settings').doc('global').set(maskedData);
+
+        return res.json({
+            success: true,
+            message: 'Tüm hassas şifreler server_settings koleksiyonuna taşındı ve settings/global içinde maskelendi.'
+        });
+    } catch (e) {
+        console.error("migrate-secrets error:", e);
+        return res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 app.post('/api/send-email', async (req, res) => {
-    const { host, port, user, pass, to, corporateName } = req.body;
+    const { host, port, user, pass } = await resolveSmtpConfig(req.body);
+    const { to, corporateName } = req.body;
     const senderBrand = corporateName || 'Base44';
 
     if (!host || !port || !user || !pass || !to) {
@@ -114,8 +526,48 @@ app.post('/api/send-email', async (req, res) => {
     }
 });
 
+app.post('/api/sync-email-templates', async (req, res) => {
+    try {
+        const db = admin.firestore();
+        const batch = db.batch();
+        
+        const templates = {
+    "tour_email": {
+        "subject": "{{corporateName}}: {{tourName}} Seyahati Kaydınız Alındı",
+        "body": "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap\" rel=\"stylesheet\"><div style=\"background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;\">\n    <div style=\"max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);\">\n        <div style=\"height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);\"></div>\n        <div style=\"padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;\">\n            <img src=\"https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png\" alt=\"Move Travel &amp; Mice\" style=\"height: 40px; max-width: 210px; object-fit: contain; display: inline-block;\" />\n        </div>\n        <div style=\"padding: 28px 32px 34px 32px;\">\n            <div style=\"text-align: center; margin-bottom: 22px;\">\n                <span style=\"display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;\">\n                    Seyahat Kaydı Onayı\n                </span>\n                <h1 style=\"color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;\">\n                    Seyahat Kaydınız Başarıyla Tamamlandı\n                </h1>\n                <p style=\"color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;\">Sayın <strong>{{participantName}}</strong>, aramıza hoş geldiniz.</p>\n            </div>\n\n            <div style=\"background: #f8fafc; border-radius: 14px; padding: 18px 20px; border: 1px solid #e2e8f0; border-left: 3px solid #D7147A; margin: 20px 0;\">\n                <div style=\"font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;\">Kayıt Olunan Seyahat</div>\n                <div style=\"font-size: 15.5px; font-weight: 600; color: #1e293b; margin-bottom: 12px;\">{{tourName}}</div>\n                <div style=\"font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;\">Kullanıcı Adı (E-Posta)</div>\n                <div style=\"font-size: 14.5px; font-weight: 600; color: #1e293b;\">{{username}}</div>\n            </div>\n\n            {{credentialSection}}\n\n            <p style=\"font-size: 13px; color: #64748b; font-weight: 500; line-height: 1.6; margin-top: 22px; text-align: center;\">\n                Uygulamamıza giriş yaparak seyahatiniz ile ilgili tüm uçuş, transfer, tur programı ve yetkili rehber bilgilerine dilediğiniz zaman ulaşabilirsiniz.\n            </p>\n        </div>\n        <div style=\"background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;\">\n            <p style=\"margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;\">{{corporateName}}</p>\n            <p style=\"margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;\">\n                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>\n                © Move Travel &amp; Mice. Tüm hakları saklıdır.\n            </p>\n        </div>\n    </div>\n</div>"
+    },
+    "ticket_email": {
+        "subject": "{{corporateName}}: Uçuş Biletleriniz Sisteme Eklendi",
+        "body": "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap\" rel=\"stylesheet\"><div style=\"background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;\">\n    <div style=\"max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);\">\n        <div style=\"height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);\"></div>\n        <div style=\"padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;\">\n            <img src=\"https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png\" alt=\"Move Travel &amp; Mice\" style=\"height: 40px; max-width: 210px; object-fit: contain; display: inline-block;\" />\n        </div>\n        <div style=\"padding: 28px 32px 34px 32px;\">\n            <div style=\"text-align: center; margin-bottom: 22px;\">\n                <span style=\"display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;\">\n                    Elektronik Bilet Bildirimi\n                </span>\n                <h1 style=\"color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;\">\n                    Uçuş Biletleriniz Sisteme Eklendi\n                </h1>\n                <p style=\"color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;\">Sayın <strong>{{participantName}}</strong>,</p>\n            </div>\n\n            <p style=\"font-size: 13.5px; font-weight: 400; color: #475569; text-align: center; margin: 0 0 18px 0; line-height: 1.6;\">\n                <strong>{{tourName}}</strong> seyahatiniz için elektronik uçuş biletiniz sisteme yüklenmiştir. Biletinizi aşağıdan hemen görüntüleyebilir veya indirebilirsiniz:\n            </p>\n\n            <div style=\"background: #f8fafc; border-radius: 14px; padding: 18px 20px; border: 1px solid #e2e8f0; border-left: 3px solid #D7147A; margin: 20px 0;\">\n                <div style=\"font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;\">Seyahat Adı</div>\n                <div style=\"font-size: 15.5px; font-weight: 600; color: #1e293b; margin-bottom: 12px;\">{{tourName}}</div>\n                <div style=\"font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;\">Yolcu Adı</div>\n                <div style=\"font-size: 14.5px; font-weight: 600; color: #1e293b;\">{{participantName}}</div>\n            </div>\n\n            {{pdfHtml}}\n\n            <div style=\"background: #f8fafc; border-radius: 12px; padding: 11px 16px; margin: 18px 0; text-align: center; border: 1px solid #e2e8f0;\">\n                <p style=\"margin: 0; font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.5;\">\n                    💡 <strong>Önemli Bilgi:</strong> İndirdiğiniz e-bilet PDF dosyasını telefonunuzda saklayabilir veya çıktısını alarak havalimanı kontuarında check-in işlemlerinizde kullanabilirsiniz.\n                </p>\n            </div>\n\n            <p style=\"font-size: 13px; color: #64748b; font-weight: 500; line-height: 1.6; text-align: center; margin-top: 22px;\">\n                Mobil uygulamamıza giriş yaparak seyahatiniz ile ilgili tüm uçuş, transfer, tur programı ve yetkili rehber bilgilerine dilediğiniz an erişebilirsiniz.\n            </p>\n        </div>\n        <div style=\"background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;\">\n            <p style=\"margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;\">{{corporateName}}</p>\n            <p style=\"margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;\">\n                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>\n                © Move Travel &amp; Mice. Tüm hakları saklıdır.\n            </p>\n        </div>\n    </div>\n</div>"
+    },
+    "forgot_password": {
+        "subject": "{{corporateName}}: Parola Sıfırlama / Hatırlatma Talebi",
+        "body": "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap\" rel=\"stylesheet\"><div style=\"background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;\">\n    <div style=\"max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);\">\n        <div style=\"height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);\"></div>\n        <div style=\"padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;\">\n            <img src=\"https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png\" alt=\"Move Travel &amp; Mice\" style=\"height: 40px; max-width: 210px; object-fit: contain; display: inline-block;\" />\n        </div>\n        <div style=\"padding: 28px 32px 34px 32px;\">\n            <div style=\"text-align: center; margin-bottom: 22px;\">\n                <span style=\"display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;\">\n                    Güvenlik Talebi\n                </span>\n                <h1 style=\"color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;\">\n                    Parola Sıfırlama Talebi\n                </h1>\n                <p style=\"color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;\">Merhaba Sayın <strong>{{accountName}}</strong>,</p>\n            </div>\n\n            <p style=\"font-size: 13.5px; font-weight: 400; color: #475569; text-align: center; margin: 0 0 20px 0; line-height: 1.6;\">\n                <strong>{{corporateName}}</strong> hesabınız için parola yenileme talebinde bulundunuz. Yeni parolanızı güvenle belirlemek için aşağıdaki butona tıklayabilirsiniz:\n            </p>\n\n            <div style=\"text-align: center; margin: 24px 0 14px 0;\">\n                <a href=\"{{setupUrl}}\" style=\"background: linear-gradient(135deg, #D7147A 0%, #b80f68 100%); color: #ffffff; padding: 12px 32px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 13.5px; display: inline-block; box-shadow: 0 4px 12px rgba(215, 20, 122, 0.25); letter-spacing: 0.2px;\">\n                    Şifrenizi Belirleyin\n                </a>\n            </div>\n\n            <div style=\"background: #f8fafc; border-radius: 12px; padding: 11px 16px; margin: 18px 0; text-align: center; border: 1px solid #e2e8f0;\">\n                <p style=\"margin: 0; font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.5;\">\n                    🔒 <strong>Güvenliğiniz için:</strong> Bu bağlantı tek kullanımlıktır ve 24 saat geçerlidir. Eğer bu talebi siz yapmadıysanız lütfen bu e-postayı dikkate almayınız.\n                </p>\n            </div>\n        </div>\n        <div style=\"background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;\">\n            <p style=\"margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;\">{{corporateName}}</p>\n            <p style=\"margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;\">\n                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>\n                © Move Travel &amp; Mice. Tüm hakları saklıdır.\n            </p>\n        </div>\n    </div>\n</div>"
+    },
+    "credentials_email": {
+        "subject": "{{corporateName}}: Giriş Bilgileriniz ve Şifre Belirleme Bağlantısı",
+        "body": "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap\" rel=\"stylesheet\"><div style=\"background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;\">\n    <div style=\"max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);\">\n        <div style=\"height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);\"></div>\n        <div style=\"padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;\">\n            <img src=\"https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png\" alt=\"Move Travel &amp; Mice\" style=\"height: 40px; max-width: 210px; object-fit: contain; display: inline-block;\" />\n        </div>\n        <div style=\"padding: 28px 32px 34px 32px;\">\n            <div style=\"text-align: center; margin-bottom: 22px;\">\n                <span style=\"display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;\">\n                    Giriş Bilgileri\n                </span>\n                <h1 style=\"color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;\">\n                    Hesap Giriş Bilgileriniz\n                </h1>\n                <p style=\"color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;\">Merhaba Sayın <strong>{{accountName}}</strong>,</p>\n            </div>\n\n            <p style=\"font-size: 13.5px; font-weight: 400; color: #475569; text-align: center; margin: 0 0 18px 0; line-height: 1.6;\">\n                <strong>{{corporateName}}</strong> sistemine giriş yapabilmeniz için kullanıcı adınız aşağıda yer almaktadır. Sisteme ilk kez giriş yapabilmeniz veya şifrenizi oluşturabilmeniz için aşağıdaki butonu kullanabilirsiniz:\n            </p>\n            \n            <div style=\"background: #f8fafc; border-radius: 14px; padding: 18px 20px; border: 1px solid #e2e8f0; border-left: 3px solid #D7147A; margin: 20px 0;\">\n                <div style=\"font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;\">Kullanıcı Adı (E-Posta)</div>\n                <div style=\"font-size: 15px; font-weight: 600; color: #1e293b;\">{{accountEmail}}</div>\n            </div>\n\n            <div style=\"text-align: center; margin: 24px 0 14px 0;\">\n                <a href=\"{{setupUrl}}\" style=\"background: linear-gradient(135deg, #D7147A 0%, #b80f68 100%); color: #ffffff; padding: 12px 32px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 13.5px; display: inline-block; box-shadow: 0 4px 12px rgba(215, 20, 122, 0.25); letter-spacing: 0.2px;\">\n                    Şifrenizi Belirleyin\n                </a>\n            </div>\n\n            <div style=\"background: #f8fafc; border-radius: 12px; padding: 11px 16px; margin: 18px 0; text-align: center; border: 1px solid #e2e8f0;\">\n                <p style=\"margin: 0; font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.5;\">\n                    🔒 <strong>Güvenlik Uyarısı:</strong> Bu şifre belirleme bağlantısı tek kullanımlıktır ve 24 saat geçerlidir. Şifrenizi belirledikten sonra doğrudan sisteme giriş yapabilirsiniz.\n                </p>\n            </div>\n\n            <p style=\"font-size: 13px; color: #64748b; font-weight: 500; line-height: 1.6; text-align: center; margin: 18px 0 0 0;\">\n                Uygulamaya giriş yaparak seyahatiniz ile ilgili uçuş, otel, transfer, rehber ve acil durum bilgilerine dilediğiniz zaman ulaşabilirsiniz.\n            </p>\n        </div>\n        <div style=\"background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;\">\n            <p style=\"margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;\">{{corporateName}}</p>\n            <p style=\"margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;\">\n                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>\n                © Move Travel &amp; Mice. Tüm hakları saklıdır.\n            </p>\n        </div>\n    </div>\n</div>"
+    },
+    "account_updated_email": {
+        "subject": "{{corporateName}}: Hesap ve İletişim Bilgileriniz Güncellendi",
+        "body": "<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap\" rel=\"stylesheet\"><div style=\"background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;\">\n    <div style=\"max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);\">\n        <div style=\"height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);\"></div>\n        <div style=\"padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;\">\n            <img src=\"https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png\" alt=\"Move Travel &amp; Mice\" style=\"height: 40px; max-width: 210px; object-fit: contain; display: inline-block;\" />\n        </div>\n        <div style=\"padding: 28px 32px 34px 32px;\">\n            <div style=\"text-align: center; margin-bottom: 22px;\">\n                <span style=\"display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;\">\n                    Bilgi Güncellemesi\n                </span>\n                <h1 style=\"color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;\">\n                    Hesap ve İletişim Bilgileriniz Güncellendi\n                </h1>\n                <p style=\"color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;\">Merhaba Sayın <strong>{{accountName}}</strong>,</p>\n            </div>\n\n            <p style=\"font-size: 13.5px; font-weight: 400; color: #475569; text-align: center; margin: 0 0 18px 0; line-height: 1.6;\">\n                <strong>{{corporateName}}</strong> sisteminde kayıtlı profil ve iletişim bilgileriniz başarıyla güncellenmiştir. Güncel giriş ve iletişim detaylarınız aşağıda yer almaktadır:\n            </p>\n            \n            <div style=\"background: #f8fafc; border-radius: 14px; padding: 18px 20px; border: 1px solid #e2e8f0; border-left: 3px solid #D7147A; margin: 20px 0;\">\n                <div style=\"margin-bottom: 12px;\">\n                    <div style=\"font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;\">Giriş E-Postası (Kullanıcı Adı)</div>\n                    <div style=\"font-size: 15px; font-weight: 600; color: #1e293b;\">{{accountEmail}}</div>\n                </div>\n                <div>\n                    <div style=\"font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;\">Kayıtlı Telefon Numarası</div>\n                    <div style=\"font-size: 14.5px; font-weight: 600; color: #1e293b;\">{{accountPhone}}</div>\n                </div>\n            </div>\n\n            <div style=\"text-align: center; margin: 24px 0 14px 0;\">\n                <a href=\"{{setupUrl}}\" style=\"background: linear-gradient(135deg, #D7147A 0%, #b80f68 100%); color: #ffffff; padding: 12px 32px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 13.5px; display: inline-block; box-shadow: 0 4px 12px rgba(215, 20, 122, 0.25); letter-spacing: 0.2px;\">\n                    Hesabınızı Aktif Edin\n                </a>\n            </div>\n\n            <p style=\"font-size: 12px; color: #64748b; font-weight: 500; text-align: center; margin: 0 0 18px 0; line-height: 1.5;\">\n                Yukarıdaki butona tıklayarak tek tıkla hesabınızı aktif hale getirebilir veya dilediğiniz zaman yeni şifrenizi belirleyebilirsiniz.\n            </p>\n\n            <p style=\"font-size: 13px; color: #64748b; font-weight: 500; line-height: 1.6; text-align: center; margin: 18px 0 0 0;\">\n                Yeni bilgilerinizle uygulamamıza giriş yaparak seyahatiniz ile ilgili tüm uçuş, transfer, tur programı ve rehber detaylarına dilediğiniz an erişebilirsiniz.\n            </p>\n        </div>\n        <div style=\"background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;\">\n            <p style=\"margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;\">{{corporateName}}</p>\n            <p style=\"margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;\">\n                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>\n                © Move Travel &amp; Mice. Tüm hakları saklıdır.\n            </p>\n        </div>\n    </div>\n</div>"
+    }
+};
+
+        for (const [key, data] of Object.entries(templates)) {
+            batch.set(db.collection('email_templates').doc(key), data, { merge: true });
+        }
+        await batch.commit();
+        return res.json({ success: true, message: 'Tüm e-posta şablonları Firestore veritabanında başarıyla güncellendi.' });
+    } catch (err) {
+        console.error("sync-email-templates error:", err);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
 app.post('/api/forgot-password', async (req, res) => {
-    const { host, port, user, pass, to, corporateName, accountName, accountPassword, customSubject, customHtml } = req.body;
+    const { host, port, user, pass } = await resolveSmtpConfig(req.body);
+    const { to, corporateName, accountName, accountPassword, customSubject, customHtml } = req.body;
     const senderBrand = corporateName || 'Base44 CRM';
 
     if (!host || !port || !user || !pass || !to) {
@@ -137,23 +589,57 @@ app.post('/api/forgot-password', async (req, res) => {
         await transporter.verify();
 
         const defaultHtml = `
-            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px;">
-                <h2 style="color: #D7147A; margin-top: 0;">Parola Hatırlatma</h2>
-                <p>Merhaba <strong>{{accountName}}</strong>,</p>
-                <p>{{corporateName}} sistemine giriş yapabilmeniz için sistemde kayıtlı olan güncel parolanız aşağıdadır:</p>
-                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; font-size: 18px; font-weight: bold; letter-spacing: 2px; text-align: center; margin: 20px 0; border: 1px dashed #cbd5e1;">
-                    {{accountPassword}}
-                </div>
-                <p>Güvenliğiniz için sisteme giriş yaptıktan sonra "Hesap Ayarları" bölümünden parolanızı düzenli olarak değiştirmeyi unutmayın.</p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                <p style="font-size: 11px; color: #94a3b8;">Eğer bu talebi siz yapmadıysanız lütfen kurum yöneticinizle irtibata geçin.</p>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet"><div style="background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;">
+    <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);">
+        <div style="height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);"></div>
+        <div style="padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;">
+            <img src="https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png" alt="Move Travel &amp; Mice" style="height: 40px; max-width: 210px; object-fit: contain; display: inline-block;" />
+        </div>
+        <div style="padding: 28px 32px 34px 32px;">
+            <div style="text-align: center; margin-bottom: 22px;">
+                <span style="display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;">
+                    Güvenlik Talebi
+                </span>
+                <h1 style="color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;">
+                    Parola Sıfırlama Talebi
+                </h1>
+                <p style="color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;">Merhaba Sayın <strong>{{accountName}}</strong>,</p>
             </div>
+
+            <p style="font-size: 13.5px; font-weight: 400; color: #475569; text-align: center; margin: 0 0 20px 0; line-height: 1.6;">
+                <strong>{{corporateName}}</strong> hesabınız için parola yenileme talebinde bulundunuz. Yeni parolanızı güvenle belirlemek için aşağıdaki butona tıklayabilirsiniz:
+            </p>
+
+            <div style="text-align: center; margin: 24px 0 14px 0;">
+                <a href="{{setupUrl}}" style="background: linear-gradient(135deg, #D7147A 0%, #b80f68 100%); color: #ffffff; padding: 12px 32px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 13.5px; display: inline-block; box-shadow: 0 4px 12px rgba(215, 20, 122, 0.25); letter-spacing: 0.2px;">
+                    Şifrenizi Belirleyin
+                </a>
+            </div>
+
+            <div style="background: #f8fafc; border-radius: 12px; padding: 11px 16px; margin: 18px 0; text-align: center; border: 1px solid #e2e8f0;">
+                <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.5;">
+                    🔒 <strong>Güvenliğiniz için:</strong> Bu bağlantı tek kullanımlıktır ve 24 saat geçerlidir. Eğer bu talebi siz yapmadıysanız lütfen bu e-postayı dikkate almayınız.
+                </p>
+            </div>
+        </div>
+        <div style="background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;">{{corporateName}}</p>
+            <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;">
+                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>
+                © Move Travel &amp; Mice. Tüm hakları saklıdır.
+            </p>
+        </div>
+    </div>
+</div>
         `;
 
         let htmlContent = customHtml || defaultHtml;
         htmlContent = htmlContent
             .replace(/{{accountName}}/g, escapeHtml(accountName || ''))
-            .replace(/{{accountPassword}}/g, escapeHtml(accountPassword || '123456'))
+            .replace(/{{accountPassword}}/g, '')
+            .replace(/{{password}}/g, '')
+            .replace(/{{setupUrl}}/g, req.body.setupUrl || 'https://move-yanimda.web.app/login')
+            .replace(/{{loginUrl}}/g, 'https://move-yanimda.web.app/login')
             .replace(/{{corporateName}}/g, escapeHtml(senderBrand));
 
         let subjectContent = customSubject || `{{corporateName}}: Parola Sıfırlama / Hatırlatma Talebi`;
@@ -176,7 +662,8 @@ app.post('/api/forgot-password', async (req, res) => {
 });
 
 app.post('/api/send-credentials', async (req, res) => {
-    const { host, port, user, pass, to, corporateName, accountName, accountEmail, accountPassword, customSubject, customHtml } = req.body;
+    const { host, port, user, pass } = await resolveSmtpConfig(req.body);
+    const { to, corporateName, accountName, accountEmail, accountPassword, customSubject, customHtml } = req.body;
     const senderBrand = corporateName || 'Move Yanımda';
 
     if (!host || !port || !user || !pass || !to) {
@@ -198,51 +685,76 @@ app.post('/api/send-credentials', async (req, res) => {
         await transporter.verify();
 
         const defaultHtml = `
-            <div style="font-family: Arial, sans-serif; padding: 24px; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-                <div style="text-align: center; margin-bottom: 24px;">
-                    <div style="width: 52px; height: 52px; background: #D7147A; color: white; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 900; line-height: 52px; text-align: center; margin: 0 auto;">
-                        M
-                    </div>
-                </div>
-                <h2 style="color: #D7147A; margin-top: 0; text-align: center; font-size: 20px;">Giriş Bilgileriniz</h2>
-                <p>Merhaba Sayın <strong>{{accountName}}</strong>,</p>
-                <p><strong>{{corporateName}}</strong> sistemine giriş yapabilmeniz için kullanıcı adı ve parolanız aşağıda yer almaktadır:</p>
-                
-                <div style="background: #f8fafc; padding: 18px; border-radius: 10px; margin: 20px 0; border: 1px dashed #cbd5e1; text-align: left;">
-                    <div style="margin-bottom: 10px; font-size: 14px;">
-                        <span style="color: #64748b; font-weight: 600;">Kullanıcı Adı (E-Posta):</span><br/>
-                        <strong style="color: #0f172a; font-size: 15px;">{{accountEmail}}</strong>
-                    </div>
-                    <div style="font-size: 14px;">
-                        <span style="color: #64748b; font-weight: 600;">Şifre:</span><br/>
-                        <strong style="color: #D7147A; font-size: 16px; letter-spacing: 1px;">{{accountPassword}}</strong>
-                    </div>
-                </div>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet"><div style="background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;">
+    <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);">
+        <div style="height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);"></div>
+        <div style="padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;">
+            <img src="https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png" alt="Move Travel &amp; Mice" style="height: 40px; max-width: 210px; object-fit: contain; display: inline-block;" />
+        </div>
+        <div style="padding: 28px 32px 34px 32px;">
+            <div style="text-align: center; margin-bottom: 22px;">
+                <span style="display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;">
+                    Giriş Bilgileri
+                </span>
+                <h1 style="color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;">
+                    Hesap Giriş Bilgileriniz
+                </h1>
+                <p style="color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;">Merhaba Sayın <strong>{{accountName}}</strong>,</p>
+            </div>
 
-                <p style="font-size: 13px; color: #475569; line-height: 1.5;">
-                    Uygulamaya giriş yaparak seyahatiniz ile ilgili uçuş, otel, transfer, rehber ve acil durum bilgilerine dilediğiniz zaman ulaşabilirsiniz. Güvenliğiniz için sisteme giriş yaptıktan sonra şifrenizi profil ayarlarınızdan değiştirebilirsiniz.
-                </p>
-                
-                <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
-                <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
-                    Bu mesaj {{corporateName}} tarafından otomatik olarak gönderilmiştir.
+            <p style="font-size: 13.5px; font-weight: 400; color: #475569; text-align: center; margin: 0 0 18px 0; line-height: 1.6;">
+                <strong>{{corporateName}}</strong> sistemine giriş yapabilmeniz için kullanıcı adınız aşağıda yer almaktadır. Sisteme ilk kez giriş yapabilmeniz veya şifrenizi oluşturabilmeniz için aşağıdaki butonu kullanabilirsiniz:
+            </p>
+            
+            <div style="background: #f8fafc; border-radius: 14px; padding: 18px 20px; border: 1px solid #e2e8f0; border-left: 3px solid #D7147A; margin: 20px 0;">
+                <div style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Kullanıcı Adı (E-Posta)</div>
+                <div style="font-size: 15px; font-weight: 600; color: #1e293b;">{{accountEmail}}</div>
+            </div>
+
+            <div style="text-align: center; margin: 24px 0 14px 0;">
+                <a href="{{setupUrl}}" style="background: linear-gradient(135deg, #D7147A 0%, #b80f68 100%); color: #ffffff; padding: 12px 32px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 13.5px; display: inline-block; box-shadow: 0 4px 12px rgba(215, 20, 122, 0.25); letter-spacing: 0.2px;">
+                    Şifrenizi Belirleyin
+                </a>
+            </div>
+
+            <div style="background: #f8fafc; border-radius: 12px; padding: 11px 16px; margin: 18px 0; text-align: center; border: 1px solid #e2e8f0;">
+                <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.5;">
+                    🔒 <strong>Güvenlik Uyarısı:</strong> Bu şifre belirleme bağlantısı tek kullanımlıktır ve 24 saat geçerlidir. Şifrenizi belirledikten sonra doğrudan sisteme giriş yapabilirsiniz.
                 </p>
             </div>
+
+            <p style="font-size: 13px; color: #64748b; font-weight: 500; line-height: 1.6; text-align: center; margin: 18px 0 0 0;">
+                Uygulamaya giriş yaparak seyahatiniz ile ilgili uçuş, otel, transfer, rehber ve acil durum bilgilerine dilediğiniz zaman ulaşabilirsiniz.
+            </p>
+        </div>
+        <div style="background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;">{{corporateName}}</p>
+            <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;">
+                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>
+                © Move Travel &amp; Mice. Tüm hakları saklıdır.
+            </p>
+        </div>
+    </div>
+</div>
         `;
 
         let htmlContent = customHtml || defaultHtml;
         const targetEmail = accountEmail || to;
         htmlContent = htmlContent
-            .replace(/{{accountName}}/g, accountName || '')
-            .replace(/{{participantName}}/g, accountName || '')
-            .replace(/{{accountEmail}}/g, targetEmail)
-            .replace(/{{username}}/g, targetEmail)
-            .replace(/{{email}}/g, targetEmail)
-            .replace(/{{accountPassword}}/g, accountPassword || '123456')
-            .replace(/{{password}}/g, accountPassword || '123456')
-            .replace(/{{corporateName}}/g, senderBrand);
+            .replace(/{{accountName}}/g, escapeHtml(accountName || ''))
+            .replace(/{{participantName}}/g, escapeHtml(accountName || ''))
+            .replace(/{{accountEmail}}/g, escapeHtml(targetEmail))
+            .replace(/{{username}}/g, escapeHtml(targetEmail))
+            .replace(/{{email}}/g, escapeHtml(targetEmail))
+            .replace(/{{accountPhone}}/g, escapeHtml(req.body.accountPhone || '-'))
+            .replace(/{{phone}}/g, escapeHtml(req.body.accountPhone || '-'))
+            .replace(/{{accountPassword}}/g, '')
+            .replace(/{{password}}/g, '')
+            .replace(/{{setupUrl}}/g, req.body.setupUrl || 'https://move-yanimda.web.app/login')
+            .replace(/{{loginUrl}}/g, req.body.loginUrl || 'https://move-yanimda.web.app/login')
+            .replace(/{{corporateName}}/g, escapeHtml(senderBrand));
 
-        let subjectContent = customSubject || `{{corporateName}}: Giriş Bilgileriniz (Kullanıcı Adı ve Şifre)`;
+        let subjectContent = customSubject || `{{corporateName}}: Giriş Bilgileriniz ve Şifre Belirleme Bağlantısı`;
         subjectContent = subjectContent
             .replace(/{{corporateName}}/g, senderBrand)
             .replace(/{{accountName}}/g, accountName || '');
@@ -255,6 +767,124 @@ app.post('/api/send-credentials', async (req, res) => {
         });
 
         return res.json({ success: true, message: `Giriş bilgileri ${to} adresine başarıyla iletildi.` });
+
+    } catch (error) {
+        console.error("SMTP Hata:", error);
+        return res.status(500).json({ success: false, message: `SMTP Hatası: ${error.message}` });
+    }
+});
+
+app.post('/api/send-account-update', async (req, res) => {
+    const { host, port, user, pass } = await resolveSmtpConfig(req.body);
+    const { to, corporateName, accountName, accountEmail, accountPhone, accountPassword, customSubject, customHtml } = req.body;
+    const senderBrand = corporateName || 'Move Yanımda';
+
+    if (!host || !port || !user || !pass || !to) {
+        return res.status(400).json({ success: false, message: 'SMTP ayarları eksik. Lütfen yapılandırmayı kontrol edin.' });
+    }
+
+    if (isChildEmailAddress(to)) {
+        return res.status(400).json({ success: false, message: 'Çocuk profilleri ve dahili hesaplar için e-posta gönderilemez.' });
+    }
+
+    try {
+        const transporter = nodemailer.createTransport({
+            host: host,
+            port: Number(port),
+            secure: Number(port) === 465,
+            auth: { user: user, pass: pass }
+        });
+
+        await transporter.verify();
+
+        const defaultHtml = `
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet"><div style="background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;">
+    <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);">
+        <div style="height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);"></div>
+        <div style="padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;">
+            <img src="https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png" alt="Move Travel &amp; Mice" style="height: 40px; max-width: 210px; object-fit: contain; display: inline-block;" />
+        </div>
+        <div style="padding: 28px 32px 34px 32px;">
+            <div style="text-align: center; margin-bottom: 22px;">
+                <span style="display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;">
+                    Bilgi Güncellemesi
+                </span>
+                <h1 style="color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;">
+                    Hesap ve İletişim Bilgileriniz Güncellendi
+                </h1>
+                <p style="color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;">Merhaba Sayın <strong>{{accountName}}</strong>,</p>
+            </div>
+
+            <p style="font-size: 13.5px; font-weight: 400; color: #475569; text-align: center; margin: 0 0 18px 0; line-height: 1.6;">
+                <strong>{{corporateName}}</strong> sisteminde kayıtlı profil ve iletişim bilgileriniz başarıyla güncellenmiştir. Güncel giriş ve iletişim detaylarınız aşağıda yer almaktadır:
+            </p>
+            
+            <div style="background: #f8fafc; border-radius: 14px; padding: 18px 20px; border: 1px solid #e2e8f0; border-left: 3px solid #D7147A; margin: 20px 0;">
+                <div style="margin-bottom: 12px;">
+                    <div style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Giriş E-Postası (Kullanıcı Adı)</div>
+                    <div style="font-size: 15px; font-weight: 600; color: #1e293b;">{{accountEmail}}</div>
+                </div>
+                <div>
+                    <div style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Kayıtlı Telefon Numarası</div>
+                    <div style="font-size: 14.5px; font-weight: 600; color: #1e293b;">{{accountPhone}}</div>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin: 24px 0 14px 0;">
+                <a href="{{setupUrl}}" style="background: linear-gradient(135deg, #D7147A 0%, #b80f68 100%); color: #ffffff; padding: 12px 32px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 13.5px; display: inline-block; box-shadow: 0 4px 12px rgba(215, 20, 122, 0.25); letter-spacing: 0.2px;">
+                    Hesabınızı Aktif Edin
+                </a>
+            </div>
+
+            <p style="font-size: 12px; color: #64748b; font-weight: 500; text-align: center; margin: 0 0 18px 0; line-height: 1.5;">
+                Yukarıdaki butona tıklayarak tek tıkla hesabınızı aktif hale getirebilir veya dilediğiniz zaman yeni şifrenizi belirleyebilirsiniz.
+            </p>
+
+            <p style="font-size: 13px; color: #64748b; font-weight: 500; line-height: 1.6; text-align: center; margin: 18px 0 0 0;">
+                Yeni bilgilerinizle uygulamamıza giriş yaparak seyahatiniz ile ilgili tüm uçuş, transfer, tur programı ve rehber detaylarına dilediğiniz an erişebilirsiniz.
+            </p>
+        </div>
+        <div style="background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;">{{corporateName}}</p>
+            <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;">
+                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>
+                © Move Travel &amp; Mice. Tüm hakları saklıdır.
+            </p>
+        </div>
+    </div>
+</div>
+        `;
+
+        let htmlContent = customHtml || defaultHtml;
+        const targetEmail = accountEmail || to;
+        const targetPhone = accountPhone || '-';
+        htmlContent = htmlContent
+            .replace(/{{accountName}}/g, escapeHtml(accountName || ''))
+            .replace(/{{participantName}}/g, escapeHtml(accountName || ''))
+            .replace(/{{accountEmail}}/g, escapeHtml(targetEmail))
+            .replace(/{{username}}/g, escapeHtml(targetEmail))
+            .replace(/{{email}}/g, escapeHtml(targetEmail))
+            .replace(/{{accountPhone}}/g, escapeHtml(targetPhone))
+            .replace(/{{phone}}/g, escapeHtml(targetPhone))
+            .replace(/{{accountPassword}}/g, '')
+            .replace(/{{password}}/g, '')
+            .replace(/{{setupUrl}}/g, req.body.setupUrl || 'https://move-yanimda.web.app/login')
+            .replace(/{{loginUrl}}/g, req.body.loginUrl || 'https://move-yanimda.web.app/login')
+            .replace(/{{corporateName}}/g, escapeHtml(senderBrand));
+
+        let subjectContent = customSubject || `{{corporateName}}: Hesap ve İletişim Bilgileriniz Güncellendi`;
+        subjectContent = subjectContent
+            .replace(/{{corporateName}}/g, senderBrand)
+            .replace(/{{accountName}}/g, accountName || '');
+
+        await transporter.sendMail({
+            from: `"${senderBrand} Bilgilendirme" <${user}>`,
+            to: to,
+            subject: subjectContent,
+            html: htmlContent
+        });
+
+        return res.json({ success: true, message: `Bilgi güncelleme e-postası ${to} adresine başarıyla iletildi.` });
 
     } catch (error) {
         console.error("SMTP Hata:", error);
@@ -299,7 +929,8 @@ app.post('/api/send-sms', async (req, res) => {
 });
 
 app.post('/api/send-ticket-email', async (req, res) => {
-    const { host, port, user, pass, to, participantName, tourName, flights, ticketPdf, ticketFiles, customSubject, customHtml } = req.body;
+    const { host, port, user, pass } = await resolveSmtpConfig(req.body);
+    const { to, participantName, tourName, flights, ticketPdf, ticketFiles, customSubject, customHtml } = req.body;
     const senderBrand = 'Move Travel & Mice';
 
     if (!host || !port || !user || !pass || !to) {
@@ -340,12 +971,12 @@ app.post('/api/send-ticket-email', async (req, res) => {
         if (allTickets.length > 0) {
             const ticketButtons = allTickets.map((t, idx) => {
                 const url = typeof t === 'string' ? t : t?.url;
-                const name = typeof t === 'object' ? (t.name || `Bilet #${idx + 1}`) : `Bilet #${idx + 1}`;
+                const name = typeof t === 'object' ? (t.name || `E-Bilet #${idx + 1}`) : `E-Bilet #${idx + 1}`;
                 if (!url) return '';
                 return `
-                    <div style="margin: 6px 0;">
-                        <a href="${url}" target="_blank" style="display: inline-block; background: #D7147A; color: #ffffff; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 13px;">
-                            📥 ${name} (Görüntüle / İndir)
+                    <div style="margin: 8px 0;">
+                        <a href="${url}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #D7147A 0%, #b80f68 100%); color: #ffffff; text-decoration: none; padding: 12px 30px; border-radius: 25px; font-weight: 600; font-size: 13.5px; box-shadow: 0 4px 12px rgba(215, 20, 122, 0.25); letter-spacing: 0.2px;">
+                            📥 ${name} (PDF İndir / Görüntüle)
                         </a>
                     </div>
                 `;
@@ -353,9 +984,14 @@ app.post('/api/send-ticket-email', async (req, res) => {
 
             if (ticketButtons) {
                 pdfHtml = `
-                    <div style="background: #f0fdf4; padding: 18px; border-radius: 12px; margin: 16px 0; border: 1px solid #bbf7d0; text-align: center;">
-                        <div style="font-weight: bold; color: #166534; font-size: 15px; margin-bottom: 6px;">📄 Elektronik Uçak Biletiniz ${allTickets.length > 1 ? `(${allTickets.length} Adet PDF)` : '(PDF)'}</div>
-                        <p style="margin: 0 0 12px 0; color: #15803d; font-size: 13px;">Uçuş biletlerinizi görüntülemek veya cihazınıza indirmek için aşağıdaki butonlara tıklayabilirsiniz:</p>
+                    <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 22px; margin: 20px 0; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04); text-align: center;">
+                        <div style="display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; padding: 4px 14px; border-radius: 20px; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+                            PDF E-BİLET DOSYASI
+                        </div>
+                        <div style="font-size: 15px; font-weight: 600; color: #1e293b; margin-bottom: 6px;">
+                            Elektronik Uçak Biletiniz Hazır ${allTickets.length > 1 ? `(${allTickets.length} Adet PDF)` : ''}
+                        </div>
+                        <p style="margin: 0 0 16px 0; color: #64748b; font-size: 13px;">Uçuş biletinizi görüntülemek veya cihazınıza indirmek için aşağıdaki butona tıklayabilirsiniz:</p>
                         ${ticketButtons}
                     </div>
                 `;
@@ -365,28 +1001,67 @@ app.post('/api/send-ticket-email', async (req, res) => {
         let flightsHtml = '';
         if (flights && flights.length > 0) {
             flightsHtml = flights.map(f => `
-                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 10px 0; border: 1px dashed #cbd5e1;">
-                    <div style="font-weight:bold; color: #D7147A; margin-bottom: 8px;">${f.type || 'Uçuş'} - ${f.airline || ''}</div>
-                    <div><strong>Kalkış:</strong> ${f.from || '-'} <strong>Varış:</strong> ${f.to || '-'}</div>
-                    <div><strong>Tarih:</strong> ${f.date || '-'} ${f.departureTime || '-'}</div>
-                    <div><strong>Uçuş Kodu:</strong> ${f.flightNo || '-'}</div>
-                    <div><strong>PNR:</strong> ${f.pnr || '-'}</div>
-                    <div><strong>Bilet No:</strong> ${f.ticketNo || '-'}</div>
+                <div style="background: #f8fafc; padding: 18px; border-radius: 14px; margin: 14px 0; border: 1px solid #e2e8f0; border-left: 4px solid #D7147A;">
+                    <div style="font-weight: 800; color: #D7147A; font-size: 15px; margin-bottom: 10px;">${f.type || 'Uçuş'} - ${f.airline || ''}</div>
+                    <div style="font-size: 13.5px; color: #334155; line-height: 1.6;">
+                        <div style="margin-bottom: 4px;"><strong>Kalkış - Varış:</strong> ${f.from || '-'} ➔ ${f.to || '-'}</div>
+                        <div style="margin-bottom: 4px;"><strong>Tarih &amp; Saat:</strong> ${f.date || '-'} ${f.departureTime || '-'}</div>
+                        <div><strong>Uçuş No:</strong> ${f.flightNo || '-'} &nbsp;|&nbsp; <strong>PNR:</strong> ${f.pnr || '-'} &nbsp;|&nbsp; <strong>Bilet No:</strong> ${f.ticketNo || '-'}</div>
+                    </div>
                 </div>
             `).join('');
         }
 
         const defaultHtml = `
-            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px;">
-                <h2 style="color: #D7147A; margin-top: 0; text-align: center;">Biletleriniz Sisteme Eklendi</h2>
-                <p>Sayın <strong>{{participantName}}</strong>,</p>
-                <p><strong>{{tourName}}</strong> seyahatiniz için uçuş biletleriniz sisteme başarıyla işlenmiştir. Detayları aşağıda bulabilirsiniz:</p>
-                {{pdfHtml}}
-                {{flightsHtml}}
-                <p>Uygulamamıza giriş yaparak seyahatiniz ile ilgili detaylara dilediğiniz zaman ulaşabilirsiniz.</p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                <p style="font-size: 11px; color: #94a3b8; text-align: center;">Bizi tercih ettiğiniz için teşekkür ederiz.<br/>Move Travel & Mice</p>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet"><div style="background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;">
+    <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);">
+        <div style="height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);"></div>
+        <div style="padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;">
+            <img src="https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png" alt="Move Travel &amp; Mice" style="height: 40px; max-width: 210px; object-fit: contain; display: inline-block;" />
+        </div>
+        <div style="padding: 28px 32px 34px 32px;">
+            <div style="text-align: center; margin-bottom: 22px;">
+                <span style="display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;">
+                    Elektronik Bilet Bildirimi
+                </span>
+                <h1 style="color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;">
+                    Uçuş Biletleriniz Sisteme Eklendi
+                </h1>
+                <p style="color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;">Sayın <strong>{{participantName}}</strong>,</p>
             </div>
+
+            <p style="font-size: 13.5px; font-weight: 400; color: #475569; text-align: center; margin: 0 0 18px 0; line-height: 1.6;">
+                <strong>{{tourName}}</strong> seyahatiniz için elektronik uçuş biletiniz sisteme yüklenmiştir. Biletinizi aşağıdan hemen görüntüleyebilir veya indirebilirsiniz:
+            </p>
+
+            <div style="background: #f8fafc; border-radius: 14px; padding: 18px 20px; border: 1px solid #e2e8f0; border-left: 3px solid #D7147A; margin: 20px 0;">
+                <div style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Seyahat Adı</div>
+                <div style="font-size: 15.5px; font-weight: 600; color: #1e293b; margin-bottom: 12px;">{{tourName}}</div>
+                <div style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Yolcu Adı</div>
+                <div style="font-size: 14.5px; font-weight: 600; color: #1e293b;">{{participantName}}</div>
+            </div>
+
+            {{pdfHtml}}
+
+            <div style="background: #f8fafc; border-radius: 12px; padding: 11px 16px; margin: 18px 0; text-align: center; border: 1px solid #e2e8f0;">
+                <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.5;">
+                    💡 <strong>Önemli Bilgi:</strong> İndirdiğiniz e-bilet PDF dosyasını telefonunuzda saklayabilir veya çıktısını alarak havalimanı kontuarında check-in işlemlerinizde kullanabilirsiniz.
+                </p>
+            </div>
+
+            <p style="font-size: 13px; color: #64748b; font-weight: 500; line-height: 1.6; text-align: center; margin-top: 22px;">
+                Mobil uygulamamıza giriş yaparak seyahatiniz ile ilgili tüm uçuş, transfer, tur programı ve yetkili rehber bilgilerine dilediğiniz an erişebilirsiniz.
+            </p>
+        </div>
+        <div style="background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;">{{corporateName}}</p>
+            <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;">
+                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>
+                © Move Travel &amp; Mice. Tüm hakları saklıdır.
+            </p>
+        </div>
+    </div>
+</div>
         `;
 
         let htmlContent = customHtml || defaultHtml;
@@ -417,7 +1092,8 @@ app.post('/api/send-ticket-email', async (req, res) => {
 });
 
 app.post('/api/send-tour-email', async (req, res) => {
-    const { host, port, user, pass, to, corporateName, participantName, tourName, password, customSubject, customHtml } = req.body;
+    const { host, port, user, pass } = await resolveSmtpConfig(req.body);
+    const { to, corporateName, participantName, tourName, password, customSubject, customHtml } = req.body;
     const senderBrand = corporateName || 'Move Travel & Mice';
 
     if (!host || !port || !user || !pass || !to) {
@@ -452,42 +1128,76 @@ app.post('/api/send-tour-email', async (req, res) => {
 
         await transporter.verify();
 
-        let credentialSection = '';
-        if (password) {
-            credentialSection = `
-                <p>Sisteme giriş yapabilmeniz için kullanıcı adınız ve parolanız aşağıdadır:</p>
-                <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px dashed #cbd5e1; text-align: center;">
-                    <div style="margin-bottom: 8px;"><strong>Kullanıcı Adı:</strong> ${to}</div>
-                    <div><strong>Şifre:</strong> ${password}</div>
-                </div>
-            `;
-        }
+        const targetSetupUrl = req.body.setupUrl || 'https://move-yanimda.web.app/set-password';
+        const targetLoginUrl = 'https://move-yanimda.web.app/login';
+
+        let credentialSection = `
+            <div style="text-align: center; margin: 24px 0 14px 0;">
+                <a href="${targetSetupUrl}" style="background: linear-gradient(135deg, #D7147A 0%, #b80f68 100%); color: #ffffff; padding: 12px 32px; border-radius: 25px; text-decoration: none; font-weight: 600; font-size: 13.5px; display: inline-block; box-shadow: 0 4px 12px rgba(215, 20, 122, 0.25); letter-spacing: 0.2px;">
+                    Hesabınızı Aktif Edin
+                </a>
+            </div>
+            <div style="background: #f8fafc; border-radius: 12px; padding: 11px 16px; margin: 18px 0; text-align: center; border: 1px solid #e2e8f0;">
+                <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 500; line-height: 1.5;">
+                    🔒 Yukarıdaki butona tıklayarak tek tıkla hesabınızı aktif hale getirebilir ve şifrenizi güvenle belirleyebilirsiniz.
+                </p>
+            </div>
+        `;
 
         const defaultHtml = `
-            <div style="font-family: Arial, sans-serif; padding: 20px; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px;">
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <div style="width: 48px; height: 48px; background: #D7147A; color: white; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 900; letter-spacing: -1px;">
-                        M
-                    </div>
-                </div>
-                <h2 style="color: #D7147A; margin-top: 0; text-align: center;">Seyahat Kaydı Başarılı</h2>
-                <p>Sayın <strong>{{participantName}}</strong>,</p>
-                <p><strong>{{tourName}}</strong> seyahatine kaydınız başarıyla yapılmıştır.</p>
-                {{credentialSection}}
-                <p>Uygulamamıza giriş yaparak seyahatiniz ile ilgili uçuş, transfer, tur programı ve yetkili bilgilerine dilediğiniz zaman ulaşabilirsiniz.</p>
-                <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
-                <p style="font-size: 11px; color: #94a3b8; text-align: center;">Bizi tercih ettiğiniz için teşekkür ederiz.<br/>Move Travel & Mice</p>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet"><div style="background-color: #f8fafc; padding: 36px 12px; font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #334155; line-height: 1.65;">
+    <div style="max-width: 560px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #edf2f7; box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);">
+        <div style="height: 3px; background: linear-gradient(90deg, #D7147A 0%, #b80f68 50%, #f43f5e 100%);"></div>
+        <div style="padding: 26px 32px 18px 32px; text-align: center; border-bottom: 1px solid #f8fafc;">
+            <img src="https://move.com.tr/wp-content/uploads/thegem/logos/logo_34e7aaf6ef74bcbc5b7767b6af85fbb4_1x.png" alt="Move Travel &amp; Mice" style="height: 40px; max-width: 210px; object-fit: contain; display: inline-block;" />
+        </div>
+        <div style="padding: 28px 32px 34px 32px;">
+            <div style="text-align: center; margin-bottom: 22px;">
+                <span style="display: inline-block; background: #fdf2f8; color: #D7147A; font-size: 11px; font-weight: 600; letter-spacing: 0.8px; padding: 4px 14px; border-radius: 20px; text-transform: uppercase;">
+                    Seyahat Kaydı Onayı
+                </span>
+                <h1 style="color: #1e293b; margin: 12px 0 6px 0; font-size: 21px; font-weight: 600; letter-spacing: -0.2px;">
+                    Seyahat Kaydınız Başarıyla Tamamlandı
+                </h1>
+                <p style="color: #64748b; font-size: 13.5px; font-weight: 500; margin: 0;">Sayın <strong>{{participantName}}</strong>, aramıza hoş geldiniz.</p>
             </div>
+
+            <div style="background: #f8fafc; border-radius: 14px; padding: 18px 20px; border: 1px solid #e2e8f0; border-left: 3px solid #D7147A; margin: 20px 0;">
+                <div style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Kayıt Olunan Seyahat</div>
+                <div style="font-size: 15.5px; font-weight: 600; color: #1e293b; margin-bottom: 12px;">{{tourName}}</div>
+                <div style="font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Kullanıcı Adı (E-Posta)</div>
+                <div style="font-size: 14.5px; font-weight: 600; color: #1e293b;">{{username}}</div>
+            </div>
+
+            {{credentialSection}}
+
+            <p style="font-size: 13px; color: #64748b; font-weight: 500; line-height: 1.6; margin-top: 22px; text-align: center;">
+                Uygulamamıza giriş yaparak seyahatiniz ile ilgili tüm uçuş, transfer, tur programı ve yetkili rehber bilgilerine dilediğiniz zaman ulaşabilirsiniz.
+            </p>
+        </div>
+        <div style="background: #f8fafc; padding: 20px 32px; border-top: 1px solid #f1f5f9; text-align: center;">
+            <p style="margin: 0 0 5px 0; font-size: 12px; font-weight: 600; color: #475569;">{{corporateName}}</p>
+            <p style="margin: 0; font-size: 11px; color: #94a3b8; font-weight: 400; line-height: 1.5;">
+                Bu e-posta sistem tarafından otomatik olarak gönderilmiştir.<br/>
+                © Move Travel &amp; Mice. Tüm hakları saklıdır.
+            </p>
+        </div>
+    </div>
+</div>
         `;
 
         let htmlContent = customHtml || defaultHtml;
         htmlContent = htmlContent
-            .replace(/{{participantName}}/g, participantName || '')
-            .replace(/{{tourName}}/g, tourName || '')
+            .replace(/{{participantName}}/g, escapeHtml(participantName || ''))
+            .replace(/{{tourName}}/g, escapeHtml(tourName || ''))
             .replace(/{{credentialSection}}/g, credentialSection || '')
-            .replace(/{{username}}/g, to || '')
-            .replace(/{{password}}/g, password || '')
-            .replace(/{{corporateName}}/g, senderBrand);
+            .replace(/{{username}}/g, escapeHtml(to || ''))
+            .replace(/{{accountEmail}}/g, escapeHtml(to || ''))
+            .replace(/{{password}}/g, '')
+            .replace(/{{accountPassword}}/g, '')
+            .replace(/{{setupUrl}}/g, targetSetupUrl)
+            .replace(/{{loginUrl}}/g, targetLoginUrl)
+            .replace(/{{corporateName}}/g, escapeHtml(senderBrand));
 
         let subjectContent = customSubject || `{{corporateName}}: {{tourName}} Seyahati Kaydınız Alındı`;
         subjectContent = subjectContent
@@ -511,7 +1221,8 @@ app.post('/api/send-tour-email', async (req, res) => {
 });
 
 app.post('/api/send-whatsapp', async (req, res) => {
-    const { phoneId, accessToken, to, templateName, languageCode, parameters } = req.body;
+    const { phoneId, accessToken } = await resolveWhatsAppConfig(req.body);
+    const { to, templateName, languageCode, parameters } = req.body;
 
     if (!phoneId || !accessToken || !to || !templateName) {
         return res.status(400).json({ success: false, message: 'WhatsApp API ayarları veya alıcı/şablon bilgisi eksik.' });
@@ -543,6 +1254,8 @@ app.post('/api/send-whatsapp', async (req, res) => {
 
         const isAuthTemplate = templateName.toLowerCase().includes('otp') || templateName.toLowerCase().includes('auth') || templateName.toLowerCase().includes('password_reset');
         const codeVal = parameters && parameters.length > 0 ? String(parameters[0]) : '';
+        const isActivationTemplate = templateName.toLowerCase().includes('activation') || templateName.toLowerCase().includes('set_password');
+        const buttonParam = req.body.buttonParameter || (isActivationTemplate && parameters && parameters.length > 1 ? parameters[1] : null);
 
         if (isAuthTemplate && codeVal) {
             bodyData.template.components = [
@@ -563,6 +1276,28 @@ app.post('/api/send-whatsapp', async (req, res) => {
                         {
                             type: "text",
                             text: codeVal
+                        }
+                    ]
+                }
+            ];
+        } else if (buttonParam) {
+            const bodyParams = isActivationTemplate && parameters && parameters.length > 1 ? [parameters[0]] : (parameters || []);
+            bodyData.template.components = [
+                {
+                    type: "body",
+                    parameters: bodyParams.map(p => ({
+                        type: "text",
+                        text: String(p)
+                    }))
+                },
+                {
+                    type: "button",
+                    sub_type: "url",
+                    index: "0",
+                    parameters: [
+                        {
+                            type: "text",
+                            text: String(buttonParam)
                         }
                     ]
                 }

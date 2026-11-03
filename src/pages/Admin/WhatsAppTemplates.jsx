@@ -6,7 +6,7 @@ import {
   Save, Info, HelpCircle, Send, MessageSquare, Code, Eye, 
   Sparkles, Check, CheckCircle2, Loader2, Copy, ExternalLink,
   Layers, Globe, ShieldCheck, Share2, ChevronDown, UserPlus,
-  Compass, FileText, Clock, Star
+  Compass, FileText, Clock, Star, KeyRound
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -24,6 +24,19 @@ const defaultWaTemplates = {
         defaultBody: 'Sayın {{1}}, Move Yanımda sistemine kaydınız başarıyla oluşturulmuştur. Seyahatlerinizi ve bilet detaylarınızı uygulamamız üzerinden takip edebilirsiniz.',
         buttons: [
             { type: 'url', text: 'Uygulamayı Aç', url: 'https://move-yanimda.web.app' }
+        ]
+    },
+    accountActivationTemplate: {
+        title: 'Hesap Aktivasyonu & Şifre Belirleme Şablonu',
+        description: 'Yeni kullanıcı veya katılımcı eklendiğinde tek tıkla şifresini belirleyip hesabını aktifleştirmesi için dinamik URL butonuyla gönderilen şablon.',
+        variables: [
+            { name: '{{1}}', desc: 'Katılımcı / Misafir Adı' }
+        ],
+        metaName: 'welcome_account_activation',
+        category: 'UTILITY',
+        defaultBody: 'Sayın {{1}}, Move Yanımda seyahat profiliniz hazırlandı. Uçuş, transfer ve tur programınıza erişmek için aşağıdaki butona tıklayarak hesabınızı aktif hale getirebilirsiniz.',
+        buttons: [
+            { type: 'url', text: 'Hesabı Aktifleştir', url: 'https://move-yanimda.web.app/set-password?token={{1}}' }
         ]
     },
     newTourTemplate: {
@@ -129,6 +142,13 @@ export default function WhatsAppTemplates() {
             bgColor: '#ecfdf5',
             borderColor: '#a7f3d0',
             badge: 'Hoş Geldin'
+        },
+        accountActivationTemplate: {
+            icon: <KeyRound size={15} />,
+            color: '#d97706',
+            bgColor: '#fffbeb',
+            borderColor: '#fde68a',
+            badge: 'Aktivasyon & Şifre'
         },
         newTourTemplate: {
             icon: <Compass size={15} />,
@@ -298,8 +318,12 @@ export default function WhatsAppTemplates() {
 
         try {
             let testParams = [];
+            let buttonParam = undefined;
             if (selectedTemplateKey === 'newUserTemplate') {
                 testParams = ['Ahmet Yılmaz'];
+            } else if (selectedTemplateKey === 'accountActivationTemplate') {
+                testParams = ['Ahmet Yılmaz'];
+                buttonParam = 'test_token_ornek';
             } else if (selectedTemplateKey === 'newTourTemplate') {
                 testParams = ['Ahmet Yılmaz', 'Klasik İtalya Turu'];
             } else if (selectedTemplateKey === 'passwordResetTemplate') {
@@ -313,7 +337,7 @@ export default function WhatsAppTemplates() {
             }
 
             const sendWhatsAppNotification = useSettingsStore.getState().sendWhatsAppNotification;
-            const result = await sendWhatsAppNotification(testPhone, selectedTemplateKey, testParams);
+            const result = await sendWhatsAppNotification(testPhone, selectedTemplateKey, testParams, buttonParam);
 
             if (result && result.success !== false) {
                 setTestResult({ success: true, message: `Test WhatsApp mesajı '${testPhone}' numarasına başarıyla iletildi.` });

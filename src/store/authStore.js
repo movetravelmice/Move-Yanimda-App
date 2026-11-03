@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useSettingsStore } from './settingsStore';
 import { useUserStore } from './userStore';
-import { normalizeEmail } from '../utils/userUtils';
+import { normalizeEmail, normalizeTurkish } from '../utils/userUtils';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -64,6 +65,7 @@ const stripSensitiveAuthFields = (userObj) => {
 
 export const useAuthStore = create(persist((set, get) => ({
   user: null, 
+  token: null,
   activeMode: null, // 'corporate' | 'individual'
   activeStaffRole: null, // 'admin' | 'expert' | 'ticketing'
   setActiveMode: (mode) => set({ activeMode: mode }),
@@ -76,11 +78,30 @@ export const useAuthStore = create(persist((set, get) => ({
     if (state.activeMode) return state.activeMode;
     return 'corporate';
   },
+  refreshTokenIfNeeded: async () => {
+    const state = get();
+    if (!state.user) return;
+    try {
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/refresh-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: state.user.id, email: state.user.email })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.token) {
+          set({ token: data.token, user: stripSensitiveAuthFields(data.user) });
+        }
+      }
+    } catch (e) {
+      console.warn("Session refresh error:", e);
+    }
+  },
   login: async (identifier, password) => {
       const cleanInput = (identifier || '').trim();
       const cleanEmail = normalizeEmail(cleanInput);
       const cleanPassword = (password || '').trim();
-      const cleanDigits = cleanInput.replace(/\D/g, '');
 
       // Brute-force / parola kırma koruması kontrolü
       const guard = getLoginGuardState();
@@ -101,109 +122,61 @@ export const useAuthStore = create(persist((set, get) => ({
           return { success: false, message: 'Bu demo hesabı kalıcı olarak kaldırılmıştır.' };
       }
 
-      const matchCandidate = (u) => {
-          if (!u) return false;
-          const uEmail = normalizeEmail(u.email);
-          if (uEmail && uEmail === cleanEmail) return true;
-          if (cleanDigits.length >= 10) {
-              const uPhone = (u.phone || '').replace(/\D/g, '');
-              if (uPhone && (uPhone.endsWith(cleanDigits.slice(-10)) || cleanDigits.endsWith(uPhone.slice(-10)))) return true;
-              if (uEmail && uEmail.includes(cleanDigits.slice(-10))) return true;
-          }
-          if (cleanDigits.length === 11) {
-              const uTc = String(u.tcNo || u.tc || '').replace(/\D/g, '');
-              if (uTc && uTc === cleanDigits) return true;
-          }
-          return false;
-      };
+      try {
+          const baseUrl = getApiBaseUrl();
+          const res = await fetch(`${baseUrl}/api/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ identifier: cleanInput, password: cleanPassword })
+          });
+          const data = await res.json();
 
-      // 1. RAM'deki (Zustand) kullanıcılar arasında şifresi eşleşen kullanıcıyı bul
-      const memoryUsers = useUserStore.getState().users || [];
-      const memoryCandidates = memoryUsers.filter(matchCandidate);
-      let userRecord = memoryCandidates.find(u => (u.password || '').trim() === cleanPassword);
-
-      // 2. Eğer yerel hafızada şifreyle eşleşen bulunamadıysa, Firestore'dan doğrudan çek
-      if (!userRecord) {
-          try {
-              const usersRef = collection(db, 'users');
-              const allSnap = await getDocs(usersRef);
-              const firestoreCandidates = [];
-              allSnap.forEach(docSnap => {
-                  const d = { id: docSnap.id, ...docSnap.data() };
-                  if (matchCandidate(d)) {
-                      firestoreCandidates.push(d);
-                  }
-              });
-
-              userRecord = firestoreCandidates.find(u => (u.password || '').trim() === cleanPassword);
-
-              // Eğer aday hesaplar varsa ama şifre uyuşmadıysa hatalı parola dön
-              if (!userRecord && (memoryCandidates.length > 0 || firestoreCandidates.length > 0)) {
-                  const nextGuard = recordFailedLoginAttempt();
-                  if (nextGuard.lockUntil > Date.now()) {
-                      return {
-                          success: false,
-                          message: 'Çok fazla hatalı parola denemesi yaptınız. Hesabınız geçici olarak 3 dakika korumaya alındı.'
-                      };
-                  }
-                  return { success: false, message: 'Hatalı Parola girdiniz.' };
+          if (!res.ok || !data.success) {
+              const nextGuard = recordFailedLoginAttempt();
+              if (nextGuard.lockUntil > Date.now()) {
+                  return {
+                      success: false,
+                      message: 'Çok fazla hatalı parola denemesi yaptınız. Hesabınız geçici olarak 3 dakika korumaya alındı.'
+                  };
               }
-          } catch (err) {
-              console.error("Giriş esnasında Firestore kullanıcı sorgulama hatası:", err);
-              if (err?.code === 'permission-denied') {
-                  return { success: false, message: 'Firebase izin hatası (Permission Denied). Lütfen Firestore kurallarınızı kontrol edin.' };
-              }
+              return { success: false, message: data.message || 'Hatalı e-posta, telefon veya şifre girdiniz.' };
           }
-      }
 
-      if (!userRecord) {
-          recordFailedLoginAttempt();
-          return { success: false, message: 'Sistemde kayıtlı kullanıcı hesabı bulunamadı.' };
-      }
+          // Başarılı girişte brute-force sayacını sıfırla
+          resetLoginGuard();
 
-      if (userRecord.status === 'Pasif') {
-          return { success: false, message: 'Hesabınız askıya alınmıştır. Lütfen yönetici ile iletişime geçin.' };
-      }
+          const userRecord = data.user;
+          const token = data.token;
 
-      // Parola Doğrulaması (Çift Güvenlik Kontrolü)
-      const recordPassword = (userRecord.password || '').trim();
-      if (recordPassword !== cleanPassword) {
-          const nextGuard = recordFailedLoginAttempt();
-          if (nextGuard.lockUntil > Date.now()) {
-              return {
-                  success: false,
-                  message: 'Çok fazla hatalı parola denemesi yaptınız. Hesabınız geçici olarak 3 dakika korumaya alındı.'
-              };
+          if (userRecord.role === 'expert') {
+              useSettingsStore.getState().setExpertName(userRecord.name);
           }
-          return { success: false, message: 'Hatalı Parola girdiniz.' };
-      }
 
-      // Başarılı girişte brute-force sayacını sıfırla
-      resetLoginGuard();
+          const normalizedUser = stripSensitiveAuthFields({
+              ...userRecord,
+              userType: 'corporate'
+          });
+          const isAdmin = userRecord.role === 'admin' || userRecord.secondaryRole === 'admin';
+          const initialStaffRole = isAdmin ? 'admin' : (userRecord.role || 'customer');
 
-      // Uzman login olduğunda, isim senkronizasyonu
-      if (userRecord.role === 'expert') {
-          useSettingsStore.getState().setExpertName(userRecord.name);
+          set({ user: normalizedUser, token: token, activeMode: 'corporate', activeStaffRole: initialStaffRole });
+
+          // Giriş sonrası güvenli kullanıcı listesini başlat
+          useUserStore.getState().initFirestoreUsers();
+
+          return { success: true };
+      } catch (err) {
+          console.error("Giriş esnasında sunucu iletişim hatası:", err);
+          return { success: false, message: 'Giriş yapılamadı. Lütfen internet bağlantınızı kontrol edip tekrar deneyin.' };
       }
-      
-      // Parolayı localStorage oturum verisinden arındır
-      const normalizedUser = stripSensitiveAuthFields({
-          ...userRecord,
-          userType: 'corporate'
-      });
-      const isAdmin = userRecord.role === 'admin' || userRecord.secondaryRole === 'admin';
-      const initialStaffRole = isAdmin ? 'admin' : (userRecord.role || 'customer');
-      set({ user: normalizedUser, activeMode: 'corporate', activeStaffRole: initialStaffRole });
-      return { success: true };
   },
-  logout: () => set({ user: null, activeMode: null, activeStaffRole: null }),
+  logout: () => set({ user: null, token: null, activeMode: null, activeStaffRole: null }),
   updateProfile: (data) => set(state => {
       if (!state.user) return state;
       const updatedUser = stripSensitiveAuthFields({ ...state.user, ...data });
       if (updatedUser.role === 'expert' && data.name) {
           useSettingsStore.getState().setExpertName(data.name);
       }
-      // Ayrıca ana veritabanını da güncelle (Böylece Kullanıcılar ekranı ve Firestore eşitlenir)
       const userStoreInstance = useUserStore.getState();
       const targetId = updatedUser.id || userStoreInstance.findUserByEmail(updatedUser.email)?.id;
       userStoreInstance.updateUser(targetId, { ...data, email: updatedUser.email, name: updatedUser.name }).catch(console.error);

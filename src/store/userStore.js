@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { normalizePhoneNumber, toTurkishTitleCase, normalizeTurkishTitleCase, normalizeEmail, getCurrentSessionUser, isStaffSessionUser, isRelatedFamilyOrSelf } from '../utils/userUtils';
+import { getApiBaseUrl } from '../utils/apiConfig';
+import { useAuthStore } from './authStore';
 
 const defaultUsers = [];
 
@@ -46,135 +48,52 @@ export const useUserStore = create((set, get) => ({
         set({ isFirebaseInitialized: true, _activeSessionKey: sessionKey });
         
         try {
-            const usersRef = collection(db, 'users');
-            
-            // Listen
-            const unsub = onSnapshot(usersRef, (snapshot) => {
-                const currentSession = getCurrentSessionUser();
-                if (!currentSession) {
-                    set({ users: [] });
-                    return;
-                }
+            const baseUrl = getApiBaseUrl();
+            let token = useAuthStore.getState().token;
+            if (!token) {
+                await useAuthStore.getState().refreshTokenIfNeeded();
+                token = useAuthStore.getState().token;
+            }
 
-                // Doğrudan Firestore kaydından oturum açmış kullanıcının gerçek yetkisini doğrula (localStorage manipülasyonuna karşı koruma)
-                const rawAuthSnap = snapshot.docs.find(d => {
-                    const dt = d.data() || {};
-                    const dId = dt.id || d.id;
-                    if (currentSession.id && dId === currentSession.id) return true;
-                    if (currentSession.email && dt.email && normalizeEmail(dt.email) === normalizeEmail(currentSession.email)) return true;
-                    return false;
-                });
-                const verifiedAuthData = rawAuthSnap ? { ...rawAuthSnap.data(), id: rawAuthSnap.data()?.id || rawAuthSnap.id } : null;
-                const isVerifiedStaff = isStaffSessionUser(verifiedAuthData);
-                const effectiveSessionUser = verifiedAuthData || currentSession;
-
-                const fetchedUsers = [];
-                const fetchedCompanies = new Set();
-                snapshot.forEach(docSnap => {
-                    const data = docSnap.data();
-                    const userId = data.id || docSnap.id;
-                    const rawEmail = data.email ? String(data.email).trim() : '';
-                    const cleanEmail = normalizeEmail(rawEmail);
-                    const rawName = data.name ? String(data.name).trim() : '';
-                    const cleanName = formatTitleCase(rawName);
-                    const rawPhone = data.phone ? String(data.phone).trim() : '';
-                    const cleanPhone = normalizePhoneNumber(rawPhone);
-                    const rawCompany = data.company ? String(data.company).trim() : '';
-                    const cleanCompany = rawCompany ? formatTitleCase(rawCompany) : '';
-                    const userRecord = { 
-                        ...data, 
-                        id: userId, 
-                        role: data.role || 'customer',
-                        email: cleanEmail, 
-                        name: cleanName, 
-                        phone: cleanPhone !== '-' ? cleanPhone : rawPhone,
-                        company: cleanCompany || ((data.role || 'customer') === 'customer' ? 'Bireysel' : 'Move Travel & Mice')
-                    };
-                    
-                    // Kalıcı olarak demo/base44 hesaplarını sadece yetkili personel oturumunda Firestore'dan temizle
-                    if (isDemoUser(userRecord, userId)) {
-                        if (isVerifiedStaff) {
-                            deleteDoc(docSnap.ref).catch(err => console.log("Demo hesap silme hatası:", err));
-                        }
-                        return; // UI listesine ekleme
-                    }
-
-                    // Aynı isim ve e-postaya sahip mükerrer doküman varsa belleğe tekil ekle ve fazlalığı temizle
-                    if (cleanEmail && !cleanEmail.endsWith('@move.local')) {
-                        const existingIdx = fetchedUsers.findIndex(u => u.email === cleanEmail && u.name?.toLowerCase() === cleanName.toLowerCase());
-                        if (existingIdx !== -1) {
-                            if (isVerifiedStaff) {
-                                deleteDoc(docSnap.ref).catch(err => console.log("Mükerrer doküman temizleme hatası:", err));
-                            }
-                            return;
-                        }
-                    }
-
-                    // Veritabanı normalizasyon yazmalarını sadece yetkili personel oturumunda çalıştır
-                    if (isVerifiedStaff) {
-                        const dbUpdates = {};
-                        if (rawEmail && rawEmail !== cleanEmail) {
-                            dbUpdates.email = cleanEmail;
-                        }
-                        if (rawName && rawName !== cleanName) {
-                            dbUpdates.name = cleanName;
-                        }
-                        if (rawPhone && cleanPhone !== '-' && rawPhone !== cleanPhone) {
-                            dbUpdates.phone = cleanPhone;
-                        }
-                        if (rawCompany && cleanCompany && rawCompany !== cleanCompany) {
-                            dbUpdates.company = cleanCompany;
-                        }
-                        if (Object.keys(dbUpdates).length > 0) {
-                            setDoc(doc(db, 'users', userId), dbUpdates, { merge: true }).catch(err => console.log("User normalization sync error:", err));
-                        }
-
-                        // Sanitize old placeholder or deleted company names
-                        if (userRecord.company && (userRecord.company.includes('Base44') || userRecord.company.toLowerCase().includes('tgundogan'))) {
-                            const fixedCompany = userRecord.role === 'customer' ? 'Bireysel' : 'Move Travel & Mice';
-                            setDoc(doc(db, 'users', userId), { company: fixedCompany }, { merge: true }).catch(err => console.log(err));
-                            userRecord.company = fixedCompany;
-                        }
-                    }
-
-                    // Müşteri (Customer) oturumlarında veri izolasyonu:
-                    // Başka müşterilerin verilerini belleğe alma; yalnızca kendi/ailesinin kaydını ve personelin genel iletişim bilgisini tut
-                    if (!isVerifiedStaff) {
-                        if (isRelatedFamilyOrSelf(userRecord, effectiveSessionUser)) {
-                            const { password: _removedPass, ...safeUserRecord } = userRecord;
-                            fetchedUsers.push(safeUserRecord);
-                        } else if (isStaffSessionUser(userRecord)) {
-                            fetchedUsers.push({
-                                id: userRecord.id,
-                                name: userRecord.name,
-                                email: userRecord.email,
-                                phone: userRecord.phone,
-                                avatar: userRecord.avatar,
-                                role: userRecord.role,
-                                secondaryRole: userRecord.secondaryRole || null,
-                                company: userRecord.company,
-                                title: userRecord.title || '',
-                                status: userRecord.status || 'Aktif'
-                            });
-                        }
-                        return;
-                    }
-
-                    fetchedUsers.push(userRecord);
-                    if (userRecord.company && !userRecord.company.toLowerCase().includes('tgundogan')) {
-                        fetchedCompanies.add(formatTitleCase(userRecord.company));
-                    }
-                });
-
-                const cleanCompanyList = Array.from(fetchedCompanies).filter(c => c && !c.toLowerCase().includes('tgundogan'));
-                set({ 
-                    users: fetchedUsers,
-                    companies: cleanCompanyList.length > 0 ? cleanCompanyList : ['Move Travel & Mice']
-                });
+            const res = await fetch(`${baseUrl}/api/users/list`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ token })
             });
-            set({ _unsubscribe: unsub });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.success && Array.isArray(data.users)) {
+                    const fetchedUsers = [];
+                    const fetchedCompanies = new Set();
+                    data.users.forEach(userRecord => {
+                        const rawCompany = userRecord.company ? String(userRecord.company).trim() : '';
+                        const cleanCompany = rawCompany ? formatTitleCase(rawCompany) : '';
+                        const formatted = {
+                            ...userRecord,
+                            name: formatTitleCase(userRecord.name || ''),
+                            email: normalizeEmail(userRecord.email || ''),
+                            phone: normalizePhoneNumber(userRecord.phone || ''),
+                            company: cleanCompany || ((userRecord.role || 'customer') === 'customer' ? 'Bireysel' : 'Move Travel & Mice')
+                        };
+                        fetchedUsers.push(formatted);
+                        if (cleanCompany && !cleanCompany.toLowerCase().includes('tgundogan')) {
+                            fetchedCompanies.add(cleanCompany);
+                        }
+                    });
+
+                    const cleanCompanyList = Array.from(fetchedCompanies).filter(c => c && !c.toLowerCase().includes('tgundogan'));
+                    set({ 
+                        users: fetchedUsers,
+                        companies: cleanCompanyList.length > 0 ? cleanCompanyList : ['Move Travel & Mice']
+                    });
+                }
+            }
         } catch (e) {
-            console.error("Firebase bağlanamadı, yerel veriler kullanılıyor", e);
+            console.warn("Kullanıcı listesi API üzerinden alınamadı:", e);
         }
     },
     
@@ -252,7 +171,20 @@ export const useUserStore = create((set, get) => ({
         set({ users: [newUser, ...currentUsers.filter(u => u.id !== newUserId)] });
 
         try {
-            await setDoc(doc(db, 'users', newUserId), newUser);
+            const baseUrl = getApiBaseUrl();
+            let token = useAuthStore.getState().token;
+            if (!token) {
+                await useAuthStore.getState().refreshTokenIfNeeded();
+                token = useAuthStore.getState().token;
+            }
+            await fetch(`${baseUrl}/api/users/save`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ token, user: newUser })
+            });
         } catch (e) {
             console.error("User eklenemedi:", e);
         }
@@ -332,13 +264,26 @@ export const useUserStore = create((set, get) => ({
             }
         } catch (e) {}
 
-        // Persist to Firestore
+        // Persist to Server API
         try {
             if (targetId) {
-                await setDoc(doc(db, 'users', targetId), { ...dataToUpdate, id: targetId }, { merge: true });
+                const baseUrl = getApiBaseUrl();
+                let token = useAuthStore.getState().token;
+                if (!token) {
+                    await useAuthStore.getState().refreshTokenIfNeeded();
+                    token = useAuthStore.getState().token;
+                }
+                await fetch(`${baseUrl}/api/users/save`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({ token, user: { ...dataToUpdate, id: targetId } })
+                });
                 
-                // Automatically sync participant details and tour experts if email, name, phone or avatar changed
-                if (dataToUpdate.email || dataToUpdate.name || dataToUpdate.phone || dataToUpdate.avatar) {
+                // Automatically sync participant details and tour experts if email, name, phone, avatar or password changed
+                if (dataToUpdate.email || dataToUpdate.name || dataToUpdate.phone || dataToUpdate.avatar || dataToUpdate.password) {
                     try {
                         const toursRef = collection(db, 'tours');
                         const toursSnap = await getDocs(toursRef);
@@ -349,13 +294,19 @@ export const useUserStore = create((set, get) => ({
                             const tourUpdates = {};
 
                             const newParts = parts.map(p => {
-                                if (p.id === targetId || (existing?.email && p.email?.toLowerCase() === existing.email.toLowerCase())) {
+                                const isTargetParticipant = (targetId && p.id === targetId) ||
+                                    (existing?.tcNo && p.tcNo && String(p.tcNo).replace(/\D/g, '') === String(existing.tcNo).replace(/\D/g, '')) ||
+                                    (existing?.email && p.email && p.email.toLowerCase() === existing.email.toLowerCase()) ||
+                                    (existing?.name && p.name && normalizeTurkishTitleCase(p.name) === normalizeTurkishTitleCase(existing.name));
+
+                                if (isTargetParticipant) {
                                     updated = true;
                                     return {
                                         ...p,
-                                        email: dataToUpdate.email || p.email,
+                                        email: dataToUpdate.email !== undefined ? dataToUpdate.email : p.email,
                                         name: dataToUpdate.name || p.name,
-                                        phone: dataToUpdate.phone || p.phone
+                                        phone: dataToUpdate.phone !== undefined ? dataToUpdate.phone : p.phone,
+                                        password: dataToUpdate.password !== undefined ? dataToUpdate.password : p.password
                                     };
                                 }
                                 return p;
@@ -367,8 +318,8 @@ export const useUserStore = create((set, get) => ({
                                 tourUpdates.expert = {
                                     ...tData.expert,
                                     name: dataToUpdate.name || tData.expert.name,
-                                    phone: dataToUpdate.phone || tData.expert.phone,
-                                    email: dataToUpdate.email || tData.expert.email,
+                                    phone: dataToUpdate.phone !== undefined ? dataToUpdate.phone : tData.expert.phone,
+                                    email: dataToUpdate.email !== undefined ? dataToUpdate.email : tData.expert.email,
                                     avatar: dataToUpdate.avatar || tData.expert.avatar
                                 };
                             }
@@ -378,8 +329,8 @@ export const useUserStore = create((set, get) => ({
                                 tourUpdates.expert2 = {
                                     ...tData.expert2,
                                     name: dataToUpdate.name || tData.expert2.name,
-                                    phone: dataToUpdate.phone || tData.expert2.phone,
-                                    email: dataToUpdate.email || tData.expert2.email,
+                                    phone: dataToUpdate.phone !== undefined ? dataToUpdate.phone : tData.expert2.phone,
+                                    email: dataToUpdate.email !== undefined ? dataToUpdate.email : tData.expert2.email,
                                     avatar: dataToUpdate.avatar || tData.expert2.avatar
                                 };
                             }
@@ -388,6 +339,37 @@ export const useUserStore = create((set, get) => ({
                                 await updateDoc(tDoc.ref, tourUpdates);
                             }
                         }
+
+                        // Also sync local useTourStore state in memory for immediate UI responsiveness
+                        try {
+                            const tourStoreMod = await import('./tourStore.js');
+                            if (tourStoreMod?.useTourStore) {
+                                tourStoreMod.useTourStore.setState(state => ({
+                                    tours: (state.tours || []).map(t => {
+                                        const parts = t.participants || [];
+                                        let modified = false;
+                                        const updatedParts = parts.map(p => {
+                                            const isTarget = (targetId && p.id === targetId) ||
+                                                (existing?.tcNo && p.tcNo && String(p.tcNo).replace(/\D/g, '') === String(existing.tcNo).replace(/\D/g, '')) ||
+                                                (existing?.email && p.email && p.email.toLowerCase() === existing.email.toLowerCase()) ||
+                                                (existing?.name && p.name && normalizeTurkishTitleCase(p.name) === normalizeTurkishTitleCase(existing.name));
+                                            if (isTarget) {
+                                                modified = true;
+                                                return {
+                                                    ...p,
+                                                    ...(dataToUpdate.email !== undefined ? { email: dataToUpdate.email } : {}),
+                                                    ...(dataToUpdate.name !== undefined ? { name: dataToUpdate.name } : {}),
+                                                    ...(dataToUpdate.phone !== undefined ? { phone: dataToUpdate.phone } : {}),
+                                                    ...(dataToUpdate.password !== undefined ? { password: dataToUpdate.password } : {})
+                                                };
+                                            }
+                                            return p;
+                                        });
+                                        return modified ? { ...t, participants: updatedParts } : t;
+                                    })
+                                }));
+                            }
+                        } catch (e) {}
                     } catch (tourSyncErr) {
                         console.warn("Tour participants & experts auto-sync error:", tourSyncErr);
                     }
@@ -420,7 +402,20 @@ export const useUserStore = create((set, get) => ({
         set({ users: currentUsers.filter(u => u.id !== id) });
         
         try {
-            await deleteDoc(doc(db, 'users', id));
+            const baseUrl = getApiBaseUrl();
+            let token = useAuthStore.getState().token;
+            if (!token) {
+                await useAuthStore.getState().refreshTokenIfNeeded();
+                token = useAuthStore.getState().token;
+            }
+            await fetch(`${baseUrl}/api/users/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ token, id })
+            });
         } catch (e) {
             console.error("Kullanici silinemedi:", e);
         }

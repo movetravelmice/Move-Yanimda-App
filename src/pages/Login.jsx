@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore } from '../store/userStore';
 import { isUserChild, normalizeEmail } from '../utils/userUtils';
+import { createPasswordSetupLink } from '../services/authLinkService';
 import { 
   Mail, 
   KeyRound, 
@@ -116,20 +117,7 @@ export default function Login() {
 
       setIsSending(true);
       try {
-          // Eğer kullanıcının şifresi veritabanında boş/tanımsız ise otomatik geçici parola ata ve veritabanına kaydet
-          let activePassword = (userRecord.password || '').trim();
-          if (!activePassword) {
-              activePassword = '123456';
-              try {
-                  const { doc, updateDoc } = await import('firebase/firestore');
-                  const { db } = await import('../lib/firebase');
-                  await updateDoc(doc(db, 'users', userRecord.id), { password: activePassword });
-                  userRecord.password = activePassword;
-                  useUserStore.getState().updateUser(userRecord.id, { password: activePassword });
-              } catch (updateErr) {
-                  console.warn("Could not save fallback password:", updateErr);
-              }
-          }
+          const setupInfo = await createPasswordSetupLink(userRecord);
 
           let customSubject = null;
           let customHtml = null;
@@ -146,13 +134,15 @@ export default function Login() {
               console.error("Forgot password template load error:", e);
           }
 
-          const res = await fetch('https://move-yanimda.web.app/api/forgot-password', {
+          const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+          const res = await fetch(`${baseUrl}/api/forgot-password`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                   host: smtp.host, port: smtp.port, user: smtp.user, pass: smtp.pass,
                   to: email, corporateName: corporateName,
-                  accountName: userRecord.name, accountPassword: activePassword,
+                  accountName: userRecord.name,
+                  setupUrl: setupInfo.url,
                   customSubject, customHtml
               })
           });
@@ -160,13 +150,14 @@ export default function Login() {
           if (!res.ok) {
               setError(data.message || 'Gönderim sırasında hata oluştu.');
           } else {
-              setSuccessMsg(`✅ Şifreniz e-posta adresinize iletildi.`);
+              setSuccessMsg(`✅ Güvenli şifre belirleme bağlantısı e-posta adresinize iletildi.`);
               if (userRecord.phone && userRecord.phone !== '-') {
                   useSettingsStore.getState().sendWhatsAppNotification(
                       userRecord.phone,
-                      'passwordResetTemplate',
-                      [String(activePassword)]
-                  );
+                      'accountActivationTemplate',
+                      [userRecord.name || 'Değerli Misafirimiz'],
+                      setupInfo.token
+                  ).catch(e => console.warn("WhatsApp password reset notification error:", e));
               }
           }
       } catch (err) {

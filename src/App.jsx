@@ -15,6 +15,7 @@ import RegisterIndividual from './pages/Public/RegisterIndividual';
 import PublicTranslator from './pages/Public/PublicTranslator';
 import PublicTools from './pages/Public/PublicTools';
 import BudgetInviteAccept from './pages/Individual/BudgetInviteAccept';
+import SetPassword from './pages/Public/SetPassword';
 import IndividualLayout from './pages/Individual/IndividualLayout';
 import AppBottomNav from './components/AppBottomNav';
 import TintinFloatingButton from './components/TintinFloatingButton';
@@ -218,6 +219,8 @@ function App() {
           <Route path="/travel-tools/distance" element={<Navigate to="/travel-tools?tab=distance" replace />} />
           <Route path="/travel-tools" element={<PublicTools />} />
           <Route path="/invite/:token" element={<BudgetInviteAccept />} />
+          <Route path="/set-password" element={<SetPassword />} />
+          <Route path="/auth/set-password" element={<SetPassword />} />
 
           {/* Individual User Portal */}
           <Route path="/individual/*" element={<IndividualLayout />} />

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronDown, ChevronRight, Plus, Phone, PhoneOff, MessageCircle, X, Search, User as UserIcon, Building, Mail, CheckCircle2, History, Activity, Users, PlaneTakeoff, BellRing, BellOff, Trash2, AlertTriangle, FileSpreadsheet, FileText, Lock, UserPlus, Ticket, KeyRound, Send, Loader2, Settings, Check, AlertCircle, Sparkles, Filter, ExternalLink, Copy, MessageSquare, Info } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Plus, Phone, PhoneOff, MessageCircle, X, Search, User as UserIcon, Building, Mail, CheckCircle2, History, Activity, Users, PlaneTakeoff, BellRing, BellOff, Trash2, AlertTriangle, FileSpreadsheet, FileText, Lock, UserPlus, Ticket, KeyRound, Send, Loader2, Settings, Check, AlertCircle, Sparkles, Filter, ExternalLink, Copy, MessageSquare, Info, Eye, EyeOff } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 import ParticipantTransferManager from '../../components/ParticipantTransferManager';
@@ -8,7 +8,8 @@ import BulkParticipantManager from '../../components/BulkParticipantManager';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useNotificationStore } from '../../store/notificationStore';
-import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, normalizeTurkish, normalizeEmail } from '../../utils/userUtils';
+import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, normalizeTurkish, normalizeEmail, formatPhoneInputWithoutPrefix, isUserMatch, findMatchingUser } from '../../utils/userUtils';
+import { createPasswordSetupLink, sendWelcomeAndActivationWhatsApp } from '../../services/authLinkService';
 
 const generateSecurePassword = (fullName) => {
     const nameStr = (fullName || '').replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, '');
@@ -59,6 +60,15 @@ const waModalTemplates = [
         previewText: (name) => `Sayın ${name}, Move Yanımda sistemine kaydınız başarıyla oluşturulmuştur. Seyahatlerinizi ve bilet detaylarınızı uygulamamız üzerinden takip edebilirsiniz.`,
         buttons: [
             { type: 'url', text: 'Uygulamayı Aç', url: 'https://move-yanimda.web.app' }
+        ]
+    },
+    {
+        key: 'accountActivationTemplate',
+        title: 'Hesap Aktivasyonu & Şifre Belirleme Şablonu',
+        desc: 'Misafire tek tıkla şifresini belirlemesi için aktivasyon butonu iletir.',
+        previewText: (name) => `Sayın ${name}, Move Yanımda seyahat profiliniz hazırlandı. Uçuş, transfer ve tur programınıza erişmek için aşağıdaki butona tıklayarak hesabınızı aktif hale getirebilirsiniz.`,
+        buttons: [
+            { type: 'url', text: 'Hesabı Aktifleştir', url: 'https://move-yanimda.web.app/set-password' }
         ]
     },
     {
@@ -191,7 +201,7 @@ export default function ParticipantsList() {
     }, []);
 
     const getParticipantTickets = (p, globalP) => {
-        const gUser = globalP || users.find(u => u.id === p.id) || p;
+        const gUser = globalP || findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
         return (Array.isArray(p.ticketFiles) && p.ticketFiles.length > 0)
             ? p.ticketFiles
             : ((Array.isArray(gUser.ticketFiles) && gUser.ticketFiles.length > 0)
@@ -200,14 +210,14 @@ export default function ParticipantsList() {
     };
 
     const checkParticipantHasPhone = (p, globalP) => {
-        const gUser = globalP || users.find(u => u.id === p.id) || p;
-        const ph = (gUser.phone || p.phone || '').trim();
+        const gUser = globalP || findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
+        const ph = ((gUser.phone && gUser.phone !== '-') ? gUser.phone : (p.phone || '')).trim();
         return ph !== '' && ph !== '-' && ph.length >= 7;
     };
 
     const checkParticipantHasEmail = (p, globalP) => {
-        const gUser = globalP || users.find(u => u.id === p.id) || p;
-        const em = (gUser.email || p.email || '').trim().toLowerCase();
+        const gUser = globalP || findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
+        const em = ((gUser.email && !gUser.email.endsWith('@move.local') && !gUser.email.endsWith('.local') && !gUser.email.startsWith('user_')) ? gUser.email : (p.email || '')).trim().toLowerCase();
         if (!em || !em.includes('@')) return false;
         if (em.endsWith('@move.local') || em.endsWith('.local') || em.startsWith('user_')) return false;
         return true;
@@ -228,7 +238,7 @@ export default function ParticipantsList() {
     const getFilterCount = (filterId) => {
         if (filterId === 'all') return participants.length;
         return participants.filter(p => {
-            const globalP = users.find(u => u.id === p.id) || p;
+            const globalP = findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
             if (filterId === 'has_phone') return checkParticipantHasPhone(p, globalP);
             if (filterId === 'no_phone') return !checkParticipantHasPhone(p, globalP);
             if (filterId === 'has_email') return checkParticipantHasEmail(p, globalP);
@@ -240,7 +250,7 @@ export default function ParticipantsList() {
     };
 
     const filteredParticipants = participants.filter(p => {
-        const globalP = users.find(u => u.id === p.id) || p;
+        const globalP = findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
         if (filterType === 'has_phone') return checkParticipantHasPhone(p, globalP);
         if (filterType === 'no_phone') return !checkParticipantHasPhone(p, globalP);
         if (filterType === 'has_email') return checkParticipantHasEmail(p, globalP);
@@ -309,7 +319,7 @@ export default function ParticipantsList() {
             let sentCount = 0;
             
             for (const p of participants) {
-                const globalUser = users.find(u => u.id === p.id || u.email === p.email);
+                const globalUser = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email);
                 if (!globalUser) continue;
 
                 // Çocuk kullanıcılar e-posta almaz ve bildirim gönderilmez
@@ -387,7 +397,9 @@ export default function ParticipantsList() {
 
     const [showSht, setShowSht] = useState(false); // Bottom sheet for user details
     const [selectedUser, setSelectedUser] = useState(null);
-    const [contactForm, setContactForm] = useState({ email: '', phone: '' });
+    const [contactForm, setContactForm] = useState({ email: '', phone: '', password: '' });
+    const [showContactPassword, setShowContactPassword] = useState(false);
+    const [passwordCopied, setPasswordCopied] = useState(false);
     const [isSavingContact, setIsSavingContact] = useState(false);
     const [identityForm, setIdentityForm] = useState({
         passportCountry: '', passportNo: '', passportExp: '', tcNo: '',
@@ -457,7 +469,7 @@ export default function ParticipantsList() {
         if (transferTarget && participants.length > 0) {
             const userToOpen = participants.find(p => p.id === transferTarget || p.id === parseInt(transferTarget, 10));
             if (userToOpen) {
-                const globalUser = users.find(u => u.id === userToOpen.id || u.email === userToOpen.email) || userToOpen;
+                const globalUser = findMatchingUser(userToOpen, users) || users.find(u => u.id === userToOpen.id || u.email === userToOpen.email) || userToOpen;
                 setSelectedUser(globalUser);
                 setShowTransferSheet(true);
             }
@@ -470,8 +482,8 @@ export default function ParticipantsList() {
     // Keep selectedUser in sync with real-time Firestore updates
     React.useEffect(() => {
         if (selectedUser) {
-            const upToDate = users.find(u => u.id === selectedUser.id || u.email === selectedUser.email);
-            if (upToDate && upToDate.pushEnabled !== selectedUser.pushEnabled) {
+            const upToDate = findMatchingUser(selectedUser, users) || users.find(u => u.id === selectedUser.id || u.email === selectedUser.email);
+            if (upToDate && (upToDate.pushEnabled !== selectedUser.pushEnabled || upToDate.phone !== selectedUser.phone || upToDate.email !== selectedUser.email)) {
                 setSelectedUser(upToDate);
             }
         }
@@ -515,13 +527,7 @@ export default function ParticipantsList() {
     const filteredCompanies = safeCompanies.filter(c => c && c.toLowerCase().includes(newCompany.toLowerCase()));
 
     const formatPhoneNumber = (value) => {
-        if (!value) return '';
-        const digits = value.replace(/\D/g, '');
-        const cleanDigits = digits.startsWith('0') ? digits.substring(1).slice(0, 10) : (digits.startsWith('90') ? digits.substring(2).slice(0, 10) : digits.slice(0, 10));
-        if (cleanDigits.length <= 3) return cleanDigits;
-        if (cleanDigits.length <= 6) return `${cleanDigits.slice(0, 3)} ${cleanDigits.slice(3)}`;
-        if (cleanDigits.length <= 8) return `${cleanDigits.slice(0, 3)} ${cleanDigits.slice(3, 6)} ${cleanDigits.slice(6)}`;
-        return `${cleanDigits.slice(0, 3)} ${cleanDigits.slice(3, 6)} ${cleanDigits.slice(6, 8)} ${cleanDigits.slice(8, 10)}`;
+        return formatPhoneInputWithoutPrefix(value);
     };
 
     const resetWizard = () => {
@@ -547,6 +553,36 @@ export default function ParticipantsList() {
     // Profile Child Linking state
     const [profileChildSearchQuery, setProfileChildSearchQuery] = useState('');
     const [showProfileChildDropdown, setShowProfileChildDropdown] = useState(false);
+    const [isCopyingSetupLink, setIsCopyingSetupLink] = useState(false);
+    const [setupLinkCopied, setSetupLinkCopied] = useState(false);
+
+    const handleCopyPasswordSetupLink = async () => {
+        if (!selectedUser) return;
+        setIsCopyingSetupLink(true);
+        try {
+            const targetUserDoc = findMatchingUser(selectedUser, users) || users.find(u => u.id === selectedUser.id) || selectedUser;
+            const res = await createPasswordSetupLink(targetUserDoc);
+            
+            await navigator.clipboard.writeText(res.url);
+            setSetupLinkCopied(true);
+            setTimeout(() => setSetupLinkCopied(false), 4000);
+            
+            setSuccessPopup({
+                title: 'Bağlantı Kopyalandı',
+                description: `Tek kullanımlık şifre belirleme bağlantısı panoya kopyalandı:\n\n${res.url}\n\nBu bağlantıyı misafirinizle WhatsApp veya SMS üzerinden paylaşabilirsiniz. Bağlantı 72 saat boyunca geçerlidir.`,
+                type: 'success'
+            });
+        } catch (err) {
+            console.error("Create password setup link error:", err);
+            setSuccessPopup({
+                title: 'Bağlantı Oluşturulamadı',
+                description: err.message || 'Şifre belirleme bağlantısı oluşturulurken hata meydana geldi.',
+                type: 'error'
+            });
+        } finally {
+            setIsCopyingSetupLink(false);
+        }
+    };
 
     const calcUserStats = (pEmail) => {
         let activeCount = 0;
@@ -564,33 +600,70 @@ export default function ParticipantsList() {
     const handleBack = () => navigate(-1);
 
     const openProfile = (p) => {
-        const globalUser = users.find(u => u.id === p.id || (u.email && u.email === p.email)) || p;
+        const globalUser = findMatchingUser(p, users) || users.find(u => u.id === p.id || (u.email && u.email === p.email)) || p;
         setSelectedUser(globalUser);
         setCredentialSentMessage(null);
+        setShowContactPassword(false);
+        setPasswordCopied(false);
         const hasPlaceholder = globalUser.email && (globalUser.email.endsWith('@move.local') || globalUser.email.endsWith('.local') || globalUser.email.startsWith('user_'));
         const initialEmail = hasPlaceholder ? '' : (globalUser.email || '');
-        const initialPhone = globalUser.phone && globalUser.phone !== '-' ? globalUser.phone : '';
+        const rawPhone = (globalUser.phone && globalUser.phone !== '-') ? globalUser.phone : (p.phone && p.phone !== '-' ? p.phone : '');
+        const initialPhone = formatPhoneInputWithoutPrefix(rawPhone);
+        const initialPassword = (globalUser.password || p.password || '').trim();
+
         setContactForm({
             email: initialEmail,
-            phone: initialPhone
+            phone: initialPhone,
+            password: initialPassword
         });
+
+        // Her profil açılışında Firestore'daki en güncel şifre ve iletişim bilgilerini doğrudan çekip eşitle
+        const targetDocId = (globalUser && globalUser.id && !globalUser.id.startsWith('temp_')) ? globalUser.id : (p.id || p.userId);
+        if (targetDocId) {
+            import('firebase/firestore').then(async ({ doc, getDoc }) => {
+                const { db } = await import('../../lib/firebase');
+                const snap = await getDoc(doc(db, 'users', targetDocId));
+                if (snap.exists()) {
+                    const uData = snap.data();
+                    if (uData.password) {
+                        const pass = String(uData.password).trim();
+                        setContactForm(prev => ({ ...prev, password: pass }));
+                        setSelectedUser(prev => ({ ...prev, password: pass }));
+                    }
+                    if (uData.phone && uData.phone !== '-') {
+                        const freshPhone = formatPhoneInputWithoutPrefix(uData.phone);
+                        setContactForm(prev => ({ ...prev, phone: freshPhone }));
+                    }
+                    if (uData.email && !uData.email.endsWith('@move.local') && !uData.email.endsWith('.local') && !uData.email.startsWith('user_')) {
+                        setContactForm(prev => ({ ...prev, email: uData.email }));
+                    }
+                }
+            }).catch(e => console.warn("Password & contact live fetch error:", e));
+        }
+
         setIdentityForm({
-            passportCountry: globalUser.passportCountry || '',
-            passportNo: globalUser.passportNo || '',
-            passportExp: globalUser.passportExp || '',
-            tcNo: globalUser.tcNo || '',
-            bloodType: globalUser.bloodType || '',
-            birthDate: globalUser.birthDate || '',
-            emergencyContactName: globalUser.emergencyContactName || '',
-            emergencyContactPhone: globalUser.emergencyContactPhone || '',
-            allergies: globalUser.allergies || '',
-            medications: globalUser.medications || '',
-            dietaryReq: globalUser.dietaryReq || ''
+            passportCountry: globalUser.passportCountry || p.passportCountry || '',
+            passportNo: globalUser.passportNo || p.passportNo || '',
+            passportExp: globalUser.passportExp || p.passportExp || '',
+            tcNo: globalUser.tcNo || p.tcNo || '',
+            bloodType: globalUser.bloodType || p.bloodType || '',
+            birthDate: globalUser.birthDate || p.birthDate || '',
+            emergencyContactName: globalUser.emergencyContactName || p.emergencyContactName || '',
+            emergencyContactPhone: globalUser.emergencyContactPhone || p.emergencyContactPhone || '',
+            allergies: globalUser.allergies || p.allergies || '',
+            medications: globalUser.medications || p.medications || '',
+            dietaryReq: globalUser.dietaryReq || p.dietaryReq || ''
         });
         setShowTransferSheet(false);
         setShowSht(true);
         const appContentEl = document.querySelector('.mobile-app-content');
         if (appContentEl) appContentEl.scrollTo({ top: 0, behavior: 'instant' });
+    };
+
+    const handleGeneratePassword = () => {
+        const newPass = generateSecurePassword(selectedUser?.name || 'User');
+        setContactForm(prev => ({ ...prev, password: newPass }));
+        setShowContactPassword(true);
     };
 
     const handleSaveContact = async () => {
@@ -599,8 +672,9 @@ export default function ParticipantsList() {
         try {
             const cleanEmail = (contactForm.email || '').trim().toLowerCase();
             let cleanPhone = (contactForm.phone || '').trim();
+            const cleanPassword = (contactForm.password || '').trim();
 
-            if (!cleanEmail && !cleanPhone) {
+            if (!cleanEmail && !cleanPhone && !cleanPassword) {
                 setSuccessPopup({
                     title: 'Eksik İletişim Bilgisi',
                     description: 'Lütfen en az bir iletişim bilgisi (e-posta veya telefon) giriniz.',
@@ -610,20 +684,44 @@ export default function ParticipantsList() {
                 return;
             }
 
+            const formattedPhone = cleanPhone ? normalizePhoneNumber(cleanPhone) : '-';
+
+            // Eski ve yeni bilgileri karşılaştır
+            const oldPhoneDigits = String(selectedUser.phone || '').replace(/\D/g, '').slice(-10);
+            const newPhoneDigits = String(formattedPhone || '').replace(/\D/g, '').slice(-10);
+            const isPhoneChanged = (newPhoneDigits.length === 10) && (newPhoneDigits !== oldPhoneDigits);
+
+            const oldEmail = String(selectedUser.email || '').trim().toLowerCase();
+            const isOldPlaceholder = !oldEmail || oldEmail.endsWith('@move.local') || oldEmail.endsWith('.local') || oldEmail.startsWith('user_');
+            const isNewPlaceholder = !cleanEmail || cleanEmail.endsWith('@move.local') || cleanEmail.endsWith('.local') || cleanEmail.startsWith('user_');
+            const isEmailChanged = !isNewPlaceholder && cleanEmail.includes('@') && (cleanEmail !== oldEmail);
+            const isChild = isUserChild(selectedUser);
+
             const payload = {
                 email: cleanEmail,
-                phone: cleanPhone ? normalizePhoneNumber(cleanPhone) : '-'
+                phone: formattedPhone,
+                ...(cleanPassword ? { password: cleanPassword } : {})
             };
 
-            await updateUser(selectedUser.id, payload);
+            const targetUserDoc = findMatchingUser(selectedUser, users) || users.find(u => u.id === selectedUser.id);
+            const userDocId = targetUserDoc ? targetUserDoc.id : selectedUser.id;
+
+            await updateUser(userDocId, payload);
 
             if (tour && tour.participants) {
                 const updatedParticipants = tour.participants.map(p => {
-                    if (p.id === selectedUser.id || (p.email && selectedUser.email && p.email === selectedUser.email)) {
+                    const isMatch = (p.id && (p.id === selectedUser.id || (userDocId && p.id === userDocId))) ||
+                        (selectedUser.tcNo && p.tcNo && String(p.tcNo).replace(/\D/g, '') === String(selectedUser.tcNo).replace(/\D/g, '')) ||
+                        (selectedUser.email && p.email && p.email.toLowerCase() === selectedUser.email.toLowerCase()) ||
+                        (selectedUser.name && p.name && normalizeTurkish(p.name) === normalizeTurkish(selectedUser.name)) ||
+                        isUserMatch(p, selectedUser);
+
+                    if (isMatch) {
                         return {
                             ...p,
-                            email: payload.email,
-                            phone: payload.phone
+                            ...(payload.email ? { email: payload.email } : {}),
+                            phone: payload.phone,
+                            ...(cleanPassword ? { password: cleanPassword } : {})
                         };
                     }
                     return p;
@@ -631,19 +729,140 @@ export default function ParticipantsList() {
                 const { updateDoc, doc } = await import('firebase/firestore');
                 const { db } = await import('../../lib/firebase');
                 await updateDoc(doc(db, 'tours', tour.id), { participants: updatedParticipants });
+
+                useTourStore.setState(state => ({
+                    tours: (state.tours || []).map(t => t.id === tour.id ? { ...t, participants: updatedParticipants } : t)
+                }));
             }
 
             setSelectedUser(prev => ({ ...prev, ...payload }));
+
+            // 1. TELEFON DEĞİŞTİYSE: Yeni numaraya sırasıyla welcome_customer ardından welcome_account_activation Gönder
+            let whatsappSent = false;
+            let setupLinkInfo = null;
+            if (isPhoneChanged && formattedPhone && formattedPhone !== '-' && !isChild) {
+                try {
+                    const waRes = await sendWelcomeAndActivationWhatsApp({
+                        id: userDocId,
+                        name: selectedUser.name || 'Değerli Misafirimiz',
+                        email: cleanEmail || selectedUser.email,
+                        phone: formattedPhone
+                    });
+
+                    if (waRes?.welcomeSent || waRes?.activationSent) {
+                        whatsappSent = true;
+                    }
+                    if (waRes?.setupUrl) {
+                        setupLinkInfo = { url: waRes.setupUrl, token: waRes.token };
+                    }
+                } catch (waErr) {
+                    console.warn("WhatsApp welcome and activation notification error on phone change:", waErr);
+                }
+            }
+
+            // 2. TELEFON VEYA E-POSTA DEĞİŞTİYSE: Yeni mail adresine kullanıcı adı, şifre ve bilgi güncelleme maili gönder
+            let emailSent = false;
+            const targetEmail = (!isNewPlaceholder && cleanEmail) ? cleanEmail : (!isOldPlaceholder && oldEmail ? oldEmail : null);
+
+            if ((isPhoneChanged || isEmailChanged) && targetEmail && !isChild && smtpConfig?.host && smtpConfig?.user && smtpConfig?.pass) {
+                try {
+                    // Şifre bağlantısı henüz üretilmediyse üretelim
+                    if (!setupLinkInfo) {
+                        try {
+                            setupLinkInfo = await createPasswordSetupLink({
+                                id: userDocId,
+                                name: selectedUser.name || targetEmail,
+                                email: targetEmail,
+                                phone: formattedPhone !== '-' ? formattedPhone : (selectedUser.phone || '-')
+                            });
+                        } catch (lnkErr) {
+                            console.warn("Setup link generation error:", lnkErr);
+                        }
+                    }
+
+                    // Güncel parolayı tespit et
+                    let activePassword = cleanPassword || selectedUser.password || '';
+                    if (!activePassword) {
+                        try {
+                            const { doc, getDoc } = await import('firebase/firestore');
+                            const { db } = await import('../../lib/firebase');
+                            const uSnap = await getDoc(doc(db, 'users', userDocId));
+                            if (uSnap.exists() && uSnap.data().password) {
+                                activePassword = String(uSnap.data().password).trim();
+                            }
+                        } catch (pErr) {
+                            console.warn("Password fetch error for auto-email:", pErr);
+                        }
+                    }
+                    if (!activePassword) activePassword = '123456';
+
+                    // Şablon yükle: Öncelikle 'account_updated_email', yoksa 'credentials_email'
+                    let customSubject = null;
+                    let customHtml = null;
+                    try {
+                        const { doc, getDoc } = await import('firebase/firestore');
+                        const { db } = await import('../../lib/firebase');
+                        let tSnap = await getDoc(doc(db, 'email_templates', 'account_updated_email'));
+                        if (!tSnap.exists()) {
+                            tSnap = await getDoc(doc(db, 'email_templates', 'credentials_email'));
+                        }
+                        if (tSnap.exists()) {
+                            customSubject = tSnap.data().subject;
+                            customHtml = tSnap.data().body;
+                        }
+                    } catch (tErr) {
+                        console.warn("Auto-email template load error:", tErr);
+                    }
+
+                    const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                    const emailRes = await fetch(`${baseUrl}/api/send-account-update`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            ...smtpConfig,
+                            to: targetEmail,
+                            corporateName: corporateName || 'Move Yanımda',
+                            accountName: selectedUser.name || targetEmail,
+                            accountEmail: targetEmail,
+                            accountPhone: formattedPhone !== '-' ? formattedPhone : (selectedUser.phone || '-'),
+                            accountPassword: activePassword,
+                            setupUrl: setupLinkInfo?.url || `${baseUrl}/login`,
+                            customSubject,
+                            customHtml
+                        })
+                    });
+
+                    if (emailRes.ok) {
+                        emailSent = true;
+                    }
+                } catch (emErr) {
+                    console.warn("Auto account update email error:", emErr);
+                }
+            }
+
+            // Kullanıcıya bildirim özeti
+            const notes = [];
+            if (whatsappSent) {
+                notes.push(`Yeni numaraya (${formattedPhone}) WhatsApp karşılama mesajı iletildi.`);
+            }
+            if (emailSent) {
+                notes.push(`Yeni e-posta adresine (${targetEmail}) güncel kullanıcı adı ve şifre iletildi.`);
+            }
+
+            const descriptionText = notes.length > 0
+                ? `İletişim ve giriş bilgileri kaydedildi.\n• ${notes.join('\n• ')}`
+                : 'Müşteri iletişim ve giriş bilgileri başarıyla kaydedildi.';
+
             setSuccessPopup({
                 title: 'İletişim Bilgileri Güncellendi',
-                description: 'Müşteri iletişim bilgileri başarıyla kaydedildi.',
+                description: descriptionText,
                 type: 'success'
             });
         } catch (e) {
             console.error("Save contact error:", e);
             setSuccessPopup({
                 title: 'Kayıt Hatası',
-                description: 'İletişim bilgileri kaydedilirken hata oluştu: ' + e.message,
+                description: 'İletişim bilgileri kaydedilirken hata oluştu: ' + (e.message || ''),
                 type: 'error'
             });
         } finally {
@@ -690,15 +909,23 @@ export default function ParticipantsList() {
         try {
             // E-posta veya telefon formda güncellendiyse önce kaydet
             let cleanPhone = (contactForm.phone || '').trim();
-            if (rawEmail !== (selectedUser.email || '') || cleanPhone !== (selectedUser.phone || '')) {
+            const normalizedCleanPhone = cleanPhone ? normalizePhoneNumber(cleanPhone) : '-';
+            if (rawEmail !== (selectedUser.email || '') || (cleanPhone && normalizedCleanPhone !== (selectedUser.phone || ''))) {
+                const targetUserDoc = findMatchingUser(selectedUser, users) || users.find(u => u.id === selectedUser.id);
+                const userDocId = targetUserDoc ? targetUserDoc.id : selectedUser.id;
                 const payload = {
                     email: targetEmail,
-                    phone: cleanPhone ? normalizePhoneNumber(cleanPhone) : (selectedUser.phone || '-')
+                    phone: cleanPhone ? normalizedCleanPhone : (selectedUser.phone || '-')
                 };
-                await updateUser(selectedUser.id, payload);
+                await updateUser(userDocId, payload);
                 if (tour && tour.participants) {
                     const updatedParticipants = tour.participants.map(p => {
-                        if (p.id === selectedUser.id || p.email === selectedUser.email) {
+                        const isMatch = (p.id && (p.id === selectedUser.id || (userDocId && p.id === userDocId))) ||
+                            (selectedUser.tcNo && p.tcNo && String(p.tcNo).replace(/\D/g, '') === String(selectedUser.tcNo).replace(/\D/g, '')) ||
+                            (selectedUser.email && p.email && p.email.toLowerCase() === selectedUser.email.toLowerCase()) ||
+                            (selectedUser.name && p.name && normalizeTurkish(p.name) === normalizeTurkish(selectedUser.name)) ||
+                            isUserMatch(p, selectedUser);
+                        if (isMatch) {
                             return { ...p, ...payload };
                         }
                         return p;
@@ -706,12 +933,16 @@ export default function ParticipantsList() {
                     const { updateDoc, doc } = await import('firebase/firestore');
                     const { db } = await import('../../lib/firebase');
                     await updateDoc(doc(db, 'tours', tour.id), { participants: updatedParticipants });
+
+                    useTourStore.setState(state => ({
+                        tours: (state.tours || []).map(t => t.id === tour.id ? { ...t, participants: updatedParticipants } : t)
+                    }));
                 }
                 setSelectedUser(prev => ({ ...prev, ...payload }));
             }
 
             // Şifreyi tespit et veya yeni güvenli şifre ata
-            let activePassword = (selectedUser.password || '').trim();
+            let activePassword = (contactForm.password || selectedUser.password || '').trim();
             if (!activePassword && selectedUser.id) {
                 try {
                     const { doc, getDoc } = await import('firebase/firestore');
@@ -733,9 +964,12 @@ export default function ParticipantsList() {
                     await updateDoc(doc(db, 'users', selectedUser.id), { password: activePassword });
                     await updateUser(selectedUser.id, { password: activePassword });
                     setSelectedUser(prev => ({ ...prev, password: activePassword }));
+                    setContactForm(prev => ({ ...prev, password: activePassword }));
                 } catch (updateErr) {
                     console.warn("Could not save generated password:", updateErr);
                 }
+            } else {
+                setContactForm(prev => ({ ...prev, password: activePassword }));
             }
 
             // Şablon yükle (özelleştirilmiş şablon varsa kullanılır)
@@ -756,6 +990,19 @@ export default function ParticipantsList() {
                 console.error("Error loading credentials template:", templateErr);
             }
 
+            // Tek kullanımlık şifre belirleme bağlantısı oluştur
+            let setupLinkInfo = null;
+            try {
+                setupLinkInfo = await createPasswordSetupLink({
+                    id: selectedUser.id,
+                    name: selectedUser.name || targetEmail,
+                    email: targetEmail,
+                    phone: selectedUser.phone || cleanPhone || '-'
+                });
+            } catch (linkErr) {
+                console.warn("Could not create setup link for email:", linkErr);
+            }
+
             const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
             const res = await fetch(`${baseUrl}/api/send-credentials`, {
                 method: 'POST',
@@ -767,6 +1014,8 @@ export default function ParticipantsList() {
                     accountName: selectedUser.name || targetEmail,
                     accountEmail: targetEmail,
                     accountPassword: activePassword,
+                    setupUrl: setupLinkInfo?.url || `${baseUrl}/login`,
+                    loginUrl: `${baseUrl}/login`,
                     customSubject,
                     customHtml
                 })
@@ -783,8 +1032,9 @@ export default function ParticipantsList() {
                 try {
                     useSettingsStore.getState().sendWhatsAppNotification(
                         targetPhone,
-                        'passwordResetTemplate',
-                        [String(activePassword)]
+                        'accountActivationTemplate',
+                        [selectedUser.name || 'Değerli Misafirimiz'],
+                        setupLinkInfo?.token
                     );
                 } catch (waErr) {
                     console.warn("WhatsApp notification error:", waErr);
@@ -824,9 +1074,9 @@ export default function ParticipantsList() {
         }
 
         const eligible = participants.filter(p => {
-            const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
             if (isUserChild(globalU)) return false;
-            const phone = (p.phone || globalU.phone || '').trim();
+            const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
             return phone && phone !== '-' && phone.length > 6;
         });
 
@@ -848,16 +1098,25 @@ export default function ParticipantsList() {
 
         for (let i = 0; i < eligible.length; i++) {
             const p = eligible[i];
-            const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
-            const phone = (p.phone || globalU.phone || '').trim();
+            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
             const pName = p.name || globalU.name || 'Katılımcı';
             const pPass = globalU.password || p.password || '123456';
             
             setBatchWaProgress({ current: i + 1, total: eligible.length, name: pName, successCount, failCount });
 
             let params = [];
+            let buttonParam = undefined;
             if (selectedWaTemplateKey === 'newUserTemplate') {
                 params = [pName];
+            } else if (selectedWaTemplateKey === 'accountActivationTemplate') {
+                params = [pName];
+                try {
+                    const setupInfo = await createPasswordSetupLink(globalU);
+                    buttonParam = setupInfo.token;
+                } catch (tokErr) {
+                    console.warn("Setup token error in batch activation:", tokErr);
+                }
             } else if (selectedWaTemplateKey === 'newTourTemplate' || selectedWaTemplateKey === 'ticketAddedTemplate') {
                 params = [pName, tour.name];
             } else if (selectedWaTemplateKey === 'passwordResetTemplate') {
@@ -872,7 +1131,7 @@ export default function ParticipantsList() {
             }
 
             try {
-                const res = await useSettingsStore.getState().sendWhatsAppNotification(phone, selectedWaTemplateKey, params);
+                const res = await useSettingsStore.getState().sendWhatsAppNotification(phone, selectedWaTemplateKey, params, buttonParam);
                 if (res.success) {
                     successCount++;
                     recipientResults.push({
@@ -916,14 +1175,15 @@ export default function ParticipantsList() {
         }
 
         // Atlanan / Numarası olmayan katılımcılar
-        const nonEligible = participants.filter(p => !eligible.some(ep => (ep.id && ep.id === p.id) || (ep.email && ep.email === p.email)));
+        const nonEligible = participants.filter(p => !eligible.some(ep => (ep.id && ep.id === p.id) || (ep.email && ep.email === p.email) || isUserMatch(ep, p)));
         const skippedDetails = nonEligible.map(sp => {
-            const globalU = users.find(u => u.id === sp.id || u.email === sp.email) || sp;
+            const globalU = findMatchingUser(sp, users) || users.find(u => u.id === sp.id || u.email === sp.email) || sp;
             const isChild = isUserChild(globalU);
+            const userPhone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (sp.phone || '')).trim();
             return {
                 id: sp.id || Math.random().toString(),
                 name: sp.name || globalU.name || 'Katılımcı',
-                phone: (sp.phone || globalU.phone || '').trim() || '-',
+                phone: userPhone || '-',
                 userType: isChild ? 'child' : 'adult',
                 company: sp.company || globalU.company || '',
                 status: isChild ? 'child_skipped' : 'missing_phone',
@@ -982,7 +1242,7 @@ export default function ParticipantsList() {
         }
 
         const eligible = participants.filter(p => {
-            const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
             if (isUserChild(globalU)) return false;
             const email = (p.email || globalU.email || '').trim().toLowerCase();
             if (!email || !email.includes('@')) return false;
@@ -1024,7 +1284,7 @@ export default function ParticipantsList() {
 
         for (let i = 0; i < eligible.length; i++) {
             const p = eligible[i];
-            const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
             const targetEmail = (p.email || globalU.email || '').trim().toLowerCase();
             const pName = p.name || globalU.name || targetEmail;
             let pPass = (globalU.password || p.password || '').trim();
@@ -1138,18 +1398,29 @@ export default function ParticipantsList() {
 
         if (phone && phone !== '-' && phone.trim().length > 6) {
             if (password) {
-                // 1) welcome_customer (1 param: Name)
-                useSettingsStore.getState().sendWhatsAppNotification(
-                    phone,
-                    'newUserTemplate',
-                    [participantName]
-                );
-                // 2) tour_registration (2 params: Name, Tour Name)
-                useSettingsStore.getState().sendWhatsAppNotification(
-                    phone,
-                    'newTourTemplate',
-                    [participantName, tour.name]
-                );
+                // Yeni kullanıcı eklendiğinde sırasıyla:
+                // 1) welcome_customer
+                // 2) welcome_account_activation
+                sendWelcomeAndActivationWhatsApp(targetUser || {
+                    id: targetUser?.id || participantEmail,
+                    name: participantName,
+                    phone: phone,
+                    email: participantEmail
+                }).then(() => {
+                    // 3) tour_registration (2 params: Name, Tour Name)
+                    useSettingsStore.getState().sendWhatsAppNotification(
+                        phone,
+                        'newTourTemplate',
+                        [participantName, tour.name]
+                    );
+                }).catch(err => {
+                    console.warn("sendWelcomeAndActivationWhatsApp in sendTourAssignmentEmail error:", err);
+                    useSettingsStore.getState().sendWhatsAppNotification(
+                        phone,
+                        'newTourTemplate',
+                        [participantName, tour.name]
+                    );
+                });
             } else {
                 // 1) tour_registration (2 params: Name, Tour Name)
                 useSettingsStore.getState().sendWhatsAppNotification(
@@ -1177,6 +1448,16 @@ export default function ParticipantsList() {
                         console.error("Error loading tour email template:", templateErr);
                     }
 
+                    let setupLinkInfo = null;
+                    const userObj = targetUser || users.find(u => u.email === participantEmail || u.name === participantName);
+                    if (userObj && userObj.id) {
+                        try {
+                            setupLinkInfo = await createPasswordSetupLink(userObj);
+                        } catch (lnkErr) {
+                            console.warn("Setup link generation error in sendTourAssignmentEmail:", lnkErr);
+                        }
+                    }
+
                     // Determine base URL: Use current origin in dev, or the production cloud functions URL
                     const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
                     const res = await fetch(`${baseUrl}/api/send-tour-email`, {
@@ -1188,7 +1469,7 @@ export default function ParticipantsList() {
                             corporateName: corporateName,
                             participantName: participantName,
                             tourName: tour.name,
-                            password: password,
+                            setupUrl: setupLinkInfo?.url || `${baseUrl}/set-password`,
                             customSubject,
                             customHtml
                         })
@@ -1921,8 +2202,9 @@ export default function ParticipantsList() {
                                             <input 
                                                 type="tel" 
                                                 placeholder="5XX XXX XX XX"
-                                                value={contactForm.phone.replace(/^\+90\s*/, '')} 
-                                                onChange={e => setContactForm({ ...contactForm, phone: formatPhoneNumber(e.target.value) })} 
+                                                maxLength={20}
+                                                value={formatPhoneInputWithoutPrefix(contactForm.phone || '')} 
+                                                onChange={e => setContactForm({ ...contactForm, phone: formatPhoneInputWithoutPrefix(e.target.value) })} 
                                                 style={{ 
                                                     width: '100%', 
                                                     padding: '8px 10px 8px 38px', 
@@ -1937,6 +2219,116 @@ export default function ParticipantsList() {
                                                 }} 
                                             />
                                         </div>
+                                    </div>
+
+                                    <div>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                            <label style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                <KeyRound size={12} color="#64748b" /> Giriş Şifresi
+                                            </label>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                {!contactForm.password && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleGeneratePassword}
+                                                        style={{
+                                                            background: '#fdf2f8',
+                                                            border: '1px solid #fbcfe8',
+                                                            color: 'var(--primary)',
+                                                            fontSize: '9.5px',
+                                                            fontWeight: '700',
+                                                            padding: '2px 7px',
+                                                            borderRadius: '5px',
+                                                            cursor: 'pointer',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            gap: '3px'
+                                                        }}
+                                                    >
+                                                        <Sparkles size={10} /> Yeni Şifre Üret
+                                                    </button>
+                                                )}
+                                                {contactForm.password ? (
+                                                    <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: '600', background: '#dcfce7', padding: '1px 6px', borderRadius: '4px' }}>
+                                                        Kayıtlı
+                                                    </span>
+                                                ) : (
+                                                    <span style={{ fontSize: '10px', color: '#d97706', fontWeight: '600', background: '#fef3c7', padding: '1px 6px', borderRadius: '4px' }}>
+                                                        Tanımlı Değil
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', position: 'relative' }}>
+                                            <input 
+                                                type={showContactPassword ? "text" : "password"} 
+                                                placeholder="Şifre henüz tanımlanmamış"
+                                                value={contactForm.password || ''} 
+                                                onChange={e => setContactForm({ ...contactForm, password: e.target.value })} 
+                                                style={{ 
+                                                    width: '100%', 
+                                                    padding: '8px 70px 8px 10px', 
+                                                    borderRadius: '9px', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    fontSize: '11.5px', 
+                                                    background: '#f8fafc', 
+                                                    outline: 'none', 
+                                                    boxSizing: 'border-box',
+                                                    color: 'var(--text-main)',
+                                                    fontWeight: '600',
+                                                    letterSpacing: (!showContactPassword && contactForm.password) ? '2px' : 'normal'
+                                                }} 
+                                            />
+                                            <div style={{ position: 'absolute', right: '6px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                {contactForm.password && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(contactForm.password);
+                                                            setPasswordCopied(true);
+                                                            setTimeout(() => setPasswordCopied(false), 2000);
+                                                        }}
+                                                        title={passwordCopied ? "Kopyalandı!" : "Şifreyi Kopyala"}
+                                                        style={{
+                                                            background: 'transparent',
+                                                            border: 'none',
+                                                            cursor: 'pointer',
+                                                            padding: '4px',
+                                                            display: 'flex',
+                                                            alignItems: 'center',
+                                                            justifyContent: 'center',
+                                                            color: passwordCopied ? '#16a34a' : '#64748b',
+                                                            borderRadius: '6px'
+                                                        }}
+                                                    >
+                                                        {passwordCopied ? <Check size={14} /> : <Copy size={14} />}
+                                                    </button>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowContactPassword(prev => !prev)}
+                                                    title={showContactPassword ? "Şifreyi Gizle" : "Şifreyi Göster"}
+                                                    style={{
+                                                        background: 'transparent',
+                                                        border: 'none',
+                                                        cursor: 'pointer',
+                                                        padding: '4px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        color: '#64748b',
+                                                        borderRadius: '6px'
+                                                    }}
+                                                >
+                                                    {showContactPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {passwordCopied && (
+                                            <span style={{ fontSize: '10px', color: '#16a34a', fontWeight: '600', marginTop: '3px', display: 'block' }}>
+                                                ✓ Şifre panoya kopyalandı!
+                                            </span>
+                                        )}
                                     </div>
 
                                     <button
@@ -2003,6 +2395,55 @@ export default function ParticipantsList() {
                                             <KeyRound size={14} />
                                         )}
                                         {isSendingCredentials ? 'Giriş Bilgileri Gönderiliyor...' : 'Kullanıcı Adı ve Şifreyi E-Posta ile Gönder'}
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={handleCopyPasswordSetupLink}
+                                        disabled={isCopyingSetupLink}
+                                        title="Kullanıcının şifresini kendisinin belirlemesi için tek kullanımlık güvenli bir sihirli bağlantı üretir ve panoya kopyalar."
+                                        style={{ 
+                                            background: '#f8fafc', 
+                                            border: '1.5px dashed #cbd5e1', 
+                                            padding: '10px', 
+                                            borderRadius: '10px', 
+                                            color: '#334155', 
+                                            fontSize: '11.5px',
+                                            fontWeight: '700', 
+                                            cursor: isCopyingSetupLink ? 'not-allowed' : 'pointer', 
+                                            opacity: isCopyingSetupLink ? 0.7 : 1,
+                                            marginTop: '4px', 
+                                            transition: 'all 0.2s',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            gap: '6px'
+                                        }}
+                                        onMouseEnter={e => {
+                                            if (!isCopyingSetupLink) {
+                                                e.currentTarget.style.background = '#f1f5f9';
+                                                e.currentTarget.style.borderColor = 'var(--primary)';
+                                                e.currentTarget.style.color = 'var(--primary)';
+                                            }
+                                        }}
+                                        onMouseLeave={e => {
+                                            e.currentTarget.style.background = '#f8fafc';
+                                            e.currentTarget.style.borderColor = '#cbd5e1';
+                                            e.currentTarget.style.color = '#334155';
+                                        }}
+                                    >
+                                        {isCopyingSetupLink ? (
+                                            <Loader2 size={14} className="animate-spin" />
+                                        ) : setupLinkCopied ? (
+                                            <Check size={14} style={{ color: '#16a34a' }} />
+                                        ) : (
+                                            <Sparkles size={14} style={{ color: '#e11d48' }} />
+                                        )}
+                                        {setupLinkCopied 
+                                            ? '✓ Bağlantı Kopyalandı!' 
+                                            : isCopyingSetupLink 
+                                                ? 'Bağlantı Oluşturuluyor...' 
+                                                : 'Şifre Belirleme Bağlantısını Kopyala'}
                                     </button>
 
                                     {credentialSentMessage && (
@@ -3217,16 +3658,16 @@ export default function ParticipantsList() {
         }
 
         const eligible = participants.filter(p => {
-            const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
             if (isUserChild(globalU)) return false;
-            const phone = (p.phone || globalU.phone || '').trim();
+            const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
             return phone && phone !== '-' && phone.length > 6;
         });
         const missingCount = participants.length - eligible.length;
         const missingPhoneAdultsCount = participants.filter(p => {
-            const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
             if (isUserChild(globalU)) return false;
-            const phone = (p.phone || globalU.phone || '').trim();
+            const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
             return !phone || phone === '-' || phone.length <= 6;
         }).length;
         const currentTpl = waModalTemplates.find(t => t.key === selectedWaTemplateKey) || waModalTemplates[0];
@@ -3243,9 +3684,9 @@ export default function ParticipantsList() {
 
             if (participants && participants.length > 0) {
                 const details = participants.map((p, idx) => {
-                    const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
+                    const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
                     const isChild = isUserChild(globalU);
-                    const phone = (p.phone || globalU.phone || '').trim();
+                    const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
                     const hasPhone = phone && phone !== '-' && phone.length > 6;
                     let status = 'success';
                     let reason = 'Mesaj başarıyla iletildi.';
@@ -3861,7 +4302,7 @@ export default function ParticipantsList() {
 
     const renderEmailPageView = () => {
         const eligible = participants.filter(p => {
-            const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
             if (isUserChild(globalU)) return false;
             const email = (p.email || globalU.email || '').trim().toLowerCase();
             if (!email || !email.includes('@')) return false;
@@ -3870,7 +4311,7 @@ export default function ParticipantsList() {
         });
         const missingCount = participants.length - eligible.length;
         const missingEmailAdultsCount = participants.filter(p => {
-            const globalU = users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
             if (isUserChild(globalU)) return false;
             const email = (p.email || globalU.email || '').trim().toLowerCase();
             return !email || !email.includes('@') || email.endsWith('@move.local') || email.endsWith('.local') || isChildEmail(email);
@@ -4861,7 +5302,7 @@ export default function ParticipantsList() {
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {filteredParticipants.map(p => {
-                            const globalP = users.find(u => u.id === p.id) || p;
+                            const globalP = findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
                             const isChild = isUserChild(globalP);
                             const isLinked = isChild && !!globalP.linkedTo && (Array.isArray(globalP.linkedTo) ? globalP.linkedTo.length > 0 : true);
                             const parents = isLinked ? users.filter(parentP => Array.isArray(globalP.linkedTo) ? globalP.linkedTo.includes(parentP.id) || globalP.linkedTo.includes(String(parentP.id)) : parentP.id === globalP.linkedTo || String(parentP.id) === String(globalP.linkedTo)) : [];
@@ -5057,9 +5498,10 @@ export default function ParticipantsList() {
                                                 <button 
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        const globalP = users.find(u => u.id === p.id || u.email === p.email) || p;
-                                                        if (globalP.phone && globalP.phone !== '-') {
-                                                            window.location.href = `tel:${globalP.phone}`;
+                                                        const globalP = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+                                                        const callPhone = ((globalP.phone && globalP.phone !== '-') ? globalP.phone : (p.phone || '')).trim();
+                                                        if (callPhone && callPhone !== '-') {
+                                                            window.location.href = `tel:${callPhone}`;
                                                         } else {
                                                             alert("Kullanıcıya ait telefon numarası kayıtlı değil.");
                                                         }

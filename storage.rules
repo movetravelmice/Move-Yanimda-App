@@ -16,8 +16,48 @@ service firebase.storage {
       );
     }
 
+    // 1. GENEL KÖK VE DİZİN LİSTELEME (ENUMERATION) KESİNLİKLE YASAK!
+    // /o veya /o?prefix=... çağrıları anında 403 Forbidden ile engellenir.
+    // Hiç kimse depodaki bilet, dosya ve yolcu listesini çekemez.
     match /{allPaths=**} {
-      allow read: if true;
+      allow list: if false;
+    }
+
+    // 2. EXCEL İÇE AKTARIM DOSYALARI (Tüm yolcuların kimlik, pasaport, şifre ve telefonları):
+    // Dışarıdan doğrudan GET veya LIST yapılması %100 YASAK!
+    match /tours/{tourId}/excel_imports/{allPaths=**} {
+      allow read: if false;
+      allow list: if false;
+      allow write: if isSafeUpload();
+    }
+
+    // 3. BİLETLER (TICKETS):
+    // Listeleme KESİNLİKLE YASAK! (allow list: if false)
+    // Sadece tekil indirme (get) ve güvenli yükleme (write) yapılabilir.
+    match /tours/{tourId}/tickets/{allPaths=**} {
+      allow list: if false;
+      allow get: if true;
+      allow write: if isSafeUpload();
+    }
+
+    // 4. Genel kapak fotoğrafları:
+    match /tour_covers/{allPaths=**} {
+      allow list: if false;
+      allow get: if true;
+      allow write: if isSafeUpload();
+    }
+
+    // 5. Chat medyaları:
+    match /chat_uploads/{allPaths=**} {
+      allow list: if false;
+      allow get: if true;
+      allow write: if isSafeUpload();
+    }
+
+    // 6. Tur programı ekleri:
+    match /tour_attachments/{allPaths=**} {
+      allow list: if false;
+      allow get: if true;
       allow write: if isSafeUpload();
     }
   }

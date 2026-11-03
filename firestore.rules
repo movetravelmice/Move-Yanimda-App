@@ -8,40 +8,53 @@ service cloud.firestore {
       return request.resource.data.keys().size() <= 100;
     }
 
-    // 1. Kullanıcılar koleksiyonu
+    // 0. SUNUCU AYARLARI (GİZLİ ŞİFRELER, SMTP, WHATSAPP, NETGSM VE API ANAHTARLARI):
+    // Dış dünyadan veya istemciden okuma/yazma KESİNLİKLE YASAK!
+    // Yalnızca Cloud Functions Backend (Admin SDK) erişebilir.
+    match /server_settings/{docId} {
+      allow read, write: if false;
+    }
+
+    // 1. KULLANICILAR KOLEKSİYONU (MÜŞTERİ VERİLERİ & PAROLALAR):
+    // Dış dünyadan, tarayıcıdan, REST API veya gizli sekmeden doğrudan okuma, arama ve listeleme KESİNLİKLE YASAK!
+    // Tüm kullanıcı ve parola işlemleri yalnızca güvenli Cloud Functions Backend (Admin SDK) üzerinden yürütülür.
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if isValidPayloadSize();
+      allow read, write: if false;
+    }
+
+    // 1.1. Tek kullanımlık şifre belirleme / oturum tokenları
+    match /auth_tokens/{tokenId} {
+      allow read, create, update: if isValidPayloadSize();
       allow delete: if true;
     }
 
-    // 2. Turlar ve alt koleksiyonları (import_reports vb.)
+    // 2. Turlar ve alt koleksiyonları (Toplu silme KESİNLİKLE YASAKLANDI!)
     match /tours/{tourId} {
       allow read: if true;
       allow create, update: if isValidPayloadSize();
-      allow delete: if true;
+      allow delete: if false;
 
       match /import_reports/{reportId} {
         allow read, write: if true;
       }
     }
 
-    // 3. Sohbet mesajları (chatId zorunlu)
+    // 3. Sohbet mesajları (Silme YASAKLANDI!)
     match /messages/{messageId} {
       allow read: if true;
       allow create, update: if isValidPayloadSize()
         && (!('chatId' in request.resource.data) || request.resource.data.chatId is string);
-      allow delete: if true;
+      allow delete: if false;
     }
 
-    // 4. Bildirimler
+    // 4. Bildirimler (Silme YASAKLANDI!)
     match /notifications/{notifId} {
       allow read: if true;
       allow create, update: if isValidPayloadSize();
-      allow delete: if true;
+      allow delete: if false;
     }
 
-    // 5. Sistem ve Kurumsal Ayarlar (Silinmeye karşı korumalı)
+    // 5. Sistem ve Kurumsal Ayarlar (Silinmeye ve dışarıdan bozulmaya karşı korumalı)
     match /settings/{docId} {
       allow read: if true;
       allow create, update: if isValidPayloadSize();
@@ -67,37 +80,37 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 7. Bireysel Modül Koleksiyonları
+    // 7. Bireysel Modül Koleksiyonları (Silme YASAKLANDI!)
     match /individual_travels/{travelId} {
       allow read: if true;
       allow create, update: if isValidPayloadSize()
         && request.resource.data.userId is string;
-      allow delete: if true;
+      allow delete: if false;
     }
 
     match /user_checklists/{checklistId} {
       allow read: if true;
       allow create, update: if isValidPayloadSize()
         && request.resource.data.userId is string;
-      allow delete: if true;
+      allow delete: if false;
     }
 
     match /travel_budgets/{budgetId} {
       allow read: if true;
       allow create, update: if isValidPayloadSize();
-      allow delete: if true;
+      allow delete: if false;
     }
 
     match /budget_expenses/{expenseId} {
       allow read: if true;
       allow create, update: if isValidPayloadSize();
-      allow delete: if true;
+      allow delete: if false;
     }
 
     match /budget_invitations/{token} {
       allow read: if true;
       allow create, update: if isValidPayloadSize();
-      allow delete: if true;
+      allow delete: if false;
     }
 
     // Bilinmeyen / tanımlanmamış tüm koleksiyonlara erişimi kapat

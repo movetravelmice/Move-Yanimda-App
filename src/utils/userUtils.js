@@ -178,6 +178,22 @@ export const findMatchingParticipant = (participants = [], user) => {
     return best;
 };
 
+export const findMatchingUser = (p, users = []) => {
+    if (!p || !Array.isArray(users) || users.length === 0) return null;
+    let best = null;
+    let maxScore = 0;
+
+    for (const u of users) {
+        const score = getParticipantMatchScore(p, u);
+        if (score >= 250 && score > maxScore) {
+            maxScore = score;
+            best = u;
+        }
+    }
+
+    return best;
+};
+
 export const canUserReceiveEmail = (u, allUsers = []) => {
     if (!u) return false;
     const email = typeof u === 'string' ? u : u.email;
@@ -193,8 +209,8 @@ export const canUserReceiveEmail = (u, allUsers = []) => {
  * If null, undefined, '-' or invalid, returns '-'
  */
 export const normalizePhoneNumber = (phone) => {
-    if (!phone || typeof phone !== 'string') return '-';
-    const trimmed = phone.trim();
+    if (phone === null || phone === undefined) return '-';
+    const trimmed = String(phone).trim();
     if (!trimmed || trimmed === '-' || trimmed === 'null' || trimmed === 'undefined') return '-';
 
     // If starts with + but not +90 (e.g. international number from Germany, USA, etc.)

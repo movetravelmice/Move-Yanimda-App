@@ -132,7 +132,8 @@ const defaultSettings = {
     passwordResetTemplate: 'password_reset_otp',
     ticketAddedTemplate: 'ticket_pdf_ready',
     checkInTemplate: 'checkin_reminder',
-    tourReviewTemplate: 'tour_review_reminder'
+    tourReviewTemplate: 'tour_review_reminder',
+    accountActivationTemplate: 'welcome_account_activation'
   },
   expertStatus: 'offline',
   googlePlacesApiKey: 'AIzaSyDLKVedSDIIzh5fbRpUta9oShiW2omr7O4',
@@ -161,7 +162,8 @@ const defaultTemplateNames = {
     passwordResetTemplate: 'password_reset_otp',
     ticketAddedTemplate: 'ticket_pdf_ready',
     checkInTemplate: 'checkin_reminder',
-    tourReviewTemplate: 'tour_review_reminder'
+    tourReviewTemplate: 'tour_review_reminder',
+    accountActivationTemplate: 'welcome_account_activation'
 };
 
 const normalizePhoneForWhatsApp = (rawPhone) => {
@@ -234,7 +236,7 @@ export const useSettingsStore = create((set, get) => ({
       const newConfig = { ...get().whatsappConfig, ...config };
       get().updateSetting('whatsappConfig', newConfig);
   },
-  sendWhatsAppNotification: async (to, templateKey, parameters) => {
+  sendWhatsAppNotification: async (to, templateKey, parameters, buttonParameter) => {
       const config = get().whatsappConfig;
       if (!config || !config.isEnabled || !config.phoneId || !config.accessToken) {
           console.log("WhatsApp notifications disabled or unconfigured.");
@@ -264,7 +266,8 @@ export const useSettingsStore = create((set, get) => ({
                   to: normalizedPhone,
                   templateName: templateName,
                   languageCode: 'tr',
-                  parameters: parameters
+                  parameters: parameters,
+                  buttonParameter: buttonParameter || (parameters && parameters.length > 1 ? parameters[1] : undefined)
               })
           });
           const data = await res.json();
