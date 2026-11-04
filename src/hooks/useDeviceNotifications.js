@@ -128,6 +128,8 @@ export function useDeviceNotifications() {
 
                 if (target === 'all') {
                     relevant = true;
+                } else if (target === 'staff') {
+                    relevant = ['admin', 'expert', 'ticketing'].includes(user.role) || ['admin', 'expert', 'ticketing'].includes(user.secondaryRole);
                 } else if (target === 'individual') {
                     relevant = user.userType === 'individual' || user.role === 'customer';
                 } else if (target === 'corporate') {

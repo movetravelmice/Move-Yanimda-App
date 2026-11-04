@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   X, 
   Send, 
@@ -17,7 +17,9 @@ import {
   CheckCircle2,
   Loader2,
   ChevronDown,
-  Check
+  Check,
+  ShieldCheck,
+  Search
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { useTourStore } from '../store/tourStore';
@@ -32,6 +34,14 @@ const AUDIENCE_OPTIONS = [
     icon: Globe,
     color: '#D7147A',
     bg: '#FDF2F8'
+  },
+  {
+    key: 'staff',
+    label: 'Sadece Personeller (Ekip & Rehberler)',
+    description: 'Yalnızca Move rehberleri, uzmanları ve yöneticileri',
+    icon: ShieldCheck,
+    color: '#0891b2',
+    bg: '#ECFEFF'
   },
   {
     key: 'individual',
@@ -117,9 +127,12 @@ export default function AdminBroadcastModal({ isOpen, onClose }) {
   // Dropdown states
   const [audienceOpen, setAudienceOpen] = useState(false);
   const [notifTypeOpen, setNotifTypeOpen] = useState(false);
+  const [tourDropdownOpen, setTourDropdownOpen] = useState(false);
+  const [tourSearchQuery, setTourSearchQuery] = useState('');
 
   const audienceDropdownRef = useRef(null);
   const notifTypeDropdownRef = useRef(null);
+  const tourDropdownRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -129,6 +142,9 @@ export default function AdminBroadcastModal({ isOpen, onClose }) {
       if (notifTypeDropdownRef.current && !notifTypeDropdownRef.current.contains(event.target)) {
         setNotifTypeOpen(false);
       }
+      if (tourDropdownRef.current && !tourDropdownRef.current.contains(event.target)) {
+        setTourDropdownOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     document.addEventListener('touchstart', handleClickOutside);
@@ -137,6 +153,30 @@ export default function AdminBroadcastModal({ isOpen, onClose }) {
       document.removeEventListener('touchstart', handleClickOutside);
     };
   }, []);
+
+  const sortedTours = useMemo(() => {
+    return (tours || [])
+      .slice()
+      .sort((a, b) => {
+        const isMyA = (a.guideName === user?.name) || (a.expert?.name === user?.name);
+        const isMyB = (b.guideName === user?.name) || (b.expert?.name === user?.name);
+        if (isMyA && !isMyB) return -1;
+        if (!isMyA && isMyB) return 1;
+        return 0;
+      });
+  }, [tours, user?.name]);
+
+  const filteredTours = useMemo(() => {
+    if (!tourSearchQuery.trim()) return sortedTours;
+    const q = tourSearchQuery.trim().toLowerCase();
+    return sortedTours.filter(t => 
+      (t.name && t.name.toLowerCase().includes(q)) ||
+      (t.dates && t.dates.toLowerCase().includes(q)) ||
+      (t.guideName && t.guideName.toLowerCase().includes(q))
+    );
+  }, [sortedTours, tourSearchQuery]);
+
+  const selectedTour = tours.find(t => t.id === selectedTourId) || sortedTours[0];
 
   const currentAudience = AUDIENCE_OPTIONS.find(a => a.key === targetAudience) || AUDIENCE_OPTIONS[0];
   const currentNotifType = NOTIF_TYPE_OPTIONS.find(t => t.key === notifType) || NOTIF_TYPE_OPTIONS[0];
@@ -487,13 +527,17 @@ export default function AdminBroadcastModal({ isOpen, onClose }) {
 
               {/* Tur Seçici (Yalnızca tur seçilmişse) */}
               {targetAudience === 'tour' && (
-                <div style={{
-                  marginTop: '8px',
-                  padding: '10px 12px',
-                  background: '#FDF2F8',
-                  borderRadius: '12px',
-                  border: '1.2px solid #FBCFE8'
-                }}>
+                <div 
+                  ref={tourDropdownRef}
+                  style={{
+                    marginTop: '10px',
+                    padding: '12px',
+                    background: '#FDF2F8',
+                    borderRadius: '14px',
+                    border: '1.2px solid #FBCFE8',
+                    position: 'relative'
+                  }}
+                >
                   <div style={{
                     fontSize: '11px',
                     fontWeight: '700',
@@ -501,45 +545,242 @@ export default function AdminBroadcastModal({ isOpen, onClose }) {
                     display: 'flex',
                     alignItems: 'center',
                     gap: '5px',
-                    marginBottom: '6px'
+                    marginBottom: '7px'
                   }}>
                     <Users size={13} />
                     <span>Bildirimin Gönderileceği Tur</span>
                   </div>
-                  <select
-                    value={selectedTourId}
-                    onChange={e => setSelectedTourId(e.target.value)}
+
+                  {/* Custom Trigger */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTourDropdownOpen(!tourDropdownOpen);
+                      setAudienceOpen(false);
+                      setNotifTypeOpen(false);
+                    }}
                     style={{
                       width: '100%',
                       padding: '8px 10px',
-                      borderRadius: '8px',
-                      border: '1.5px solid #F472B6',
+                      borderRadius: '10px',
+                      border: tourDropdownOpen ? '1.5px solid #D7147A' : '1.5px solid #F472B6',
                       background: '#ffffff',
-                      fontSize: '11.5px',
-                      fontWeight: '600',
-                      outline: 'none',
-                      color: '#1e293b',
-                      cursor: 'pointer'
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'all 0.2s ease',
+                      boxShadow: tourDropdownOpen ? '0 0 0 3px rgba(215, 20, 122, 0.12)' : '0 1px 3px rgba(0,0,0,0.02)'
                     }}
                   >
-                    {tours
-                      .slice()
-                      .sort((a, b) => {
-                        const isMyA = (a.guideName === user?.name) || (a.expert?.name === user?.name);
-                        const isMyB = (b.guideName === user?.name) || (b.expert?.name === user?.name);
-                        if (isMyA && !isMyB) return -1;
-                        if (!isMyA && isMyB) return 1;
-                        return 0;
-                      })
-                      .map(t => {
-                        const isMy = (t.guideName === user?.name) || (t.expert?.name === user?.name);
-                        return (
-                          <option key={t.id} value={t.id}>
-                            {isMy ? '⭐ [Turum] ' : ''}{t.name} ({t.dates || 'Tarih Yok'})
-                          </option>
-                        );
-                      })}
-                  </select>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                      <div style={{
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '8px',
+                        background: '#FDF2F8',
+                        color: '#D7147A',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        overflow: 'hidden',
+                        border: '1px solid #FCE7F3'
+                      }}>
+                        {selectedTour?.avatar ? (
+                          <img src={selectedTour.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <Luggage size={15} />
+                        )}
+                      </div>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ 
+                          fontSize: '12px', 
+                          fontWeight: '700', 
+                          color: '#1e293b', 
+                          overflow: 'hidden', 
+                          textOverflow: 'ellipsis', 
+                          whiteSpace: 'nowrap' 
+                        }}>
+                          {selectedTour?.name || 'Bir Tur Seçin'}
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span>📅 {selectedTour?.dates || 'Tarih Belirtilmedi'}</span>
+                          {selectedTour?.participants?.length > 0 && (
+                            <span style={{ background: '#f1f5f9', color: '#475569', padding: '1px 4px', borderRadius: '4px', fontWeight: '600' }}>
+                              👥 {selectedTour.participants.length}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      background: tourDropdownOpen ? '#FDF2F8' : '#f8fafc',
+                      color: tourDropdownOpen ? '#D7147A' : '#94a3b8',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'transform 0.2s ease',
+                      transform: tourDropdownOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                      flexShrink: 0,
+                      marginLeft: '6px'
+                    }}>
+                      <ChevronDown size={14} />
+                    </div>
+                  </button>
+
+                  {/* Dropdown Menu with Search */}
+                  {tourDropdownOpen && (
+                    <div style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      left: 0,
+                      right: 0,
+                      background: '#ffffff',
+                      borderRadius: '14px',
+                      border: '1.2px solid #e2e8f0',
+                      boxShadow: '0 12px 30px -4px rgba(15, 23, 42, 0.16), 0 4px 12px -2px rgba(15, 23, 42, 0.08)',
+                      zIndex: 60,
+                      overflow: 'hidden'
+                    }}>
+                      {/* Search Header */}
+                      <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9', background: '#fafafa' }}>
+                        <div style={{ position: 'relative' }}>
+                          <Search size={13} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                          <input
+                            type="text"
+                            value={tourSearchQuery}
+                            onChange={(e) => setTourSearchQuery(e.target.value)}
+                            placeholder="Tur adı veya tarih ara..."
+                            autoFocus
+                            style={{
+                              width: '100%',
+                              padding: '6px 10px 6px 30px',
+                              borderRadius: '8px',
+                              border: '1px solid #e2e8f0',
+                              fontSize: '11px',
+                              outline: 'none',
+                              background: '#ffffff',
+                              boxSizing: 'border-box'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tour Items List */}
+                      <div style={{ maxHeight: '200px', overflowY: 'auto', padding: '4px' }}>
+                        {filteredTours.length === 0 ? (
+                          <div style={{ padding: '16px', textAlign: 'center', color: '#94a3b8', fontSize: '11px' }}>
+                            Aramanıza uygun tur bulunamadı.
+                          </div>
+                        ) : (
+                          filteredTours.map((t) => {
+                            const isSelected = selectedTourId === t.id;
+                            const isMyTour = (t.guideName === user?.name) || (t.expert?.name === user?.name);
+
+                            return (
+                              <button
+                                key={t.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedTourId(t.id);
+                                  setTourDropdownOpen(false);
+                                  setTourSearchQuery('');
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '7px 8px',
+                                  borderRadius: '9px',
+                                  border: isSelected ? '1px solid #FCE7F3' : '1px solid transparent',
+                                  background: isSelected ? '#FDF2F8' : 'transparent',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  cursor: 'pointer',
+                                  textAlign: 'left',
+                                  transition: 'background 0.15s ease',
+                                  marginBottom: '2px',
+                                  boxSizing: 'border-box'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (!isSelected) e.currentTarget.style.background = '#f8fafc';
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (!isSelected) e.currentTarget.style.background = 'transparent';
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                                  <div style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    borderRadius: '7px',
+                                    background: isSelected ? '#FCE7F3' : '#f1f5f9',
+                                    color: '#D7147A',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    overflow: 'hidden'
+                                  }}>
+                                    {t.avatar ? (
+                                      <img src={t.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                    ) : (
+                                      <Luggage size={14} />
+                                    )}
+                                  </div>
+                                  <div style={{ minWidth: 0, flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                      {isMyTour && (
+                                        <span style={{ fontSize: '9px', background: '#ecfdf5', color: '#047857', padding: '1px 4px', borderRadius: '4px', fontWeight: '700', flexShrink: 0 }}>
+                                          Turum
+                                        </span>
+                                      )}
+                                      <span style={{
+                                        fontSize: '11.5px',
+                                        fontWeight: isSelected ? '700' : '600',
+                                        color: isSelected ? '#D7147A' : '#1e293b',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        {t.name}
+                                      </span>
+                                    </div>
+                                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <span>📅 {t.dates || 'Tarih Yok'}</span>
+                                      {t.participants?.length > 0 && (
+                                        <span>• {t.participants.length} Katılımcı</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <div style={{
+                                    width: '18px',
+                                    height: '18px',
+                                    borderRadius: '50%',
+                                    background: '#D7147A',
+                                    color: '#ffffff',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    marginLeft: '6px'
+                                  }}>
+                                    <Check size={11} strokeWidth={3} />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

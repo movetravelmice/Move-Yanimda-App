@@ -58,10 +58,20 @@ export default function AppBottomNav() {
       return true;
     }).map(t => t.id);
 
+    const isStaff = ['admin', 'expert', 'ticketing'].includes(user?.role) || ['admin', 'expert', 'ticketing'].includes(user?.secondaryRole);
+
     myUnreadNotificationsCount = notifications
-      .filter(n => !n.tourId || myTourIds.includes(n.tourId))
-      .filter(n => !(n.deletedBy || []).includes(user?.email || 'mock_user'))
-      .filter(n => !(n.readBy || []).includes(user?.email || 'mock_user'))
+      .filter(n => {
+        if ((n.deletedBy || []).includes(user?.email || 'mock_user')) return false;
+        if ((n.readBy || []).includes(user?.email || 'mock_user')) return false;
+
+        const target = n.target || (n.tourId ? 'tour' : 'all');
+        if (target === 'staff') return isStaff;
+        if (target === 'individual') return user?.userType === 'individual' || user?.role === 'customer';
+        if (target === 'corporate') return user?.userType === 'corporate' || isStaff || user?.role === 'customer';
+        if (target === 'tour' && n.tourId) return myTourIds.includes(n.tourId);
+        return true;
+      })
       .length;
 
     const isExpiredArchivedTour = (datesString) => {

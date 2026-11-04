@@ -23,7 +23,8 @@ import {
   ChevronDown,
   Check,
   Trash2,
-  Search
+  Search,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useTourStore } from '../../store/tourStore';
@@ -38,6 +39,14 @@ const AUDIENCE_OPTIONS = [
     icon: Globe,
     color: '#D7147A',
     bg: '#FDF2F8'
+  },
+  {
+    key: 'staff',
+    label: 'Sadece Personeller (Ekip & Rehberler)',
+    description: 'Yalnızca Move rehberleri, uzmanları ve yöneticileri',
+    icon: ShieldCheck,
+    color: '#0891b2',
+    bg: '#ECFEFF'
   },
   {
     key: 'individual',
@@ -231,6 +240,8 @@ export default function BroadcastNotification() {
 
   const getTargetBadge = (target, tourId) => {
     switch (target) {
+      case 'staff':
+        return <span style={{ fontSize: '10px', background: '#ecfeff', color: '#0891b2', padding: '2px 7px', borderRadius: '6px', fontWeight: '700' }}>🛡️ Personel</span>;
       case 'individual':
         return <span style={{ fontSize: '10px', background: '#fdf2f8', color: '#be185d', padding: '2px 7px', borderRadius: '6px', fontWeight: '700' }}>Bireysel</span>;
       case 'corporate':

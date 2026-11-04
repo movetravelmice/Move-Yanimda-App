@@ -65,6 +65,9 @@ export default function Notifications() {
 
       // 3. Target matching
       const target = n.target || (n.tourId ? 'tour' : 'all');
+      if (target === 'staff') {
+        return ['admin', 'expert', 'ticketing'].includes(user?.role) || ['admin', 'expert', 'ticketing'].includes(user?.secondaryRole);
+      }
       if (target === 'all') return true;
       if (target === 'individual') return user?.userType === 'individual' || user?.role === 'customer';
       if (target === 'corporate') return user?.userType === 'corporate' || ['admin', 'expert', 'customer', 'ticketing'].includes(user?.role);
@@ -311,20 +314,28 @@ export default function Notifications() {
                   {/* Metin Alanı */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px', gap: '6px' }}>
-                      <h3 
-                        title={n.title}
-                        style={{ 
-                          fontSize: '12px', 
-                          fontWeight: '700', 
-                          color: '#0f172a', 
-                          margin: 0, 
-                          lineHeight: 1.3,
-                          flex: 1,
-                          minWidth: 0
-                        }}
-                      >
-                        {n.title}
-                      </h3>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1, minWidth: 0 }}>
+                        <h3 
+                          title={n.title}
+                          style={{ 
+                            fontSize: '12px', 
+                            fontWeight: '700', 
+                            color: '#0f172a', 
+                            margin: 0, 
+                            lineHeight: 1.3,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {n.title}
+                        </h3>
+                        {n.target === 'staff' && (
+                          <span style={{ fontSize: '9px', background: '#ecfeff', color: '#0891b2', padding: '1px 5px', borderRadius: '4px', fontWeight: '700', flexShrink: 0, border: '1px solid #cffafe' }}>
+                            🛡️ Personel
+                          </span>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
                         {isUnread && <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#D7147A', flexShrink: 0 }} />}
                         <button
