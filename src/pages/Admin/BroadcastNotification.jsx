@@ -42,7 +42,7 @@ const AUDIENCE_OPTIONS = [
   },
   {
     key: 'staff',
-    label: 'Sadece Personeller (Ekip & Rehberler)',
+    label: 'Sadece Personeller',
     description: 'Yalnızca Move rehberleri, uzmanları ve yöneticileri',
     icon: ShieldCheck,
     color: '#0891b2',
@@ -445,7 +445,7 @@ export default function BroadcastNotification() {
                     flexShrink: 0
                   }} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', lineHeight: 1.2 }}>
+                    <div style={{ fontSize: '13px', fontWeight: '700', color: '#0f172a', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {currentAudience.label}
                     </div>
                     <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -532,7 +532,7 @@ export default function BroadcastNotification() {
                             <IconComponent size={16} />
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '12.5px', fontWeight: isSelected ? '700' : '600', color: isSelected ? '#D7147A' : '#1e293b' }}>
+                            <div style={{ fontSize: '12.5px', fontWeight: isSelected ? '700' : '600', color: isSelected ? '#D7147A' : '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {item.label}
                             </div>
                             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
@@ -999,7 +999,7 @@ export default function BroadcastNotification() {
                             <IconComponent size={16} />
                           </div>
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: '12.5px', fontWeight: isSelected ? '700' : '600', color: isSelected ? '#D7147A' : '#1e293b' }}>
+                            <div style={{ fontSize: '12.5px', fontWeight: isSelected ? '700' : '600', color: isSelected ? '#D7147A' : '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {item.label}
                             </div>
                             <div style={{ fontSize: '11px', color: '#64748b', marginTop: '1px' }}>
