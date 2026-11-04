@@ -642,13 +642,15 @@ export default function BroadcastNotification() {
                         }}>
                           {selectedTour?.name || 'Bir Tur Seçin'}
                         </div>
-                        <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span>📅 {selectedTour?.dates || 'Tarih Belirtilmedi'}</span>
-                          {selectedTour?.participants?.length > 0 && (
-                            <span style={{ background: '#f1f5f9', color: '#475569', padding: '1px 5px', borderRadius: '4px', fontWeight: '600' }}>
-                              👥 {selectedTour.participants.length} Katılımcı
-                            </span>
-                          )}
+                        <div style={{ 
+                          fontSize: '11px', 
+                          color: '#64748b', 
+                          marginTop: '2px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          📅 {selectedTour?.dates || 'Tarih Belirtilmedi'}
                         </div>
                       </div>
                     </div>
@@ -817,13 +819,15 @@ export default function BroadcastNotification() {
                                         </span>
                                       )}
                                     </div>
-                                    <div style={{ fontSize: '10.5px', color: '#64748b', marginTop: '1px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                      <span>{t.dates || 'Tarih Belirtilmedi'}</span>
-                                      {t.participants?.length > 0 && (
-                                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                          • {t.participants.length} Kişi
-                                        </span>
-                                      )}
+                                    <div style={{ 
+                                      fontSize: '10.5px', 
+                                      color: '#64748b', 
+                                      marginTop: '1px',
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis'
+                                    }}>
+                                      📅 {t.dates || 'Tarih Belirtilmedi'}
                                     </div>
                                   </div>
                                 </div>
