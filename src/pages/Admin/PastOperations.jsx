@@ -688,7 +688,7 @@ function PastOperationsContent() {
                 >
                   
                   {/* Top Cover Image with Floating Badges & Action Buttons */}
-                  <div style={{ height: '125px', width: '100%', position: 'relative', overflow: 'hidden' }}>
+                  <div style={{ position: 'relative', width: '100%', aspectRatio: '2 / 1', overflow: 'hidden', background: '#0f172a' }}>
                     <img 
                       src={tour.avatar || "https://images.unsplash.com/photo-1503220317375-aaad61436b1b?auto=format&fit=crop&q=80&w=400"} 
                       alt="Tour" 

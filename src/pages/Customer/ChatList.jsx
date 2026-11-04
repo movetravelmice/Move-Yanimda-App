@@ -19,10 +19,11 @@ import {
   Image as ImageIcon,
   ChevronDown,
   Layers,
-  Filter
+  Filter,
+  Eye
 } from 'lucide-react';
 import Header from '../../components/Header';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore, isUserAdmin } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useChatStore } from '../../store/chatStore';
@@ -36,6 +37,7 @@ export default function ChatList() {
   const { tours } = useTourStore();
   const users = useUserStore(state => state.users);
   const user = useAuthStore(state => state.user);
+  const isAdmin = Boolean(user && (user.role === 'admin' || user.secondaryRole === 'admin' || isUserAdmin(user)));
   
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all'); // 'all' | 'groups' | 'staff' | 'customers' | 'unread'
@@ -122,108 +124,110 @@ export default function ChatList() {
     const expertGroupedChats = {};
     const customerGroupedChats = {};
 
+    const isAdmin = Boolean(user && (user.role === 'admin' || user.secondaryRole === 'admin' || isUserAdmin(user)));
+
     tours.forEach(tour => {
-      const isExpertForTour = user?.role === 'expert' && (
-          (tour.guideName === user?.name) || 
-          (tour.expert?.name === user?.name) || 
-          (tour.expert?.email === user?.email) || 
-          (tour.expert2?.name === user?.name) || 
-          (tour.expert2?.email === user?.email)
+      // Tur bittikten sonra grup sohbeti listeden tamamen kalkmalı
+      const isPast = isTourPast(tour);
+      if (isPast) return;
+
+      const isExpertForTour = (user?.role === 'expert' || user?.secondaryRole === 'expert') && Boolean(
+          (tour.guideName && user?.name && tour.guideName.trim().toLowerCase() === user.name.trim().toLowerCase()) || 
+          (tour.expert?.name && user?.name && tour.expert.name.trim().toLowerCase() === user.name.trim().toLowerCase()) || 
+          (tour.expert?.email && user?.email && tour.expert.email.trim().toLowerCase() === user.email.trim().toLowerCase()) || 
+          (tour.expert2?.name && user?.name && tour.expert2.name.trim().toLowerCase() === user.name.trim().toLowerCase()) || 
+          (tour.expert2?.email && user?.email && tour.expert2.email.trim().toLowerCase() === user.email.trim().toLowerCase())
       ); 
-      const isCustomerForTour = user?.role === 'customer' && tour.participants?.some(p => isUserMatch(p, user) || p.id === user?.id || (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()));
+      const isCustomerForTour = (user?.role === 'customer' || user?.userType === 'individual') && tour.participants?.some(p => isUserMatch(p, user) || p.id === user?.id || (p.email && user?.email && p.email.trim().toLowerCase() === user.email.trim().toLowerCase()));
       
-      if (user?.role === 'admin' || isExpertForTour || isCustomerForTour) {
-          const isArchive = isTourPast(tour);
-          const arrayToPush = isArchive ? past : active;
+      if (isAdmin || isExpertForTour || isCustomerForTour) {
+          const isObserverOnly = isAdmin && !isExpertForTour && !isCustomerForTour;
 
-          // Group Chat 
-          if (!(isArchive && isExpiredArchivedTour(tour.dates))) {
-              arrayToPush.push({
-                 id: tour.id,
-                 type: 'group',
-                 name: `${tour.name} Grubu`,
-                 tourName: tour.name,
-                 badgeType: 'group',
-                 destination: tour.destination || '',
-                 participantCount: tour.participants?.length || 0,
-                 ...getChatPreview(tour.id),
-                 unread: messages.filter(m => m.chatId === tour.id && m.status !== 'read' && m.sender !== mySenderKey).length,
-                 avatar: tour.avatar || tourGroupAvatar,
-                 isArchive
+          // Group Chat (Tur Grupları)
+          active.push({
+             id: tour.id,
+             type: 'group',
+             name: `${tour.name || 'Tur'} Grubu`,
+             tourName: tour.name || 'Tur',
+             badgeType: 'group',
+             destination: tour.destination || '',
+             participantCount: tour.participants?.length || 0,
+             ...getChatPreview(tour.id),
+             unread: messages.filter(m => m.chatId === tour.id && m.status !== 'read' && m.sender !== mySenderKey).length,
+             avatar: tour.avatar || tourGroupAvatar,
+             isArchive: false,
+             isObserverOnly
+          });
+
+          // 1:1 Direct Chats generated from participant map (Rehberler ve Müşteriler için)
+          if (isExpertForTour) {
+              tour.participants?.forEach(p => {
+                 if (!expertGroupedChats[p.id]) {
+                     expertGroupedChats[p.id] = {
+                         id: `direct_grouped_${p.id}`,
+                         type: 'direct',
+                         badgeType: 'customer',
+                         name: p.name,
+                         tourNames: [tour.name],
+                         unread: messages.filter(m => m.chatId === getDirectChatId(tour.id, p.id) && m.status !== 'read' && m.sender !== mySenderKey).length,
+                         avatar: p.avatar,
+                         isArchive: false,
+                         lastTId: getDirectChatId(tour.id, p.id)
+                     };
+                 } else {
+                     expertGroupedChats[p.id].tourNames.push(tour.name);
+                     expertGroupedChats[p.id].unread += messages.filter(m => m.chatId === getDirectChatId(tour.id, p.id) && m.status !== 'read' && m.sender !== mySenderKey).length;
+                 }
               });
-          }
+          } else if (isCustomerForTour) {
+              const customerId = user.id;
+              const { expert1, expert2 } = getTourExperts(tour, users, user);
 
-          // 1:1 Direct Chats generated from participant map
-          if (!isArchive) {
-              if (user?.role === 'expert' || user?.role === 'admin') {
-                  tour.participants?.forEach(p => {
-                     if (!expertGroupedChats[p.id]) {
-                         expertGroupedChats[p.id] = {
-                             id: `direct_grouped_${p.id}`,
-                             type: 'direct',
-                             badgeType: 'customer',
-                             name: p.name,
-                             tourNames: [tour.name],
-                             unread: messages.filter(m => m.chatId === getDirectChatId(tour.id, p.id) && m.status !== 'read' && m.sender !== mySenderKey).length,
-                             avatar: p.avatar,
-                             isArchive: false,
-                             lastTId: getDirectChatId(tour.id, p.id)
-                         };
-                     } else {
-                         expertGroupedChats[p.id].tourNames.push(tour.name);
-                         expertGroupedChats[p.id].unread += messages.filter(m => m.chatId === getDirectChatId(tour.id, p.id) && m.status !== 'read' && m.sender !== mySenderKey).length;
-                     }
-                  });
-              } else if (user?.role === 'customer') {
-                  const customerId = user.id;
-                  const { expert1, expert2 } = getTourExperts(tour, users, user);
-
-                  if (expert1 && expert1.name) {
-                      const exp1Key = `expert1_${expert1.email || expert1.name}_${tour.id}`;
-                      const directChatId = getDirectChatId(tour.id, customerId);
-                      if (!customerGroupedChats[exp1Key]) {
-                          customerGroupedChats[exp1Key] = {
-                              id: directChatId,
-                              type: 'direct',
-                              badgeType: 'expert',
-                              category: 'expert',
-                              name: expert1.name,
-                              tourNames: [tour.name],
-                              unread: messages.filter(m => m.chatId === directChatId && m.status !== 'read' && m.sender !== mySenderKey).length,
-                              avatar: expert1.avatar,
-                              isArchive: false,
-                              lastTId: directChatId
-                          };
-                      } else {
-                          if (!customerGroupedChats[exp1Key].tourNames.includes(tour.name)) {
-                              customerGroupedChats[exp1Key].tourNames.push(tour.name);
-                          }
-                          customerGroupedChats[exp1Key].unread += messages.filter(m => m.chatId === directChatId && m.status !== 'read' && m.sender !== mySenderKey).length;
+              if (expert1 && expert1.name) {
+                  const exp1Key = `expert1_${expert1.email || expert1.name}_${tour.id}`;
+                  const directChatId = getDirectChatId(tour.id, customerId);
+                  if (!customerGroupedChats[exp1Key]) {
+                      customerGroupedChats[exp1Key] = {
+                          id: directChatId,
+                          type: 'direct',
+                          badgeType: 'expert',
+                          category: 'expert',
+                          name: expert1.name,
+                          tourNames: [tour.name],
+                          unread: messages.filter(m => m.chatId === directChatId && m.status !== 'read' && m.sender !== mySenderKey).length,
+                          avatar: expert1.avatar,
+                          isArchive: false,
+                          lastTId: directChatId
+                      };
+                  } else {
+                      if (!customerGroupedChats[exp1Key].tourNames.includes(tour.name)) {
+                          customerGroupedChats[exp1Key].tourNames.push(tour.name);
                       }
+                      customerGroupedChats[exp1Key].unread += messages.filter(m => m.chatId === directChatId && m.status !== 'read' && m.sender !== mySenderKey).length;
                   }
+              }
 
-                  if (expert2 && expert2.name) {
-                      const exp2Key = `expert2_${expert2.email || expert2.name}_${tour.id}`;
-                      const exp2ChatId = `direct_${tour.id}_${customerId}_exp2`;
-                      if (!customerGroupedChats[exp2Key]) {
-                          customerGroupedChats[exp2Key] = {
-                              id: exp2ChatId,
-                              type: 'direct',
-                              badgeType: 'expert',
-                              category: 'expert',
-                              name: expert2.name,
-                              tourNames: [tour.name],
-                              unread: messages.filter(m => m.chatId === exp2ChatId && m.status !== 'read' && m.sender !== mySenderKey).length,
-                              avatar: expert2.avatar,
-                              isArchive: false,
-                              lastTId: exp2ChatId
-                          };
-                      } else {
-                          if (!customerGroupedChats[exp2Key].tourNames.includes(tour.name)) {
-                              customerGroupedChats[exp2Key].tourNames.push(tour.name);
-                          }
-                          customerGroupedChats[exp2Key].unread += messages.filter(m => m.chatId === exp2ChatId && m.status !== 'read' && m.sender !== mySenderKey).length;
+              if (expert2 && expert2.name) {
+                  const exp2Key = `expert2_${expert2.email || expert2.name}_${tour.id}`;
+                  const exp2ChatId = `direct_${tour.id}_${customerId}_exp2`;
+                  if (!customerGroupedChats[exp2Key]) {
+                      customerGroupedChats[exp2Key] = {
+                          id: exp2ChatId,
+                          type: 'direct',
+                          badgeType: 'expert',
+                          category: 'expert',
+                          name: expert2.name,
+                          tourNames: [tour.name],
+                          unread: messages.filter(m => m.chatId === exp2ChatId && m.status !== 'read' && m.sender !== mySenderKey).length,
+                          avatar: expert2.avatar,
+                          isArchive: false,
+                          lastTId: exp2ChatId
+                      };
+                  } else {
+                      if (!customerGroupedChats[exp2Key].tourNames.includes(tour.name)) {
+                          customerGroupedChats[exp2Key].tourNames.push(tour.name);
                       }
+                      customerGroupedChats[exp2Key].unread += messages.filter(m => m.chatId === exp2ChatId && m.status !== 'read' && m.sender !== mySenderKey).length;
                   }
               }
           }
@@ -383,29 +387,42 @@ export default function ChatList() {
     return matchName || matchTour || matchMsg;
   };
 
+    // Filtered unread chats
+  const filteredUnread = useMemo(() => {
+    return activeChats.filter(c => c.unread > 0 && matchSearch(c));
+  }, [activeChats, searchQuery]);
+
   // Filtered by search & unread
   const filteredGroups = useMemo(() => {
     return groupChats.filter(c => {
-      if (activeTab === 'unread' && c.unread === 0) return false;
+      if (activeTab === 'unread') return false;
+      if (activeTab === 'all' && c.unread > 0) return false;
       return matchSearch(c);
     });
   }, [groupChats, searchQuery, activeTab]);
 
   const filteredStaff = useMemo(() => {
     return staffChats.filter(c => {
-      if (activeTab === 'unread' && c.unread === 0) return false;
+      if (activeTab === 'unread') return false;
+      if (activeTab === 'all' && c.unread > 0) return false;
       return matchSearch(c);
     });
   }, [staffChats, searchQuery, activeTab]);
 
   const filteredCustomers = useMemo(() => {
     return customerChats.filter(c => {
-      if (activeTab === 'unread' && c.unread === 0) return false;
+      if (activeTab === 'unread') return false;
+      if (activeTab === 'all' && c.unread > 0) return false;
       return matchSearch(c);
     });
   }, [customerChats, searchQuery, activeTab]);
 
-  const totalFilteredCount = filteredGroups.length + filteredStaff.length + filteredCustomers.length;
+  const totalFilteredCount = (
+    (activeTab === 'all' || activeTab === 'unread' ? filteredUnread.length : 0) +
+    filteredGroups.length +
+    filteredStaff.length +
+    filteredCustomers.length
+  );
 
   const renderBadgeIcon = (badgeType) => {
     switch (badgeType) {
@@ -563,6 +580,20 @@ export default function ChatList() {
                      }}>
                          {chat.name}
                      </h3>
+                     
+                     {chat.participantCount > 0 && !chat.isObserverOnly && (
+                       <span style={{ 
+                         fontSize: '9.5px', 
+                         background: '#f1f5f9', 
+                         color: '#64748b', 
+                         padding: '1px 5px', 
+                         borderRadius: '4px', 
+                         fontWeight: '600',
+                         flexShrink: 0
+                       }}>
+                         {chat.participantCount} kişi
+                       </span>
+                     )}
                      {chat.isArchive && (
                        <span style={{ fontSize: '9px', background: '#e2e8f0', color: '#64748b', padding: '1px 4px', borderRadius: '4px', fontWeight: 'bold' }}>Arşiv</span>
                      )}
@@ -663,7 +694,7 @@ export default function ChatList() {
       color: '#059669',
       bg: '#ecfdf5'
     }] : []),
-    ...(unreadCount > 0 ? [{
+    {
       id: 'unread',
       label: 'Okunmamış Mesajlar',
       shortLabel: 'Okunmamış',
@@ -671,15 +702,16 @@ export default function ChatList() {
       icon: Sparkles,
       color: '#D7147A',
       bg: '#FDF2F8'
-    }] : [])
+    }
   ], [activeChats.length, groupChats.length, staffChats.length, customerChats.length, unreadCount]);
 
   const currentFilterOption = filterOptions.find(opt => opt.id === activeTab) || filterOptions[0];
   const CurrentIcon = currentFilterOption.icon;
 
-  const showGroupsSection = (activeTab === 'all' || activeTab === 'groups' || activeTab === 'unread') && filteredGroups.length > 0;
-  const showStaffSection = (activeTab === 'all' || activeTab === 'staff' || activeTab === 'unread') && filteredStaff.length > 0;
-  const showCustomersSection = (activeTab === 'all' || activeTab === 'customers' || activeTab === 'unread') && filteredCustomers.length > 0;
+  const showUnreadSection = (activeTab === 'all' || activeTab === 'unread');
+  const showGroupsSection = (activeTab === 'all' || activeTab === 'groups') && filteredGroups.length > 0;
+  const showStaffSection = (activeTab === 'all' || activeTab === 'staff') && filteredStaff.length > 0;
+  const showCustomersSection = (activeTab === 'all' || activeTab === 'customers') && filteredCustomers.length > 0;
 
   return (
     <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))' }}>
@@ -883,9 +915,6 @@ export default function ChatList() {
                         }}>
                           {opt.count}
                         </span>
-                        {isSelected && (
-                          <Check size={16} color="#D7147A" strokeWidth={2.5} />
-                        )}
                       </div>
                     </div>
                   );
@@ -917,6 +946,79 @@ export default function ChatList() {
             ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     
+                    {/* SECTION 0: OKUNMAMIŞ MESAJLAR KARTI */}
+                    {showUnreadSection && (
+                      filteredUnread.length > 0 ? (
+                        <div style={{ 
+                          background: 'var(--surface)', 
+                          borderRadius: '16px', 
+                          padding: '12px 14px', 
+                          border: '1.5px solid #F9BED8', 
+                          boxShadow: '0 4px 16px rgba(215, 20, 122, 0.06)' 
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #fce7f3' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                              <div style={{ width: '22px', height: '22px', borderRadius: '6px', background: '#FDF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7147A' }}>
+                                <Sparkles size={12} />
+                              </div>
+                              <span style={{ fontSize: '11.5px', fontWeight: '800', color: '#9d174d', textTransform: 'uppercase', letterSpacing: '0.4px' }}>
+                                Okunmamış Mesajlar
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '10px', background: '#D7147A', color: '#ffffff', padding: '2px 8px', borderRadius: '10px', fontWeight: '700' }}>
+                              {filteredUnread.length} Yeni
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                            {filteredUnread.map(renderChatItem)}
+                          </div>
+                        </div>
+                      ) : (
+                        activeTab === 'unread' ? (
+                          <div style={{
+                            background: 'var(--surface)',
+                            borderRadius: '16px',
+                            padding: '24px 16px',
+                            border: '1.5px dashed #F9BED8',
+                            textAlign: 'center'
+                          }}>
+                            <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#FDF2F8', color: '#D7147A', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
+                              <Sparkles size={18} />
+                            </div>
+                            <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-main)', marginBottom: '3px' }}>
+                              Tüm mesajları okudunuz!
+                            </div>
+                            <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                              Yeni bir mesaj geldiğinde bu kartta listelenecektir.
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{
+                            background: 'var(--surface)',
+                            borderRadius: '14px',
+                            padding: '9px 13px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                              <div style={{ width: '20px', height: '20px', borderRadius: '6px', background: '#FDF2F8', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D7147A' }}>
+                                <Sparkles size={11} />
+                              </div>
+                              <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-main)', textTransform: 'uppercase', letterSpacing: '0.3px' }}>
+                                Okunmamış Mesajlar
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '10px', color: '#059669', background: '#ecfdf5', padding: '2px 8px', borderRadius: '10px', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <Check size={11} strokeWidth={2.5} /> Okunmamış mesaj yok
+                            </span>
+                          </div>
+                        )
+                      )
+                    )}
+
                     {/* SECTION 1: TUR GRUPLARI KARTI */}
                     {showGroupsSection && (
                       <div style={{ background: 'var(--surface)', borderRadius: '16px', padding: '12px 14px', border: '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
@@ -988,7 +1090,7 @@ export default function ChatList() {
          </div>
 
          {/* Past / Archived Tours Section */}
-         {(user?.role === 'expert' || user?.role === 'admin') && pastChats.length > 0 && !searchQuery && activeTab !== 'unread' && (
+         {(isAdmin || user?.role === 'expert') && pastChats.length > 0 && !searchQuery && activeTab !== 'unread' && (
              <div style={{ marginTop: '20px' }}>
                  <div style={{ background: 'var(--surface)', borderRadius: '16px', padding: '12px 14px', border: '1px solid #e2e8f0', opacity: 0.85 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '10px', paddingBottom: '8px', borderBottom: '1px solid #f1f5f9', color: 'var(--text-muted)' }}>

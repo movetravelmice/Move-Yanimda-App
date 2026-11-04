@@ -301,7 +301,7 @@ export default function DestinationGuide() {
     }
 
     return (
-        <div style={{ paddingBottom: '90px', background: 'var(--bg-color)', minHeight: '100vh' }}>
+        <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', background: 'var(--bg-color)', minHeight: '100vh' }}>
             <Header 
                 preTitle={
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
@@ -408,7 +408,8 @@ export default function DestinationGuide() {
                     boxShadow: '0 4px 14px rgba(15, 23, 42, 0.04)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '12px'
+                    gap: '12px',
+                    marginBottom: '32px'
                   }}
                 >
                     {/* Header inside card */}
@@ -456,7 +457,8 @@ export default function DestinationGuide() {
                     boxShadow: '0 4px 14px rgba(15, 23, 42, 0.04)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '12px'
+                    gap: '12px',
+                    marginBottom: '32px'
                   }}
                 >
                     {/* Header inside card */}
@@ -489,7 +491,8 @@ export default function DestinationGuide() {
                     boxShadow: '0 4px 14px rgba(15, 23, 42, 0.04)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '12px'
+                    gap: '12px',
+                    marginBottom: '32px'
                   }}
                 >
                     {/* Header inside card */}
@@ -534,7 +537,8 @@ export default function DestinationGuide() {
                     boxShadow: '0 4px 14px rgba(15, 23, 42, 0.04)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '12px'
+                    gap: '12px',
+                    marginBottom: '32px'
                   }}
                 >
                     {/* Header inside card */}
@@ -567,6 +571,10 @@ export default function DestinationGuide() {
                        </div>
                     )}
                 </div>
+
+                {/* Menünün ve Tintin ikonunun altında kalmayı %100 önleyen fiziksel tampon boşluk */}
+                <div style={{ height: '140px', minHeight: '140px', width: '100%', flexShrink: 0 }} aria-hidden="true" />
+
                 <style>{`@keyframes spin { 100% { transform: rotate(360deg); } }`}</style>
             </div>
         </div>

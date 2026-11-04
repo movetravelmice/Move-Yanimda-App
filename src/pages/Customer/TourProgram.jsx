@@ -26,7 +26,7 @@ export default function TourProgram() {
   );
 
   return (
-    <div style={{ paddingBottom: '96px', minHeight: '100dvh', background: 'var(--bg-color)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+    <div style={{ paddingBottom: 'calc(180px + env(safe-area-inset-bottom, 0px))', minHeight: '100dvh', background: 'var(--bg-color)', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
       <Header title="Tur Programı" subtitle={activeTour?.name || "Program Detayı"} showBack marginBottom={0} />
 
       <div style={{ padding: '16px 16px 0 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -121,7 +121,7 @@ export default function TourProgram() {
           )}
 
           {activeTour?.programFiles && activeTour.programFiles.length > 0 && (
-              <div style={{ marginTop: '24px', background: 'white', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', marginBottom: '32px' }}>
+              <div style={{ marginTop: '24px', background: 'white', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.02)', marginBottom: '40px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
                       <Paperclip size={18} color="var(--primary)" />
                       <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-main)' }}>Ekli Belgeler ve Dosyalar (Ekler)</span>
@@ -167,6 +167,9 @@ export default function TourProgram() {
                   </div>
               </div>
           )}
+
+          {/* Menünün ve Tintin ikonunun altında kalmayı %100 önleyen alt tampon boşluk */}
+          <div style={{ height: '140px', minHeight: '140px', width: '100%', flexShrink: 0 }} aria-hidden="true" />
       </div>
     </div>
   );

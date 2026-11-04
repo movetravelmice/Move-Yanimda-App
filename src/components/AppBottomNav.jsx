@@ -14,7 +14,7 @@ import {
   Wallet 
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
-import { useTourStore } from '../store/tourStore';
+import { useTourStore, isTourPast } from '../store/tourStore';
 import { useChatStore } from '../store/chatStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { isUserMatch } from '../utils/userUtils';
@@ -104,12 +104,12 @@ export default function AppBottomNav() {
       if (chatId.startsWith('tour_')) {
         const t = tours.find(tour => tour.id === chatId);
         if (!t) return false;
-        if (t.status === 'past' && isExpiredArchivedTour(t.dates)) return false;
+        if (isTourPast(t) || (t.status === 'past' && isExpiredArchivedTour(t.dates))) return false;
 
         if (user.role === 'customer') {
           return t.participants?.some(isUserInTour);
         }
-        if (user.role === 'expert' || user.role === 'admin' || user.role === 'ticketing') {
+        if (user.role === 'expert' || user.role === 'admin' || user.secondaryRole === 'admin' || user.role === 'ticketing') {
           return (t.guideName === user.name) || (t.expert?.name === user.name) || (t.expert?.email === user.email) || (t.expert2?.name === user.name) || (t.expert2?.email === user.email);
         }
         return false;

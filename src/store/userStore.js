@@ -16,8 +16,19 @@ const isDemoUser = (user, id) => {
     return docId === 'sys_admin' || docId === 'sys_expert' || docId === 'sys_customer' || email.endsWith('@base44.com');
 };
 
+const getCachedUsers = () => {
+    try {
+        const raw = localStorage.getItem('travel_cached_users_v2');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch (e) {}
+    return [];
+};
+
 export const useUserStore = create((set, get) => ({
-    users: [],
+    users: getCachedUsers(),
     companies: ['Move Travel & Mice'],
     isFirebaseInitialized: false,
     _unsubscribe: null,
@@ -28,6 +39,7 @@ export const useUserStore = create((set, get) => ({
         if (typeof unsub === 'function') {
             try { unsub(); } catch (e) {}
         }
+        try { localStorage.removeItem('travel_cached_users_v2'); } catch (e) {}
         set({ users: [], isFirebaseInitialized: false, _unsubscribe: null, _activeSessionKey: null });
     },
 
@@ -86,6 +98,7 @@ export const useUserStore = create((set, get) => ({
                     });
 
                     const cleanCompanyList = Array.from(fetchedCompanies).filter(c => c && !c.toLowerCase().includes('tgundogan'));
+                    try { localStorage.setItem('travel_cached_users_v2', JSON.stringify(fetchedUsers)); } catch (e) {}
                     set({ 
                         users: fetchedUsers,
                         companies: cleanCompanyList.length > 0 ? cleanCompanyList : ['Move Travel & Mice']
@@ -168,7 +181,9 @@ export const useUserStore = create((set, get) => ({
         };
         
         // Optimistic UI Update
-        set({ users: [newUser, ...currentUsers.filter(u => u.id !== newUserId)] });
+        const nextUsers = [newUser, ...currentUsers.filter(u => u.id !== newUserId)];
+        try { localStorage.setItem('travel_cached_users_v2', JSON.stringify(nextUsers)); } catch (e) {}
+        set({ users: nextUsers });
 
         try {
             const baseUrl = getApiBaseUrl();
@@ -245,12 +260,18 @@ export const useUserStore = create((set, get) => ({
         }
 
         // Optimistic UI update
-        set({
-            users: currentUsers.map(u => {
-                const isMatch = (targetId && u.id === targetId) || (normalizedEmail && u.email?.toLowerCase() === normalizedEmail);
-                return isMatch ? { ...u, ...dataToUpdate } : u;
-            })
+        const nextUsers = currentUsers.map(u => {
+            const isMatch = (targetId && u.id === targetId) || (normalizedEmail && u.email?.toLowerCase() === normalizedEmail);
+            return isMatch ? { ...u, ...dataToUpdate } : u;
         });
+        try { localStorage.setItem('travel_cached_users_v2', JSON.stringify(nextUsers)); } catch (e) {}
+        set({
+            users: nextUsers
+        });
+
+        if (dataToUpdate.company && !get().companies.includes(dataToUpdate.company)) {
+            set(state => ({ companies: [...state.companies, dataToUpdate.company] }));
+        }
 
         // Also if avatar changed, sync to AuthStore if this user is current logged in user
         try {
@@ -282,8 +303,8 @@ export const useUserStore = create((set, get) => ({
                     body: JSON.stringify({ token, user: { ...dataToUpdate, id: targetId } })
                 });
                 
-                // Automatically sync participant details and tour experts if email, name, phone, avatar or password changed
-                if (dataToUpdate.email || dataToUpdate.name || dataToUpdate.phone || dataToUpdate.avatar || dataToUpdate.password) {
+                // Automatically sync participant details and tour experts if email, name, phone, company, avatar or password changed
+                if (dataToUpdate.email || dataToUpdate.name || dataToUpdate.phone || dataToUpdate.company || dataToUpdate.avatar || dataToUpdate.password) {
                     try {
                         const toursRef = collection(db, 'tours');
                         const toursSnap = await getDocs(toursRef);
@@ -306,6 +327,7 @@ export const useUserStore = create((set, get) => ({
                                         email: dataToUpdate.email !== undefined ? dataToUpdate.email : p.email,
                                         name: dataToUpdate.name || p.name,
                                         phone: dataToUpdate.phone !== undefined ? dataToUpdate.phone : p.phone,
+                                        company: dataToUpdate.company !== undefined ? dataToUpdate.company : p.company,
                                         password: dataToUpdate.password !== undefined ? dataToUpdate.password : p.password
                                     };
                                 }
@@ -357,6 +379,7 @@ export const useUserStore = create((set, get) => ({
                                                 modified = true;
                                                 return {
                                                     ...p,
+                                                    ...(dataToUpdate.company !== undefined ? { company: dataToUpdate.company } : {}),
                                                     ...(dataToUpdate.email !== undefined ? { email: dataToUpdate.email } : {}),
                                                     ...(dataToUpdate.name !== undefined ? { name: dataToUpdate.name } : {}),
                                                     ...(dataToUpdate.phone !== undefined ? { phone: dataToUpdate.phone } : {}),
@@ -399,7 +422,9 @@ export const useUserStore = create((set, get) => ({
         }
         // Optimistic delete
         const currentUsers = get().users;
-        set({ users: currentUsers.filter(u => u.id !== id) });
+        const nextUsers = currentUsers.filter(u => u.id !== id);
+        try { localStorage.setItem('travel_cached_users_v2', JSON.stringify(nextUsers)); } catch (e) {}
+        set({ users: nextUsers });
         
         try {
             const baseUrl = getApiBaseUrl();

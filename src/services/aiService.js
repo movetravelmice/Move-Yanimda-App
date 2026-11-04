@@ -1,15 +1,14 @@
 // Robust Google Gemini AI Service for Tintin Travel Assistant
+import { getApiBaseUrl } from '../utils/apiConfig';
 
 const DEFAULT_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 const FALLBACK_MODELS = [
-  'gemini-3-flash-preview',
   'gemini-3.5-flash',
   'gemini-3.6-flash',
-  'gemma-4-26b-a4b-it',
-  'gemini-3.8-flash',
-  'gemini-3.7-flash',
   'gemini-3.5-flash-lite',
-  'gemini-3.1-flash-lite'
+  'gemini-flash-latest',
+  'gemini-3-flash-preview',
+  'gemini-3.8-flash'
 ];
 
 /**
@@ -25,15 +24,19 @@ export const sanitizeAssistantText = (raw) => {
 };
 
 /**
- * Sanitize model name to avoid deprecated or invalid models
+ * Sanitize model name to upgrade deprecated models to modern Gemini models
  */
 export const sanitizeModelName = (rawModel) => {
-  if (!rawModel || typeof rawModel !== 'string') return 'gemini-3-flash-preview';
+  if (!rawModel || typeof rawModel !== 'string') return 'gemini-3.5-flash';
   const m = rawModel.trim();
-  if (m.startsWith('gemini-1.') || m.startsWith('gemini-2.5')) {
-    return 'gemini-3-flash-preview';
+  const deprecated = [
+    'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 
+    'gemini-1.5-pro', 'gemini-2.0-flash-lite', 'gemini-2.5-pro'
+  ];
+  if (deprecated.includes(m)) {
+    return 'gemini-3.5-flash';
   }
-  return m;
+  return m || 'gemini-3.5-flash';
 };
 
 /**
@@ -181,7 +184,7 @@ export const extractCityCandidates = (msg, travelContext) => {
 };
 
 /**
- * Generate AI reply using Google Gemini with multi-model fallback and rich travel context
+ * Generate AI reply using Google Gemini with secure backend routing, multi-model fallback and rich travel context
  */
 export const generateTintinReply = async ({
   message,
@@ -191,10 +194,79 @@ export const generateTintinReply = async ({
 }) => {
   const apiKey = (geminiConfig?.apiKey || DEFAULT_API_KEY).trim();
   const configuredModel = sanitizeModelName(geminiConfig?.model);
-  
-  // Ordered model candidates: configured model first, then reliable fallbacks
-  const modelCandidates = Array.from(new Set([configuredModel, ...FALLBACK_MODELS]));
 
+  // 1. GÜVENLİ BACKEND PROXY (Cloud Function) İLE ÇAĞRI
+  try {
+    const baseUrl = getApiBaseUrl();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 18000);
+
+    const res = await fetch(`${baseUrl}/api/tintin/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message,
+        conversationHistory,
+        travelContext,
+        apiKey: (apiKey && apiKey !== '********' && apiKey.length > 20) ? apiKey : undefined,
+        model: configuredModel,
+        systemPrompt: geminiConfig?.systemPrompt,
+        temperature: geminiConfig?.temperature,
+        maxTokens: geminiConfig?.maxTokens
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    const data = await res.json();
+
+    if (res.ok && data?.success && data?.reply) {
+      return sanitizeAssistantText(data.reply);
+    }
+
+    if (data?.message) {
+      throw new Error(data.message);
+    }
+  } catch (backendErr) {
+    console.warn('Tintin backend proxy failed:', backendErr.message);
+
+    // Eğer backend doğrudan API Key yapılandırma hatası veya limit bildirdiyse kullanıcıya net ilet
+    if (
+      backendErr.message.includes('yapılandırılmamış') ||
+      backendErr.message.includes('limit') ||
+      backendErr.message.includes('Geçersiz')
+    ) {
+      throw backendErr;
+    }
+
+    // Yalnızca istemcide GERÇEK ve açık bir API anahtarı varsa doğrudan tarayıcıdan dene
+    if (apiKey && apiKey !== '********' && apiKey.length > 20) {
+      return generateTintinReplyDirect({
+        message,
+        conversationHistory,
+        travelContext,
+        geminiConfig,
+        apiKey,
+        configuredModel
+      });
+    }
+
+    throw backendErr;
+  }
+};
+
+/**
+ * Direct browser fallback for development or local custom key
+ */
+const generateTintinReplyDirect = async ({
+  message,
+  conversationHistory = [],
+  travelContext = {},
+  geminiConfig = {},
+  apiKey,
+  configuredModel
+}) => {
+  const modelCandidates = Array.from(new Set([configuredModel, ...FALLBACK_MODELS])).filter(Boolean);
   const userMsgLower = (message || '').toLowerCase();
 
   // 1. Live Weather Lookup if queried
@@ -294,13 +366,12 @@ KURALLAR:
     }
   };
 
-  // 5. Model Execution Loop with timeout and fallback
   let lastError = null;
 
   for (const model of modelCandidates) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 9000); // 9 sec timeout per model
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
 
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
       const res = await fetch(endpoint, {
@@ -331,30 +402,77 @@ KURALLAR:
 };
 
 /**
- * Test Gemini API connection with multi-model validation
+ * Test Gemini API connection with multi-model validation via backend or direct
  */
 export const testGeminiConnection = async (apiKey, model) => {
   const cleanKey = (apiKey || DEFAULT_API_KEY).trim();
-  const primaryModel = sanitizeModelName(model) || 'gemini-3-flash-preview';
+  const primaryModel = sanitizeModelName(model) || 'gemini-3.5-flash';
+
+  // 1. Önce Backend Test Endpoint'i üzerinden güvenle sına
+  try {
+    const baseUrl = getApiBaseUrl();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    const res = await fetch(`${baseUrl}/api/tintin/test-connection`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: (cleanKey && cleanKey !== '********') ? cleanKey : undefined,
+        model: primaryModel
+      }),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+    const data = await res.json();
+
+    if (res.ok && data?.success) {
+      return {
+        success: true,
+        message: data.message || `Google Gemini (${data.model || primaryModel}) API bağlantısı başarılı!`,
+        model: data.model || primaryModel
+      };
+    }
+
+    if (data?.message) {
+      return {
+        success: false,
+        message: data.message
+      };
+    }
+  } catch (backendErr) {
+    console.warn('Backend test connection unreachable, fallback to direct test if key available:', backendErr.message);
+  }
+
+  // 2. Eğer backend erişilemezse ve açık bir API anahtarı varsa doğrudan sına
+  if (!cleanKey || cleanKey === '********' || cleanKey.length < 15) {
+    return {
+      success: false,
+      message: 'Geçersiz veya eksik Gemini API Key. Lütfen geçerli bir API anahtarı girin.'
+    };
+  }
 
   const candidateModels = Array.from(new Set([
     primaryModel,
-    'gemini-3-flash-preview',
     'gemini-3.5-flash',
     'gemini-3.6-flash',
-    'gemma-4-26b-a4b-it'
-  ]));
+    'gemini-3.5-flash-lite',
+    'gemini-3-flash-preview',
+    'gemini-flash-latest',
+    'gemini-3.8-flash'
+  ])).filter(Boolean);
 
   let lastError = null;
 
   for (const m of candidateModels) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
 
       const testPayload = {
-        contents: [{ role: 'user', parts: [{ text: "Tek kelimeyle 'Bağlantı başarılı' diye cevap ver." }] }],
-        generationConfig: { maxOutputTokens: 50, temperature: 0.1 }
+        contents: [{ role: 'user', parts: [{ text: "Merhaba, baglanti testi. Tek kelime cevap ver." }] }],
+        generationConfig: { maxOutputTokens: 500, temperature: 0.1 }
       };
 
       const res = await fetch(
@@ -370,17 +488,13 @@ export const testGeminiConnection = async (apiKey, model) => {
       clearTimeout(timeoutId);
       const data = await res.json();
 
-      if (res.ok && data?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        if (m === primaryModel) {
+      if (res.ok && data?.candidates?.[0]?.content?.parts) {
+        const parts = data.candidates[0].content.parts;
+        const combined = parts.map(p => p.text || '').filter(Boolean).join('\n').trim();
+        if (combined) {
           return {
             success: true,
             message: `Google Gemini (${m}) bağlantısı başarılı!`,
-            model: m
-          };
-        } else {
-          return {
-            success: true,
-            message: `Google Gemini bağlantısı aktif! (${primaryModel} yoğun olduğu için ${m} ile doğrulandı)`,
             model: m
           };
         }
@@ -410,7 +524,7 @@ export const testGeminiConnection = async (apiKey, model) => {
  */
 export const generateCityGuideAI = async (cityName, countryName = '', geminiConfig = {}) => {
   const apiKey = (geminiConfig?.apiKey || DEFAULT_API_KEY).trim();
-  const primaryModel = sanitizeModelName(geminiConfig?.model) || 'gemini-3-flash-preview';
+  const primaryModel = sanitizeModelName(geminiConfig?.model) || 'gemini-3.5-flash';
 
   const prompt = `Sen Move Travel & MICE kurumsal seyahat rehberi uzmanısın.
 ${cityName}${countryName ? ' (' + countryName + ')' : ''} şehri için Türkçe, son derece kaliteli ve profesyonel bir seyahat ve şehir rehberi hazırla.
@@ -434,9 +548,11 @@ SADECE geçerli JSON döndür, kod bloğu veya backtick dışında hiçbir metin
 
   const candidateModels = Array.from(new Set([
     primaryModel,
-    'gemini-3-flash-preview',
     'gemini-3.5-flash',
-    'gemini-3.6-flash'
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-flash-latest',
+    'gemini-3-flash-preview'
   ]));
 
   for (const model of candidateModels) {

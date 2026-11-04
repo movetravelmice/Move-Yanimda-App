@@ -323,8 +323,19 @@ export const sanitizeForFirestore = (obj) => {
     return cleanObj;
 };
 
+const getCachedTours = () => {
+    try {
+        const raw = localStorage.getItem('travel_cached_tours_v2');
+        if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+    } catch (e) {}
+    return [];
+};
+
 export const useTourStore = create((set, get) => ({
-  tours: [],
+  tours: getCachedTours(),
   isFirebaseInitialized: false,
   _unsubscribe: null,
   _activeSessionKey: null,
@@ -334,6 +345,7 @@ export const useTourStore = create((set, get) => ({
       if (typeof unsub === 'function') {
           try { unsub(); } catch (e) {}
       }
+      try { localStorage.removeItem('travel_cached_tours_v2'); } catch (e) {}
       set({ tours: [], isFirebaseInitialized: false, _unsubscribe: null, _activeSessionKey: null });
   },
 
@@ -462,7 +474,9 @@ export const useTourStore = create((set, get) => ({
 
                   fetchedTours.push({ id: docSnap.id, ...tourData });
               }
-              set({ tours: fetchedTours.reverse() });
+              const reversedTours = fetchedTours.reverse();
+               try { localStorage.setItem('travel_cached_tours_v2', JSON.stringify(reversedTours)); } catch (e) {}
+               set({ tours: reversedTours });
               if (isVerifiedStaff) {
                   get().cleanupExpiredTourAttachments().catch(console.error);
               }

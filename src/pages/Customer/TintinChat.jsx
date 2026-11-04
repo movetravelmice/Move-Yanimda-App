@@ -201,13 +201,29 @@ export default function TintinChat() {
       });
     } catch (err) {
       console.error('Tintin chat error:', err);
-      setErrorBanner(err.message || 'Bağlantı hatası oluştu.');
+      let userFriendlyMsg = 'Üzgünüm, şu anda yanıt oluşturulamadı. Lütfen biraz sonra tekrar deneyin.';
+      const raw = err?.message || '';
+      if (raw.includes('billing account') || raw.includes('outstanding balance')) {
+        userFriendlyMsg = 'Google Gemini hesabında faturalandırma / bakiye engeli bulunmaktadır (Google Cloud Projesi). Lütfen yönetici panelinden fatura durumunu kontrol edin veya Google AI Studio\'dan yeni bir ücretsiz API anahtarı tanımlayın.';
+      } else if (
+        raw.includes('yapılandırılmamış') || 
+        raw.includes('API Key') || 
+        raw.includes('unregistered callers') || 
+        raw.includes('consumer identity') ||
+        raw.includes('Geçersiz')
+      ) {
+        userFriendlyMsg = 'Move Seyahat Asistanı Tintin henüz yapılandırılmamış. Lütfen yönetici panelinden (Ayarlar > WhatsApp & Yapay Zeka) Google Gemini API anahtarını tanımlayın.';
+      } else if (raw.includes('limit')) {
+        userFriendlyMsg = raw;
+      }
+
+      setErrorBanner(userFriendlyMsg);
       
       const errorMsgObj = {
         id: 'error-' + Date.now(),
         sender: 'tintin',
         isError: true,
-        text: `⚠️ Üzgünüm, yanıt oluştururken bir sorun yaşandı: ${err.message}\n\nLütfen tekrar deneyin.`,
+        text: `⚠️ ${userFriendlyMsg}`,
         timestamp: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => {

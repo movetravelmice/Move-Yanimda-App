@@ -31,9 +31,10 @@ import {
   Users,
   Search,
   Home,
-  X
+  X,
+  Eye
 } from 'lucide-react';
-import { useAuthStore } from '../../store/authStore';
+import { useAuthStore, isUserAdmin } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useChatStore } from '../../store/chatStore';
 import { useTourStore, getTourExperts, isTourActive, isTourPast } from '../../store/tourStore';
@@ -174,6 +175,7 @@ export default function Chat() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearchingPlaces, setIsSearchingPlaces] = useState(false);
+  const [selectedLightboxImage, setSelectedLightboxImage] = useState(null);
   
   const isGroupedDirect = chatId?.startsWith('direct_grouped_');
   const pIdMatched = isGroupedDirect 
@@ -211,16 +213,21 @@ export default function Chat() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   
-  let headerName = safeExpertName;
-  let subtitle = "Çevrimdışı (Son görülme: Yakın zamanda)";
-  let sColor = 'rgba(255,255,255,0.4)';
-  if (expertStatus === 'online') { subtitle = "Çevrimiçi"; sColor = '#4ade80'; }
-  else if (expertStatus === 'busy') { subtitle = "Meşgul (Birazdan Dönecek)"; sColor = '#facc15'; }
+  const isGroupChat = Boolean(chatId?.startsWith('tour_'));
+  let headerName = isGroupChat ? "Tur Grubu..." : safeExpertName;
+  let subtitle = isGroupChat ? "Yükleniyor..." : "Çevrimdışı (Son görülme: Yakın zamanda)";
+  let sColor = isGroupChat ? 'transparent' : 'rgba(255,255,255,0.4)';
+  if (!isGroupChat) {
+      if (expertStatus === 'online') { subtitle = "Çevrimiçi"; sColor = '#4ade80'; }
+      else if (expertStatus === 'busy') { subtitle = "Meşgul (Birazdan Dönecek)"; sColor = '#facc15'; }
+  }
   
-  let headerAvatar = realExpertAvatar || "https://ui-avatars.com/api/?name=" + safeExpertName.charAt(0) + "&background=D7147A&color=fff";
+  let headerAvatar = isGroupChat 
+      ? (tourGroupAvatar || "https://images.unsplash.com/photo-1521295121783-8a321d551ad2?auto=format&fit=crop&q=80&w=150") 
+      : (realExpertAvatar || "https://ui-avatars.com/api/?name=" + safeExpertName.charAt(0) + "&background=D7147A&color=fff");
   let isReadOnlyArchive = false;
   let resolvedTour = null;
-  let headerRoleIcon = null;
+  let headerRoleIcon = isGroupChat ? <Users size={12} /> : null;
 
   let resolvedDirectUser = null;
   // Check for staff-to-staff direct chats
@@ -229,13 +236,19 @@ export default function Chat() {
   }
 
   if (chatId?.startsWith('tour_')) {
-      resolvedTour = tours.find(t => t.id === chatId);
+      resolvedTour = tours.find(t => t.id === chatId || t.id === chatId.replace(/^tour_/, '') || `tour_${t.id}` === chatId);
       if (resolvedTour) {
           headerName = `${resolvedTour.name} Grubu`;
           subtitle = `${resolvedTour.participants?.length || 0} Katılımcı`;
           headerAvatar = resolvedTour.avatar || tourGroupAvatar;
           isReadOnlyArchive = isTourPast(resolvedTour);
           headerRoleIcon = <Users size={12} />;
+      } else {
+          headerName = "Tur Grubu...";
+          subtitle = "Yükleniyor...";
+          headerAvatar = tourGroupAvatar;
+          headerRoleIcon = <Users size={12} />;
+          sColor = 'transparent';
       }
   } else if (chatId === 'expert_direct') {
       resolvedTour = tours.find(t => t.id === 'tour_avrupa_ruyasi') || tours[0];
@@ -323,9 +336,22 @@ export default function Chat() {
       }
   }
 
-  const isGroupChat = chatId?.startsWith('tour_');
+  // isGroupChat is declared above
   const isStaffDirectChat = !!(resolvedDirectUser && resolvedDirectUser.role !== 'customer');
-  const isStaffUser = ['admin', 'expert', 'ticketing'].includes(user?.role) || user?.secondaryRole === 'admin';
+  const isAdmin = Boolean(user && (user.role === 'admin' || user.secondaryRole === 'admin' || isUserAdmin(user)));
+  const isStaffUser = ['admin', 'expert', 'ticketing'].includes(user?.role) || ['admin', 'expert', 'ticketing'].includes(user?.secondaryRole) || isAdmin;
+
+  // Check if current user is an actively assigned guide for this specific tour
+  const isAssignedGuide = (user?.role === 'expert' || user?.secondaryRole === 'expert') && Boolean(
+      (resolvedTour?.guideName && user?.name && resolvedTour.guideName.trim().toLowerCase() === user.name.trim().toLowerCase()) || 
+      (resolvedTour?.expert?.name && user?.name && resolvedTour.expert.name.trim().toLowerCase() === user.name.trim().toLowerCase()) || 
+      (resolvedTour?.expert?.email && user?.email && resolvedTour.expert.email.trim().toLowerCase() === user.email.trim().toLowerCase()) || 
+      (resolvedTour?.expert2?.name && user?.name && resolvedTour.expert2.name.trim().toLowerCase() === user.name.trim().toLowerCase()) || 
+      (resolvedTour?.expert2?.email && user?.email && resolvedTour.expert2.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+  );
+
+  // Admin Observer Mode: Admin can view all tour group chats, but cannot send messages unless they are the assigned field guide
+  const isAdminObserver = isGroupChat && isAdmin && !isAssignedGuide;
 
   // Müşteri rolündeki kullanıcıların başkasının sohbet odasına veya kayıtlı olmadığı turun grup sohbetine girmesini engelle
   let isUnauthorizedCustomerAccess = false;
@@ -352,11 +378,7 @@ export default function Chat() {
       }
   }
 
-  if (user?.role === 'admin' && isGroupChat) {
-      isReadOnlyArchive = true;
-  }
-
-  const isChatLockedForUser = isGroupChat && resolvedTour?.onlyAdminsCanWrite && (user?.role !== 'expert' && user?.role !== 'admin');
+  const isChatLockedForUser = isGroupChat && resolvedTour?.onlyAdminsCanWrite && (user?.role !== 'expert' && !isAdmin && !isAssignedGuide);
 
   const toggleOnlyAdminsCanWrite = async () => {
     if (!resolvedTour) return;
@@ -365,7 +387,10 @@ export default function Chat() {
     setShowOptionsMenu(false);
   };
 
-  if (isReadOnlyArchive) {
+  if (isAdminObserver) {
+      subtitle = resolvedTour ? `${resolvedTour.participants?.length || 0} Katılımcı • Yönetici Gözlemci` : 'Yükleniyor... • Yönetici Gözlemci';
+      sColor = '#38bdf8';
+  } else if (isReadOnlyArchive) {
       subtitle = isTourPast(resolvedTour) ? "Tarihi Geçmiş Seyahat - Salt Okunur Arşiv" : "Salt Okunur Görüntüleme Modu";
       sColor = 'transparent';
   }
@@ -383,6 +408,7 @@ export default function Chat() {
   }, [effectiveChatId, user?.role, allMessages.length, markRoomAsRead]);
 
   const startRealRecording = async () => {
+    if (isAdminObserver || isChatLockedForUser || isReadOnlyArchive) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mediaRecorder = new MediaRecorder(stream);
@@ -469,16 +495,57 @@ export default function Chat() {
       };
   }, []);
 
+  const compressImageFile = (file) => {
+      return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+              const img = new Image();
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  let { width, height } = img;
+                  const maxDim = 900;
+                  if (width > maxDim || height > maxDim) {
+                      if (width > height) {
+                          height = Math.round((height * maxDim) / width);
+                          width = maxDim;
+                      } else {
+                          width = Math.round((width * maxDim) / height);
+                          height = maxDim;
+                      }
+                  }
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  ctx.drawImage(img, 0, 0, width, height);
+                  resolve(canvas.toDataURL('image/jpeg', 0.78));
+              };
+              img.onerror = () => resolve(e.target.result);
+              img.src = e.target.result;
+          };
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(file);
+      });
+  };
+
   const handleFileChange = async (e) => {
-      const file = e.target.files[0];
+      if (isAdminObserver || isChatLockedForUser || isReadOnlyArchive) return;
+      const file = e.target.files?.[0];
       if (file) {
-          const localUrl = URL.createObjectURL(file);
-          sendCustomMessage({ type: 'image', url: localUrl, _blob: file });
+          try {
+              const compressedDataUrl = await compressImageFile(file);
+              if (compressedDataUrl) {
+                  sendCustomMessage({ type: 'image', url: compressedDataUrl });
+              }
+          } catch (err) {
+              console.error("Görsel işlenirken hata oluştu:", err);
+          }
       }
+      if (fileInputRef.current) fileInputRef.current.value = '';
       setShowAttachMenu(false);
   };
 
   const shareLocation = () => {
+      if (isAdminObserver || isChatLockedForUser || isReadOnlyArchive) return;
       if ("geolocation" in navigator) {
           navigator.geolocation.getCurrentPosition((position) => {
               const lat = position.coords.latitude;
@@ -516,6 +583,7 @@ export default function Chat() {
   };
 
   const sharePlace = (place) => {
+      if (isAdminObserver || isChatLockedForUser || isReadOnlyArchive) return;
       const lat = parseFloat(place.lat);
       const lng = parseFloat(place.lon);
       const name = place.display_name.split(',')[0];
@@ -538,14 +606,14 @@ export default function Chat() {
         e.preventDefault();
     }
     if (!inputText.trim()) return;
-    if (isChatLockedForUser) return;
+    if (isAdminObserver || isChatLockedForUser || isReadOnlyArchive) return;
 
     sendCustomMessage({ type: 'text', text: inputText });
     setInputText("");
   };
 
   const sendCustomMessage = (data) => {
-    if (isChatLockedForUser) return;
+    if (isAdminObserver || isChatLockedForUser || isReadOnlyArchive) return;
     let senderKey = 'customer';
     if (user?.role === 'expert') senderKey = 'expert';
     if (user?.role === 'admin') senderKey = 'admin';
@@ -598,25 +666,155 @@ export default function Chat() {
       setConfirmClearPopup(false);
   };
 
+  const getAvatarDetails = (name, role) => {
+    const safeName = (name || 'Misafir').trim();
+    const parts = safeName.split(/\s+/).filter(Boolean);
+    const initials = parts.length > 1
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : safeName.slice(0, 2).toUpperCase();
+
+    if (role === 'expert') {
+      return { initials, bg: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', text: '#ffffff' };
+    }
+    if (role === 'admin') {
+      return { initials, bg: 'linear-gradient(135deg, #6366f1 0%, #4338ca 100%)', text: '#ffffff' };
+    }
+    if (role === 'ticketing') {
+      return { initials, bg: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)', text: '#ffffff' };
+    }
+
+    const palettes = [
+      { bg: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)', text: '#ffffff' },
+      { bg: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)', text: '#ffffff' },
+      { bg: 'linear-gradient(135deg, #ec4899 0%, #be185d 100%)', text: '#ffffff' },
+      { bg: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', text: '#ffffff' },
+      { bg: 'linear-gradient(135deg, #10b981 0%, #047857 100%)', text: '#ffffff' },
+      { bg: 'linear-gradient(135deg, #06b6d4 0%, #0e7490 100%)', text: '#ffffff' },
+      { bg: 'linear-gradient(135deg, #64748b 0%, #334155 100%)', text: '#ffffff' },
+    ];
+    let hash = 0;
+    for (let i = 0; i < safeName.length; i++) {
+      hash = safeName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const pal = palettes[Math.abs(hash) % palettes.length];
+    return { initials, ...pal };
+  };
+
+  const resolveSenderAvatar = (msg) => {
+    if (msg.senderAvatar) return msg.senderAvatar;
+    if (msg.senderId) {
+      const u = users.find(x => x.id === msg.senderId);
+      if (u?.avatar) return u.avatar;
+      const p = resolvedTour?.participants?.find(x => x.id === msg.senderId);
+      if (p?.avatar) return p.avatar;
+    }
+    if (msg.senderName) {
+      const sLower = msg.senderName.trim().toLowerCase();
+      const u = users.find(x => x.name && x.name.trim().toLowerCase() === sLower);
+      if (u?.avatar) return u.avatar;
+      const p = resolvedTour?.participants?.find(x => x.name && x.name.trim().toLowerCase() === sLower);
+      if (p?.avatar) return p.avatar;
+    }
+    return null;
+  };
+
+  const getMessageDateLabel = (msg) => {
+    if (!msg) return '';
+    if (msg.date) return msg.date;
+    const num = Number(msg.id);
+    if (!isNaN(num) && num > 1000000000000) {
+      try {
+        const d = new Date(num);
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+
+        if (d.toDateString() === today.toDateString()) {
+          return 'Bugün';
+        }
+        if (d.toDateString() === yesterday.toDateString()) {
+          return 'Dün';
+        }
+        return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+      } catch (e) {
+        return '';
+      }
+    }
+    return '';
+  };
+
+  const getBubbleRadii = (isMe, isFirst, isLast) => {
+    if (isMe) {
+      if (isFirst && isLast) return '18px 18px 4px 18px';
+      if (isFirst) return '18px 18px 6px 18px';
+      if (isLast) return '18px 6px 4px 18px';
+      return '18px 6px 6px 18px';
+    } else {
+      if (isFirst && isLast) return '18px 18px 18px 4px';
+      if (isFirst) return '18px 18px 18px 6px';
+      if (isLast) return '6px 18px 18px 4px';
+      return '6px 18px 18px 6px';
+    }
+  };
+
   const getSenderRoleBadge = (senderRole, senderName) => {
     if (senderRole === 'admin') {
       return (
-        <span style={{ fontSize: '10px', background: '#ede9fe', color: '#6366f1', padding: '1px 6px', borderRadius: '4px', fontWeight: '700', marginLeft: '6px' }}>
-          Yönetici
+        <span style={{ 
+          fontSize: '9.5px', 
+          background: '#f5f3ff', 
+          color: '#6d28d9', 
+          padding: '2px 7px', 
+          borderRadius: '6px', 
+          fontWeight: '700', 
+          border: '1px solid #ddd6fe',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          letterSpacing: '0.2px',
+          flexShrink: 0
+        }}>
+          <ShieldCheck size={11} strokeWidth={2.5} /> Yönetici
         </span>
       );
     }
     if (senderRole === 'expert') {
       return (
-        <span style={{ fontSize: '10px', background: '#e0f2fe', color: '#0284c7', padding: '1px 6px', borderRadius: '4px', fontWeight: '700', marginLeft: '6px' }}>
-          Uzman & Rehber
+        <span style={{ 
+          fontSize: '9.5px', 
+          background: '#f0f9ff', 
+          color: '#0369a1', 
+          padding: '2px 7px', 
+          borderRadius: '6px', 
+          fontWeight: '700', 
+          border: '1px solid #bae6fd',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          letterSpacing: '0.2px',
+          flexShrink: 0
+        }}>
+          <Compass size={11} strokeWidth={2.5} /> Uzman & Rehber
         </span>
       );
     }
     if (senderRole === 'ticketing') {
       return (
-        <span style={{ fontSize: '10px', background: '#d1fae5', color: '#059669', padding: '1px 6px', borderRadius: '4px', fontWeight: '700', marginLeft: '6px' }}>
-          Biletleme
+        <span style={{ 
+          fontSize: '9.5px', 
+          background: '#f0fdf4', 
+          color: '#15803d', 
+          padding: '2px 7px', 
+          borderRadius: '6px', 
+          fontWeight: '700', 
+          border: '1px solid #bbf7d0',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          letterSpacing: '0.2px',
+          flexShrink: 0
+        }}>
+          <Plane size={11} strokeWidth={2.5} /> Biletleme
         </span>
       );
     }
@@ -833,7 +1031,7 @@ export default function Chat() {
                             </div>
                         )}
                         
-                        {!isStaffDirectChat && user?.role === 'expert' && resolvedTour && (
+                        {!isStaffDirectChat && (user?.role === 'expert' || isAdmin) && resolvedTour && (
                             <div 
                               onClick={() => { setShowOptionsMenu(false); navigate(`/dashboard/participants/${resolvedTour?.id}`); }} 
                               style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderRadius: '10px', transition: 'background 0.15s' }}
@@ -844,7 +1042,7 @@ export default function Chat() {
                             </div>
                         )}
 
-                        {isGroupChat && (user?.role === 'expert' || user?.role === 'admin') && (
+                        {isGroupChat && (user?.role === 'expert' || isAdmin) && (
                             <div 
                               onClick={toggleOnlyAdminsCanWrite} 
                               style={{ padding: '10px 14px', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px', fontWeight: '500', cursor: 'pointer', borderRadius: '10px', transition: 'background 0.15s' }}
@@ -893,28 +1091,40 @@ export default function Chat() {
         </div>
 
         {/* Chat Messages Feed */}
-        <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '14px', position: 'relative' }}>
+        <div style={{ 
+          flex: 1, 
+          padding: '14px 16px 20px', 
+          overflowY: 'auto', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          position: 'relative',
+          background: '#f8fafc',
+          backgroundImage: 'radial-gradient(rgba(148, 163, 184, 0.22) 1.25px, transparent 1.25px)',
+          backgroundSize: '18px 18px',
+          backgroundAttachment: 'local'
+        }}>
             
             {/* Encryption & Security Pill */}
-            <div style={{ textAlign: 'center', margin: '6px 0 12px' }}>
+            <div style={{ textAlign: 'center', margin: '4px 0 10px', display: 'flex', justifyContent: 'center' }}>
                <span style={{ 
-                 background: '#f1f5f9', 
+                 background: 'rgba(255, 255, 255, 0.92)', 
+                 backdropFilter: 'blur(8px)',
                  color: '#64748b', 
-                 padding: '6px 14px', 
+                 padding: '5px 14px', 
                  borderRadius: '20px', 
                  fontSize: '11px', 
                  fontWeight: '600',
                  display: 'inline-flex',
                  alignItems: 'center',
                  gap: '6px',
-                 boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
-                 border: '1px solid #e2e8f0'
+                 boxShadow: '0 1px 4px rgba(0,0,0,0.03)',
+                 border: '1px solid rgba(226, 232, 240, 0.8)'
                }}>
                  <Lock size={12} style={{ color: 'var(--primary)' }} /> Uçtan Uca Güvenli Move İletişimi
                </span>
             </div>
 
-            {roomMessages.map((msg) => {
+            {roomMessages.map((msg, idx) => {
                 const isMe = msg.senderId 
                     ? (msg.senderId === user?.id) 
                     : (msg.senderName && user?.name 
@@ -924,33 +1134,132 @@ export default function Chat() {
                 
                 if (isSystem) {
                     return (
-                        <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', margin: '4px 0' }}>
-                           <div style={{ background: '#f1f5f9', color: 'var(--text-main)', padding: '8px 16px', borderRadius: '14px', fontSize: '12.5px', textAlign: 'center', maxWidth: '85%', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+                        <div key={msg.id} style={{ display: 'flex', justifyContent: 'center', margin: '8px 0' }}>
+                           <div style={{ background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)', color: '#475569', padding: '7px 16px', borderRadius: '14px', fontSize: '12px', textAlign: 'center', maxWidth: '85%', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.03)' }}>
                                {msg.text}
-                               <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '4px' }}>{msg.timestamp}</div>
+                               <div style={{ fontSize: '9.5px', color: '#94a3b8', marginTop: '3px' }}>{msg.timestamp}</div>
                            </div>
                         </div>
                     );
                 }
 
+                const prevMsg = roomMessages[idx - 1];
+                const nextMsg = roomMessages[idx + 1];
+
+                const currentDateLabel = getMessageDateLabel(msg);
+                const prevDateLabel = getMessageDateLabel(prevMsg);
+                const showDateDivider = Boolean(currentDateLabel && currentDateLabel !== prevDateLabel);
+
+                const getSenderKey = (m) => {
+                    if (!m || m.sender === 'system') return null;
+                    if (m.senderId) return `id_${m.senderId}`;
+                    if (m.senderName) return `name_${m.senderName.trim().toLowerCase()}`;
+                    return `role_${m.sender}`;
+                };
+
+                const currentSenderKey = getSenderKey(msg);
+                const prevSenderKey = getSenderKey(prevMsg);
+                const nextSenderKey = getSenderKey(nextMsg);
+
+                const isSameSenderAsPrev = !showDateDivider && Boolean(prevSenderKey && prevSenderKey === currentSenderKey);
+                const isSameSenderAsNext = Boolean(nextSenderKey && nextSenderKey === currentSenderKey);
+
+                const isFirstInCluster = !isSameSenderAsPrev;
+                const isLastInCluster = !isSameSenderAsNext;
+
+                const senderAvatarUrl = resolveSenderAvatar(msg);
+                const avatarInfo = getAvatarDetails(msg.senderName, msg.sender);
+
                 const renderContent = () => {
                     if (msg.type === 'image') {
+                        const isBlob = typeof msg.url === 'string' && msg.url.startsWith('blob:');
+                        const defaultLunchImg = 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&q=80&w=800';
+                        const displayUrl = (!msg.url || isBlob) ? defaultLunchImg : msg.url;
                         return (
-                            <div style={{ padding: '2px' }}>
-                                <img 
-                                  loading="lazy" 
-                                  src={msg.url} 
-                                  alt="Görsel" 
-                                  style={{ width: '100%', maxWidth: '280px', borderRadius: '12px', display: 'block', marginBottom: msg.text ? '8px' : '0' }} 
-                                />
-                                {msg.text && <div style={{ fontSize: '13.5px', padding: '4px 6px', lineHeight: '1.4' }}>{msg.text}</div>}
+                            <div style={{ padding: '2px', position: 'relative' }}>
+                                <div style={{ position: 'relative', borderRadius: '12px', overflow: 'hidden' }}>
+                                    <img 
+                                      loading="lazy" 
+                                      src={displayUrl} 
+                                      alt="Görsel" 
+                                      onClick={() => setSelectedLightboxImage(displayUrl)}
+                                      onError={(e) => {
+                                          e.target.onerror = null;
+                                          e.target.src = defaultLunchImg;
+                                      }}
+                                      style={{ 
+                                          width: '100%', 
+                                          maxWidth: '280px', 
+                                          minHeight: '140px', 
+                                          maxHeight: '340px',
+                                          borderRadius: '12px', 
+                                          display: 'block', 
+                                          objectFit: 'cover',
+                                          backgroundColor: '#f1f5f9',
+                                          cursor: 'pointer'
+                                      }} 
+                                    />
+                                    {!msg.text && (
+                                        <div style={{
+                                          position: 'absolute',
+                                          bottom: '6px',
+                                          right: '6px',
+                                          background: 'rgba(15, 23, 42, 0.65)',
+                                          backdropFilter: 'blur(4px)',
+                                          color: 'white',
+                                          padding: '2px 7px',
+                                          borderRadius: '10px',
+                                          fontSize: '10px',
+                                          fontWeight: '500',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '3px',
+                                          userSelect: 'none'
+                                        }}>
+                                          <span>{msg.timestamp}</span>
+                                          {isMe && (
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                              {msg.status === 'sent' ? <Check size={11} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.8)' }} /> :
+                                               msg.status === 'delivered' ? <CheckCheck size={12} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.95)' }} /> :
+                                               msg.status === 'read' ? <CheckCheck size={12} strokeWidth={2.6} style={{ color: '#67e8f9' }} /> : null}
+                                            </div>
+                                          )}
+                                        </div>
+                                    )}
+                                </div>
+                                {msg.text && (
+                                    <div style={{ padding: '6px 8px 3px' }}>
+                                        <div style={{ fontSize: '13.5px', lineHeight: '1.45', color: isMe ? '#ffffff' : '#1e293b' }}>
+                                          {msg.text}
+                                        </div>
+                                        <div style={{ 
+                                          display: 'flex', 
+                                          alignItems: 'center', 
+                                          justifyContent: 'flex-end', 
+                                          gap: '3px', 
+                                          marginTop: '3px',
+                                          userSelect: 'none'
+                                        }}>
+                                          <span style={{ fontSize: '10px', fontWeight: '500', color: isMe ? 'rgba(255,255,255,0.75)' : '#94a3b8' }}>
+                                            {msg.timestamp}
+                                          </span>
+                                          {isMe && (
+                                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                                              {msg.status === 'sent' ? <Check size={12} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.75)' }} /> :
+                                               msg.status === 'delivered' ? <CheckCheck size={13} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.85)' }} /> :
+                                               msg.status === 'read' ? <CheckCheck size={13} strokeWidth={2.6} style={{ color: '#67e8f9' }} /> : null}
+                                            </div>
+                                          )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         );
                     } else if (msg.type === 'location') {
                         return (
                             <div style={{ width: '230px', padding: '4px' }}>
                                 {msg.text && (
-                                    <div style={{ fontWeight: '700', fontSize: '13.5px', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    <div style={{ fontWeight: '700', fontSize: '13px', marginBottom: '6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: isMe ? '#ffffff' : '#1e293b' }}>
                                         📍 {msg.text}
                                     </div>
                                 )}
@@ -973,90 +1282,231 @@ export default function Chat() {
                                     fontWeight: '700', 
                                     display: 'flex', 
                                     alignItems: 'center', 
-                                    justifyContent: 'center',
+                                    justifyContent: 'center', 
                                     gap: '6px', 
-                                    fontSize: '12.5px', 
+                                    fontSize: '12px', 
                                     color: isMe ? 'white' : 'var(--primary)', 
                                     textDecoration: 'none', 
-                                    padding: '6px 10px',
-                                    background: isMe ? 'rgba(255,255,255,0.2)' : '#FDF2F8',
-                                    borderRadius: '8px'
+                                    padding: '7px 10px', 
+                                    background: isMe ? 'rgba(255,255,255,0.2)' : '#FDF2F8', 
+                                    borderRadius: '8px',
+                                    marginBottom: '4px'
                                   }}
                                 >
-                                    <MapPin size={14} /> Haritada Aç <ExternalLink size={12} />
+                                    <MapPin size={13} /> Haritada Aç <ExternalLink size={12} />
                                 </a>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '3px', marginTop: '2px' }}>
+                                  <span style={{ fontSize: '10px', color: isMe ? 'rgba(255,255,255,0.75)' : '#94a3b8' }}>{msg.timestamp}</span>
+                                  {isMe && (
+                                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                                      {msg.status === 'sent' ? <Check size={12} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.75)' }} /> :
+                                       msg.status === 'delivered' ? <CheckCheck size={13} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.85)' }} /> :
+                                       msg.status === 'read' ? <CheckCheck size={13} strokeWidth={2.6} style={{ color: '#67e8f9' }} /> : null}
+                                    </div>
+                                  )}
+                                </div>
                             </div>
                         );
                     } else if (msg.type === 'real_audio') {
-                        return <VoiceNoteBubble url={msg.url} duration={msg.duration} isMe={isMe} />;
+                        return (
+                            <div style={{ padding: '2px' }}>
+                              <VoiceNoteBubble url={msg.url} duration={msg.duration} isMe={isMe} />
+                              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '3px', marginTop: '2px', paddingRight: '4px' }}>
+                                <span style={{ fontSize: '10px', color: isMe ? 'rgba(255,255,255,0.75)' : '#94a3b8' }}>{msg.timestamp}</span>
+                                {isMe && (
+                                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    {msg.status === 'sent' ? <Check size={12} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.75)' }} /> :
+                                     msg.status === 'delivered' ? <CheckCheck size={13} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.85)' }} /> :
+                                     msg.status === 'read' ? <CheckCheck size={13} strokeWidth={2.6} style={{ color: '#67e8f9' }} /> : null}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                        );
                     } else {
-                        return <div style={{ fontSize: '14px', lineHeight: '1.45', wordBreak: 'break-word' }}>{msg.text}</div>;
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ 
+                              fontSize: '13.5px', 
+                              lineHeight: '1.45', 
+                              wordBreak: 'break-word',
+                              color: isMe ? '#ffffff' : '#1e293b',
+                              whiteSpace: 'pre-wrap'
+                            }}>
+                              {msg.text}
+                            </div>
+                            
+                            <div style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'flex-end', 
+                              gap: '3px', 
+                              marginTop: '3px',
+                              alignSelf: 'flex-end',
+                              userSelect: 'none'
+                            }}>
+                              <span style={{ 
+                                fontSize: '10px', 
+                                fontWeight: '500', 
+                                color: isMe ? 'rgba(255,255,255,0.75)' : '#94a3b8',
+                                letterSpacing: '0.2px'
+                              }}>
+                                {msg.timestamp}
+                              </span>
+                              {isMe && (
+                                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                                  {msg.status === 'sent' ? <Check size={12} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.75)' }} /> :
+                                   msg.status === 'delivered' ? <CheckCheck size={13} strokeWidth={2.4} style={{ color: 'rgba(255,255,255,0.85)' }} /> :
+                                   msg.status === 'read' ? <CheckCheck size={13} strokeWidth={2.6} style={{ color: '#67e8f9' }} /> : null}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
                     }
                 };
 
                 return (
-                    <div 
-                      key={msg.id} 
-                      style={{ 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: isMe ? 'flex-end' : 'flex-start',
-                        maxWidth: '100%'
-                      }}
-                    >
-                        <div style={{ 
-                            maxWidth: '85%', 
-                            padding: msg.type === 'text' ? '10px 14px' : '4px', 
-                            borderRadius: '18px', 
-                            borderBottomRightRadius: isMe ? '4px' : '18px',
-                            borderBottomLeftRadius: isMe ? '18px' : '4px',
-                            background: isMe 
-                              ? (isReadOnlyArchive ? '#64748b' : 'linear-gradient(135deg, #D7147A 0%, #D7147A 100%)') 
-                              : '#ffffff', 
-                            color: isMe ? 'white' : 'var(--text-main)',
-                            boxShadow: isMe 
-                              ? '0 2px 8px rgba(215, 20, 122, 0.16)' 
-                              : '0 1px 4px rgba(0,0,0,0.04)',
-                            border: isMe ? 'none' : '1px solid #f1f5f9',
-                            position: 'relative'
-                        }}>
-                            {!isMe && (
-                                <div style={{ 
-                                  fontSize: '12px', 
-                                  fontWeight: '700', 
-                                  color: msg.sender === 'admin' ? '#6366f1' : (msg.sender === 'expert' ? '#0284c7' : 'var(--primary)'), 
-                                  padding: msg.type !== 'text' ? '6px 8px 4px' : '0 0 4px 0',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between'
+                    <React.Fragment key={msg.id}>
+                        {showDateDivider && (
+                            <div style={{ display: 'flex', justifyContent: 'center', margin: '14px 0 8px' }}>
+                                <span style={{ 
+                                    background: 'rgba(255, 255, 255, 0.92)', 
+                                    backdropFilter: 'blur(8px)',
+                                    color: '#64748b', 
+                                    padding: '4px 13px', 
+                                    borderRadius: '12px', 
+                                    fontSize: '11px', 
+                                    fontWeight: '600',
+                                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                                    border: '1px solid #e2e8f0',
+                                    userSelect: 'none'
                                 }}>
-                                    <span>{msg.senderName}</span>
-                                    {getSenderRoleBadge(msg.sender, msg.senderName)}
-                                </div>
-                            )}
-                            
-                            {renderContent()}
-                        </div>
+                                    {currentDateLabel}
+                                </span>
+                            </div>
+                        )}
 
-                        {/* Timestamp & Delivery Checks */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', marginRight: isMe ? '4px' : '0', marginLeft: isMe ? '0' : '4px' }}>
-                            <span style={{ fontSize: '10.5px', color: '#94a3b8', fontWeight: '500' }}>{msg.timestamp}</span>
-                            {isMe && (
-                                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                                    {msg.status === 'sent' ? <Check size={13} color="#94a3b8" /> :
-                                     msg.status === 'delivered' ? <CheckCheck size={13} color="#94a3b8" /> :
-                                     msg.status === 'read' ? <CheckCheck size={13} color="#0284c7" /> : null}
-                                </div>
+                        <div 
+                          style={{ 
+                            display: 'flex', 
+                            alignItems: 'flex-end',
+                            justifyContent: isMe ? 'flex-end' : 'flex-start',
+                            marginTop: isFirstInCluster ? '12px' : '3px',
+                            maxWidth: '100%',
+                            width: '100%'
+                          }}
+                        >
+                            {/* Avatar for received messages in group chats */}
+                            {isGroupChat && !isMe && (
+                              <div style={{ width: '32px', marginRight: '8px', flexShrink: 0, display: 'flex', alignItems: 'flex-end' }}>
+                                {isLastInCluster ? (
+                                  senderAvatarUrl ? (
+                                    <img 
+                                      src={senderAvatarUrl} 
+                                      alt={msg.senderName || ''} 
+                                      style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover', boxShadow: '0 1px 3px rgba(0,0,0,0.12)', border: '1.5px solid white' }} 
+                                    />
+                                  ) : (
+                                    <div style={{
+                                      width: '32px',
+                                      height: '32px',
+                                      borderRadius: '50%',
+                                      background: avatarInfo.bg,
+                                      color: avatarInfo.text,
+                                      fontSize: '11px',
+                                      fontWeight: '700',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                                      border: '1.5px solid white',
+                                      letterSpacing: '0.3px',
+                                      userSelect: 'none'
+                                    }}>
+                                      {avatarInfo.initials}
+                                    </div>
+                                  )
+                                ) : (
+                                  <div style={{ width: '32px', height: '32px' }} />
+                                )}
+                              </div>
                             )}
+
+                            {/* Message Bubble */}
+                            <div style={{ 
+                                maxWidth: isGroupChat && !isMe ? 'calc(84% - 40px)' : '84%', 
+                                padding: msg.type === 'text' ? '9px 13px' : '4px', 
+                                borderRadius: getBubbleRadii(isMe, isFirstInCluster, isLastInCluster), 
+                                background: isMe 
+                                  ? (isReadOnlyArchive ? '#64748b' : 'linear-gradient(135deg, #D7147A 0%, #BE125A 100%)') 
+                                  : '#ffffff', 
+                                color: isMe ? '#ffffff' : '#1e293b',
+                                boxShadow: isMe 
+                                  ? '0 2px 8px rgba(215, 20, 122, 0.2), 0 1px 2px rgba(0,0,0,0.04)' 
+                                  : '0 1px 4px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03)',
+                                border: isMe ? 'none' : '1px solid rgba(226, 232, 240, 0.9)',
+                                position: 'relative'
+                            }}>
+                                {!isMe && isFirstInCluster && (
+                                    <div style={{ 
+                                      fontSize: '12px', 
+                                      fontWeight: '700', 
+                                      color: msg.sender === 'admin' ? '#6d28d9' : (msg.sender === 'expert' ? '#0284c7' : (msg.sender === 'ticketing' ? '#0f766e' : '#0f172a')), 
+                                      padding: msg.type !== 'text' ? '6px 8px 4px' : '0 0 5px 0',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: '8px',
+                                      marginBottom: '4px',
+                                      borderBottom: '1px solid #f1f5f9'
+                                    }}>
+                                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{msg.senderName || 'Misafir'}</span>
+                                        {getSenderRoleBadge(msg.sender, msg.senderName)}
+                                    </div>
+                                )}
+                                
+                                {renderContent()}
+                            </div>
                         </div>
-                    </div>
+                    </React.Fragment>
                 );
             })}
             <div ref={endOfMessagesRef} />
         </div>
 
         {/* Input Bar or Status Bar */}
-        {isReadOnlyArchive ? (
+        {isAdminObserver ? (
+            <div style={{ 
+              padding: '14px 18px calc(95px + env(safe-area-inset-bottom, 0px)) 18px', 
+              background: '#f8fafc', 
+              textAlign: 'center', 
+              color: '#334155', 
+              fontSize: '12.5px', 
+              borderTop: '1px solid #e2e8f0', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '9px',
+              boxShadow: '0 -2px 10px rgba(0,0,0,0.03)'
+            }}>
+                <div style={{
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '50%',
+                  background: '#e0f2fe',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  <Eye size={15} color="#0284c7" />
+                </div>
+                <span style={{ fontWeight: '600', color: '#475569', lineHeight: '1.4' }}>
+                  Yönetici Gözlemci Modu: Yalnızca okuma yetkiniz bulunmaktadır, bu gruba mesaj gönderemezsiniz.
+                </span>
+            </div>
+        ) : isReadOnlyArchive ? (
             <div style={{ padding: '16px 16px calc(95px + env(safe-area-inset-bottom, 0px)) 16px', background: 'white', textAlign: 'center', color: '#64748b', fontSize: '13px', borderTop: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
                 <Archive size={22} color="#94a3b8" />
                 <b style={{ color: 'var(--text-main)' }}>Geçmiş Seyahat Arşivi</b>
@@ -1318,6 +1768,67 @@ export default function Chat() {
                         Kapat
                     </button>
                 </div>
+            </div>
+        )}
+
+        {/* Fullscreen Image Lightbox Modal */}
+        {selectedLightboxImage && (
+            <div 
+              onClick={() => setSelectedLightboxImage(null)}
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                zIndex: 99999,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '20px',
+                backdropFilter: 'blur(10px)',
+                cursor: 'zoom-out',
+                animation: 'fadeIn 0.2s ease-out'
+              }}
+            >
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setSelectedLightboxImage(null); }}
+                  style={{
+                    position: 'absolute',
+                    top: '24px',
+                    right: '24px',
+                    background: 'rgba(255,255,255,0.2)',
+                    border: 'none',
+                    borderRadius: '50%',
+                    width: '42px',
+                    height: '42px',
+                    color: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.35)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
+                >
+                    <X size={22} />
+                </button>
+                <img 
+                  src={selectedLightboxImage} 
+                  alt="Önizleme" 
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    maxWidth: '94%',
+                    maxHeight: '86vh',
+                    borderRadius: '16px',
+                    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+                    objectFit: 'contain'
+                  }}
+                />
             </div>
         )}
       </div>

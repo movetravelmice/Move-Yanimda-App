@@ -15,6 +15,7 @@ import {
   Trash2, 
   AlertTriangle, 
   ChevronDown, 
+  ChevronLeft, 
   PlaneTakeoff,
   Phone,
   Filter,
@@ -818,7 +819,251 @@ export default function AdminUsers() {
     { key: 'customer', label: 'Müşteriler', count: stats.customer, icon: UsersIcon, color: '#f97316' }
   ];
 
-  // Render full-page user add / edit view (replacing popup modal)
+    // Render full-page individual user data summary view (replacing popup modal)
+  if (selectedIndividualSummary) {
+    return (
+      <div style={{ paddingBottom: 'calc(180px + env(safe-area-inset-bottom, 0px))', background: '#f8fafc', minHeight: '100vh', position: 'relative' }}>
+        <Header 
+          title={formatTitleCase(selectedIndividualSummary.name)} 
+          subtitle="Bireysel Kullanıcı Veri Özeti (Salt Okunur)"
+          showBack 
+          onBack={() => setSelectedIndividualSummary(null)} 
+        />
+
+        <div style={{ padding: '0 16px calc(160px + env(safe-area-inset-bottom, 0px)) 16px', maxWidth: '600px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          
+          {/* User Profile Card */}
+          <div style={{
+            background: 'white',
+            borderRadius: '18px',
+            border: '1px solid #e2e8f0',
+            padding: '18px 16px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.03)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '14px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{
+                width: '46px',
+                height: '46px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #D7147A 0%, #b80f68 100%)',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: '800',
+                fontSize: '18px',
+                flexShrink: 0,
+                boxShadow: '0 2px 8px rgba(215, 20, 122, 0.25)'
+              }}>
+                {selectedIndividualSummary.name?.charAt(0) || 'B'}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: '15px', fontWeight: '800', color: '#1e293b' }}>
+                  {formatTitleCase(selectedIndividualSummary.name)}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                  <span style={{ fontSize: '10.5px', fontWeight: '700', background: '#fdf2f8', color: '#D7147A', padding: '2px 8px', borderRadius: '6px', border: '1px solid #fbcfe8' }}>
+                    Bireysel Kullanıcı
+                  </span>
+                  <span style={{ fontSize: '10.5px', fontWeight: '700', background: selectedIndividualSummary.status === 'Aktif' ? '#ecfdf5' : '#fee2e2', color: selectedIndividualSummary.status === 'Aktif' ? '#059669' : '#dc2626', padding: '2px 8px', borderRadius: '6px' }}>
+                    {selectedIndividualSummary.status || 'Aktif'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Info Grid */}
+            <div style={{
+              background: '#f8fafc',
+              borderRadius: '12px',
+              padding: '12px 14px',
+              border: '1px solid #e2e8f0',
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '10px',
+              fontSize: '11.5px'
+            }}>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '11px' }}>E-Posta:</span>
+                <div style={{ fontWeight: '700', color: selectedIndividualSummary.email ? '#1e293b' : '#94a3b8', fontStyle: selectedIndividualSummary.email ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>
+                  {selectedIndividualSummary.email || 'Henüz Mail Tanımlı Değil'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '11px' }}>Telefon:</span>
+                <div style={{ fontWeight: '700', color: '#1e293b', marginTop: '2px' }}>
+                  {selectedIndividualSummary.phone || '-'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '11px' }}>Kayıt Tarihi:</span>
+                <div style={{ fontWeight: '700', color: '#1e293b', marginTop: '2px' }}>
+                  {selectedIndividualSummary.createdAt ? new Date(selectedIndividualSummary.createdAt.seconds ? selectedIndividualSummary.createdAt.seconds * 1000 : selectedIndividualSummary.createdAt).toLocaleDateString('tr-TR') : 'Belirtilmedi'}
+                </div>
+              </div>
+              <div>
+                <span style={{ color: '#64748b', fontSize: '11px' }}>Hesap Durumu:</span>
+                <div style={{ fontWeight: '700', color: selectedIndividualSummary.status === 'Aktif' ? '#10b981' : '#ef4444', marginTop: '2px' }}>
+                  {selectedIndividualSummary.status || 'Aktif'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Data Cards: Loading or Content */}
+          {individualSummaryData.loading ? (
+            <div style={{ background: 'white', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '36px', textAlign: 'center', color: '#64748b', fontSize: '13px' }}>
+              <div style={{ width: '28px', height: '28px', border: '3px solid #D7147A', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 10px auto' }} />
+              Kullanıcı seyahat ve planlama verileri yükleniyor...
+            </div>
+          ) : (
+            <>
+              {/* Section 1: Kayıtlı Seyahatler */}
+              <div style={{ background: 'white', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '800', color: '#1e293b' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#fdf2f8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Luggage size={15} color="#D7147A" />
+                    </div>
+                    Kayıtlı Seyahatler
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '800', background: '#fdf2f8', color: '#D7147A', padding: '3px 8px', borderRadius: '6px', border: '1px solid #fbcfe8' }}>
+                    {individualSummaryData.travels.length} Seyahat
+                  </span>
+                </div>
+
+                {individualSummaryData.travels.length === 0 ? (
+                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
+                    Kayıtlı seyahat bulunmuyor.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {individualSummaryData.travels.map(t => (
+                      <div key={t.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontWeight: '700', fontSize: '12.5px', color: '#1e293b' }}>{t.title || t.destination}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{t.destination} • {t.startDate || '-'} {t.endDate ? ` / ${t.endDate}` : ''}</div>
+                        </div>
+                        <span style={{ fontSize: '10px', fontWeight: '700', background: t.status === 'completed' ? '#f1f5f9' : '#eff6ff', color: t.status === 'completed' ? '#64748b' : '#2563eb', padding: '3px 8px', borderRadius: '6px' }}>
+                          {t.status === 'completed' ? 'Tamamlandı' : t.status === 'active' ? 'Devam Ediyor' : 'Planlandı'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Kontrol Listeleri */}
+              <div style={{ background: 'white', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '800', color: '#1e293b' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <CheckSquare size={15} color="#059669" />
+                    </div>
+                    Kontrol Listeleri (Checklists)
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '800', background: '#ecfdf5', color: '#059669', padding: '3px 8px', borderRadius: '6px', border: '1px solid #a7f3d0' }}>
+                    {individualSummaryData.checklists.length} Liste
+                  </span>
+                </div>
+
+                {individualSummaryData.checklists.length === 0 ? (
+                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
+                    Kayıtlı kontrol listesi bulunmuyor.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {individualSummaryData.checklists.map(c => {
+                      const items = c.items || [];
+                      const doneCount = items.filter(it => it.done).length;
+                      return (
+                        <div key={c.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div>
+                            <div style={{ fontWeight: '700', fontSize: '12.5px', color: '#1e293b' }}>{c.title}</div>
+                            <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{c.category || 'Genel'}</div>
+                          </div>
+                          <span style={{ fontSize: '10px', fontWeight: '700', background: '#ecfdf5', color: '#059669', padding: '3px 8px', borderRadius: '6px' }}>
+                            {doneCount}/{items.length} Tamamlandı
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Section 3: Bütçe & Harcama Planları */}
+              <div style={{ background: 'white', borderRadius: '18px', border: '1px solid #e2e8f0', padding: '16px', boxShadow: '0 2px 8px rgba(0,0,0,0.03)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '800', color: '#1e293b' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '8px', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Wallet size={15} color="#d97706" />
+                    </div>
+                    Bütçe & Harcama Planları
+                  </div>
+                  <span style={{ fontSize: '11px', fontWeight: '800', background: '#fef3c7', color: '#d97706', padding: '3px 8px', borderRadius: '6px', border: '1px solid #fde68a' }}>
+                    {individualSummaryData.budgets.length} Bütçe
+                  </span>
+                </div>
+
+                {individualSummaryData.budgets.length === 0 ? (
+                  <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', fontSize: '12px', color: '#94a3b8', textAlign: 'center' }}>
+                    Kayıtlı bütçe bulunmuyor.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {individualSummaryData.budgets.map(b => (
+                      <div key={b.id} style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div>
+                          <div style={{ fontWeight: '700', fontSize: '12.5px', color: '#1e293b' }}>{b.title}</div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>Hedef: {Number(b.targetBudget || 0).toLocaleString('tr-TR')} {b.currency || 'EUR'}</div>
+                        </div>
+                        <span style={{ fontSize: '10px', fontWeight: '700', background: '#fef3c7', color: '#b45309', padding: '3px 8px', borderRadius: '6px' }}>
+                          {b.isShared ? 'Ortak Bütçe' : 'Bireysel Bütçe'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Back to List Button */}
+              <button
+                type="button"
+                onClick={() => setSelectedIndividualSummary(null)}
+                style={{
+                  width: '100%',
+                  padding: '13px',
+                  borderRadius: '12px',
+                  border: '1px solid #cbd5e1',
+                  background: 'white',
+                  color: '#475569',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                }}
+              >
+                <ChevronLeft size={16} /> Kullanıcı Listesine Geri Dön
+              </button>
+            </>
+          )}
+
+          {/* Clearance Spacer for Bottom Nav & Tintin */}
+          <div style={{ height: '160px', minHeight: '160px', width: '100%', flexShrink: 0 }} aria-hidden="true" />
+        </div>
+      </div>
+    );
+  }
+
+// Render full-page user add / edit view (replacing popup modal)
   if (showAddModal) {
     const isChild = formData.role === 'customer' && customerType === 'child';
     const isStaff = formData.role !== 'customer';
@@ -2319,257 +2564,6 @@ export default function AdminUsers() {
 
 
 
-      {/* Individual User Summary Modal (Read-Only) */}
-      {selectedIndividualSummary && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(15, 23, 42, 0.6)',
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 99999,
-          padding: '16px'
-        }}>
-          <div style={{
-            background: 'white',
-            borderRadius: '20px',
-            width: '100%',
-            maxWidth: '460px',
-            maxHeight: '85vh',
-            display: 'flex',
-            flexDirection: 'column',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-            overflow: 'hidden'
-          }}>
-            {/* Header */}
-            <div style={{
-              padding: '14px 18px',
-              borderBottom: '1px solid #e2e8f0',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: '#fdf2f8'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{
-                  width: '38px',
-                  height: '38px',
-                  borderRadius: '50%',
-                  background: 'linear-gradient(135deg, #D7147A 0%, #b80f68 100%)',
-                  color: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: '800',
-                  fontSize: '15px'
-                }}>
-                  {selectedIndividualSummary.name?.charAt(0) || 'B'}
-                </div>
-                <div>
-                  <div style={{ fontSize: '13.5px', fontWeight: '800', color: '#1e293b' }}>
-                    {formatTitleCase(selectedIndividualSummary.name)}
-                  </div>
-                  <div style={{ fontSize: '10.5px', color: '#64748b' }}>
-                    Bireysel Kullanıcı Veri Özeti (Salt Okunur)
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedIndividualSummary(null)}
-                style={{
-                  background: 'white',
-                  border: '1px solid #fbcfe8',
-                  borderRadius: '50%',
-                  width: '28px',
-                  height: '28px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: '#64748b'
-                }}
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div style={{ padding: '16px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              
-              {/* User Quick Info */}
-              <div style={{
-                background: '#f8fafc',
-                borderRadius: '12px',
-                padding: '10px 14px',
-                border: '1px solid #e2e8f0',
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '8px',
-                fontSize: '11px'
-              }}>
-                <div>
-                  <span style={{ color: '#64748b' }}>E-Posta:</span>
-                  <div style={{ fontWeight: '700', color: selectedIndividualSummary.email ? '#1e293b' : '#94a3b8', fontStyle: selectedIndividualSummary.email ? 'normal' : 'italic', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {selectedIndividualSummary.email || 'Henüz Mail Adresi Tanımlı Değil'}
-                  </div>
-                </div>
-                <div>
-                  <span style={{ color: '#64748b' }}>Telefon:</span>
-                  <div style={{ fontWeight: '700', color: '#1e293b' }}>
-                    {selectedIndividualSummary.phone || '-'}
-                  </div>
-                </div>
-                <div>
-                  <span style={{ color: '#64748b' }}>Kayıt Tarihi:</span>
-                  <div style={{ fontWeight: '700', color: '#1e293b' }}>
-                    {selectedIndividualSummary.createdAt ? new Date(selectedIndividualSummary.createdAt.seconds ? selectedIndividualSummary.createdAt.seconds * 1000 : selectedIndividualSummary.createdAt).toLocaleDateString('tr-TR') : 'Belirtilmedi'}
-                  </div>
-                </div>
-                <div>
-                  <span style={{ color: '#64748b' }}>Hesap Durumu:</span>
-                  <div style={{ fontWeight: '700', color: selectedIndividualSummary.status === 'Aktif' ? '#10b981' : '#ef4444' }}>
-                    {selectedIndividualSummary.status || 'Aktif'}
-                  </div>
-                </div>
-              </div>
-
-              {individualSummaryData.loading ? (
-                <div style={{ padding: '30px', textAlign: 'center', color: '#64748b', fontSize: '12px' }}>
-                  <div style={{ width: '24px', height: '24px', border: '3px solid #D7147A', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 8px auto' }} />
-                  Kullanıcı verileri yükleniyor...
-                </div>
-              ) : (
-                <>
-                  {/* Section 1: Seyahatler */}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '800', color: '#1e293b' }}>
-                        <Luggage size={14} color="#D7147A" />
-                        Kayıtlı Seyahatler
-                      </div>
-                      <span style={{ fontSize: '10px', fontWeight: '800', background: '#fdf2f8', color: '#D7147A', padding: '1px 6px', borderRadius: '6px' }}>
-                        {individualSummaryData.travels.length} Seyahat
-                      </span>
-                    </div>
-
-                    {individualSummaryData.travels.length === 0 ? (
-                      <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
-                        Kayıtlı seyahat bulunmuyor.
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {individualSummaryData.travels.map(t => (
-                          <div key={t.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div>
-                              <div style={{ fontWeight: '700', fontSize: '11.5px', color: '#1e293b' }}>{t.title || t.destination}</div>
-                              <div style={{ fontSize: '10px', color: '#64748b' }}>{t.destination} • {t.startDate || '-'} {t.endDate ? ` / ${t.endDate}` : ''}</div>
-                            </div>
-                            <span style={{ fontSize: '9px', fontWeight: '700', background: t.status === 'completed' ? '#f1f5f9' : '#eff6ff', color: t.status === 'completed' ? '#64748b' : '#2563eb', padding: '2px 6px', borderRadius: '4px' }}>
-                              {t.status === 'completed' ? 'Tamamlandı' : t.status === 'active' ? 'Devam Ediyor' : 'Planlandı'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Section 2: Kontrol Listeleri */}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '800', color: '#1e293b' }}>
-                        <CheckSquare size={14} color="#059669" />
-                        Kontrol Listeleri (Checklists)
-                      </div>
-                      <span style={{ fontSize: '10px', fontWeight: '800', background: '#ecfdf5', color: '#059669', padding: '1px 6px', borderRadius: '6px' }}>
-                        {individualSummaryData.checklists.length} Liste
-                      </span>
-                    </div>
-
-                    {individualSummaryData.checklists.length === 0 ? (
-                      <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
-                        Kayıtlı kontrol listesi bulunmuyor.
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {individualSummaryData.checklists.map(c => {
-                          const items = c.items || [];
-                          const doneCount = items.filter(it => it.done).length;
-                          return (
-                            <div key={c.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div>
-                                <div style={{ fontWeight: '700', fontSize: '11.5px', color: '#1e293b' }}>{c.title}</div>
-                                <div style={{ fontSize: '10px', color: '#64748b' }}>{c.category || 'Genel'}</div>
-                              </div>
-                              <span style={{ fontSize: '9.5px', fontWeight: '700', background: '#ecfdf5', color: '#059669', padding: '2px 6px', borderRadius: '4px' }}>
-                                {doneCount}/{items.length} Tamamlandı
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Section 3: Bütçe Planları */}
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', fontWeight: '800', color: '#1e293b' }}>
-                        <Wallet size={14} color="#d97706" />
-                        Bütçe & Harcama Planları
-                      </div>
-                      <span style={{ fontSize: '10px', fontWeight: '800', background: '#fef3c7', color: '#d97706', padding: '1px 6px', borderRadius: '6px' }}>
-                        {individualSummaryData.budgets.length} Bütçe
-                      </span>
-                    </div>
-
-                    {individualSummaryData.budgets.length === 0 ? (
-                      <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', fontSize: '11px', color: '#94a3b8', textAlign: 'center' }}>
-                        Kayıtlı bütçe bulunmuyor.
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {individualSummaryData.budgets.map(b => (
-                          <div key={b.id} style={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '8px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div>
-                              <div style={{ fontWeight: '700', fontSize: '11.5px', color: '#1e293b' }}>{b.title}</div>
-                              <div style={{ fontSize: '10px', color: '#64748b' }}>Hedef: {Number(b.targetBudget || 0).toLocaleString('tr-TR')} {b.currency || 'EUR'}</div>
-                            </div>
-                            <span style={{ fontSize: '9.5px', fontWeight: '700', background: '#fef3c7', color: '#b45309', padding: '2px 6px', borderRadius: '4px' }}>
-                              {b.isShared ? 'Ortak Bütçe' : 'Bireysel Bütçe'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div style={{ padding: '12px 16px', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setSelectedIndividualSummary(null)}
-                style={{
-                  padding: '7px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
-                  background: 'white',
-                  color: '#475569',
-                  fontSize: '11.5px',
-                  fontWeight: '700',
-                  cursor: 'pointer'
-                }}
-              >
-                Kapat
-              </button>
-            </div>
           </div>
-        </div>
-      )}
-
-    </div>
   );
 }

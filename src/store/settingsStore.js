@@ -120,14 +120,19 @@ const defaultSettings = {
   customerAvatar: null,
   corporateName: 'Move Yanımda',
   corporateLogo: null,
-  smtpConfig: { host: 'smtp.gmail.com', port: '465', user: '', pass: '' },
+  smtpConfig: { 
+    host: 'smtp.gmail.com', 
+    port: '465', 
+    user: 'noreply@move.com.tr', 
+    pass: 'boib zgdq dfqa uqwl' 
+  },
   isSmtpVerified: false,
   netgsmConfig: { usercode: '', password: '', header: '' },
   whatsappConfig: {
-    phoneId: '',
-    accessToken: '',
-    wabaId: '',
-    isEnabled: false,
+    phoneId: '1254897364383845',
+    accessToken: 'EAAUAtD82XvwBSsMg4bK12UDGtPrKzbTZCi1QBWQ3u15jwZCZA3jb8hdHhIBNfW4m8gA8vO8w7PMNPffIEwC67B0yncuciIJ0kdtEcko5Acq0yAnbnLuEMtxg2wWKy5PBulfe8UTJrwEa8QJZAdcotpgdhUoSAcZC8cp7T82KepaGhaWduKiFydZC7VP0lUCQZDZD',
+    wabaId: '1785974082829282',
+    isEnabled: true,
     newUserTemplate: 'welcome_customer',
     newTourTemplate: 'tour_registration',
     passwordResetTemplate: 'password_reset_otp',
@@ -141,7 +146,7 @@ const defaultSettings = {
   akbankApiKey: '',
   geminiConfig: {
     apiKey: import.meta.env.VITE_GEMINI_API_KEY || '',
-    model: 'gemini-3-flash-preview',
+    model: 'gemini-3.5-flash',
     isEnabled: true,
     systemPrompt: `Sen Move Travel & MICE şirketinin akıllı seyahat asistanı Tintin'sin.
 Görevin misafirlerimize seyahatleri boyunca uçuşları, otelleri, transferleri, günlük tur programları, hava durumu, yerel lezzetler ve gezilecek yerler hakkında profesyonel, doğru ve net rehberlik yapmaktır.
@@ -207,6 +212,7 @@ export const useSettingsStore = create((set, get) => ({
   loadAdminSettings: async () => {
       try {
           const baseUrl = getApiBaseUrl();
+          const authUser = useAuthStore.getState().user;
           let token = useAuthStore.getState().token;
           if (!token) {
               await useAuthStore.getState().refreshTokenIfNeeded();
@@ -218,12 +224,29 @@ export const useSettingsStore = create((set, get) => ({
                   'Content-Type': 'application/json',
                   'Authorization': token ? `Bearer ${token}` : ''
               },
-              body: JSON.stringify({ token })
+              body: JSON.stringify({ 
+                  token,
+                  userId: authUser?.id,
+                  email: authUser?.email
+              })
           });
           if (res.ok) {
               const data = await res.json();
               if (data.success && data.settings) {
-                  set({ ...data.settings });
+                  set(state => ({
+                      ...data.settings,
+                      smtpConfig: {
+                          ...(state.smtpConfig || {}),
+                          ...(data.settings.smtpConfig || {}),
+                          user: data.settings.smtpConfig?.user || state.smtpConfig?.user || '',
+                          pass: (data.settings.smtpConfig?.pass && data.settings.smtpConfig.pass !== '********') ? data.settings.smtpConfig.pass : (state.smtpConfig?.pass || '')
+                      },
+                      whatsappConfig: {
+                          ...(state.whatsappConfig || {}),
+                          ...(data.settings.whatsappConfig || {}),
+                          accessToken: (data.settings.whatsappConfig?.accessToken && data.settings.whatsappConfig.accessToken !== '********') ? data.settings.whatsappConfig.accessToken : (state.whatsappConfig?.accessToken || '')
+                      }
+                  }));
               }
           }
       } catch (e) {
@@ -236,21 +259,33 @@ export const useSettingsStore = create((set, get) => ({
       set({ [key]: val });
       try {
           const baseUrl = getApiBaseUrl();
+          const authUser = useAuthStore.getState().user;
           let token = useAuthStore.getState().token;
           if (!token) {
               await useAuthStore.getState().refreshTokenIfNeeded();
               token = useAuthStore.getState().token;
           }
-          await fetch(`${baseUrl}/api/settings/update`, {
+          const res = await fetch(`${baseUrl}/api/settings/update`, {
               method: 'POST',
               headers: {
                   'Content-Type': 'application/json',
                   'Authorization': token ? `Bearer ${token}` : ''
               },
-              body: JSON.stringify({ token, key, val })
+              body: JSON.stringify({ 
+                  token, 
+                  userId: authUser?.id,
+                  email: authUser?.email,
+                  key, 
+                  val 
+              })
           });
+          if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              throw new Error(errData.message || 'Sunucu ayarı kaydedemedi');
+          }
       } catch (e) {
           console.warn("Ayar kaydedilemedi:", e);
+          throw e;
       }
   },
 

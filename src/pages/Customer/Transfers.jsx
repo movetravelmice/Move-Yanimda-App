@@ -65,7 +65,7 @@ export default function Transfers() {
   });
 
   return (
-    <div style={{ paddingBottom: '80px', minHeight: '100vh', background: '#f8fafc' }}>
+    <div style={{ paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))', minHeight: '100vh', background: '#f8fafc' }}>
       <Header title="Uçuş ve Transfer Biletlerim" subtitle={activeTour?.name || "Seyahat Operasyonu"} showBack marginBottom={0} />
 
       <div style={{ padding: '0 16px', marginTop: '20px' }}>
@@ -259,6 +259,9 @@ export default function Transfers() {
                 </div>
             </div>
         ))}
+
+        {/* Menünün ve Tintin ikonunun altında kalmayı %100 önleyen alt tampon boşluk */}
+        <div style={{ height: '140px', minHeight: '140px', width: '100%', flexShrink: 0 }} aria-hidden="true" />
         
       </div>
     </div>
