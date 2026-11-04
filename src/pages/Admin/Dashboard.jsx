@@ -149,6 +149,89 @@ export default function AdminDashboard() {
       <div style={{ padding: '16px', paddingTop: '14px' }}>
         <ModeSwitchBanner currentMode="admin" />
 
+        {/* 2. ONESIGNAL TOPLU PUSH BİLDİRİMİ KISAYOLU (Seyahat Uzmanı Paneline Geç'in hemen altında) */}
+        <div 
+          onClick={() => navigate('/dashboard/broadcast')}
+          role="button"
+          tabIndex={0}
+          title="Toplu Push & Web Bildirimi Gönder"
+          style={{
+            background: 'linear-gradient(135deg, #FFF1F7 0%, #FFFFFF 55%, #FDF2F8 100%)',
+            border: '1.2px solid #F9BED8',
+            borderRadius: '16px',
+            padding: '12px 14px',
+            marginBottom: '14px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            boxShadow: '0 3px 12px rgba(215, 20, 122, 0.08)',
+            cursor: 'pointer',
+            userSelect: 'none',
+            WebkitTapHighlightColor: 'transparent',
+            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-1.5px)';
+            e.currentTarget.style.boxShadow = '0 6px 18px rgba(215, 20, 122, 0.14)';
+            e.currentTarget.style.borderColor = '#F472B6';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 3px 12px rgba(215, 20, 122, 0.08)';
+            e.currentTarget.style.borderColor = '#F9BED8';
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '11px', minWidth: 0, flex: 1 }}>
+            <div style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '12px',
+              background: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)',
+              border: '1px solid #F9BED8',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              boxShadow: '0 2px 6px rgba(215, 20, 122, 0.1)'
+            }}>
+              <Megaphone size={19} color="#D7147A" strokeWidth={2.2} />
+            </div>
+
+            {/* İkon ile Yazı Arasındaki Dikey Çizgi */}
+            <div style={{
+              width: '1px',
+              height: '24px',
+              background: '#F9BED8',
+              borderRadius: '1px',
+              flexShrink: 0
+            }} />
+
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{
+                fontSize: '13px',
+                fontWeight: '800',
+                color: '#0f172a',
+                letterSpacing: '-0.2px',
+                lineHeight: 1.25
+              }}>
+                Toplu Push & Web Bildirimi Gönder
+              </div>
+              <div style={{
+                fontSize: '10.5px',
+                color: '#64748b',
+                fontWeight: '500',
+                marginTop: '3px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>
+                Tüm kullanıcılara masaüstü ve mobil ekran bildirimi yayınlayın
+              </div>
+            </div>
+          </div>
+          <ChevronRight size={18} color="#D7147A" strokeWidth={2.5} style={{ flexShrink: 0 }} />
+        </div>
 
         {/* 1. ÜST YÖNETİCİ METRİK KARTLARI (Tek Kart İçinde) */}
         <div style={{
@@ -323,81 +406,7 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        {/* 2. ONESIGNAL TOPLU PUSH BİLDİRİMİ KISAYOLU */}
-        <div 
-          onClick={() => navigate('/dashboard/broadcast')}
-          role="button"
-          tabIndex={0}
-          title="Toplu Push & Web Bildirimi Gönder"
-          style={{
-            background: 'linear-gradient(135deg, #FFF1F7 0%, #FFFFFF 55%, #FDF2F8 100%)',
-            border: '1.2px solid #F9BED8',
-            borderRadius: '16px',
-            padding: '12px 14px',
-            marginBottom: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '12px',
-            boxShadow: '0 3px 12px rgba(215, 20, 122, 0.08)',
-            cursor: 'pointer',
-            userSelect: 'none',
-            WebkitTapHighlightColor: 'transparent',
-            transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.transform = 'translateY(-1.5px)';
-            e.currentTarget.style.boxShadow = '0 6px 18px rgba(215, 20, 122, 0.14)';
-            e.currentTarget.style.borderColor = '#F472B6';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 3px 12px rgba(215, 20, 122, 0.08)';
-            e.currentTarget.style.borderColor = '#F9BED8';
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '11px', minWidth: 0, flex: 1 }}>
-            <div style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: '12px',
-              background: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)',
-              border: '1px solid #F9BED8',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              boxShadow: '0 2px 6px rgba(215, 20, 122, 0.1)'
-            }}>
-              <Megaphone size={19} color="#D7147A" strokeWidth={2.2} />
-            </div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{
-                fontSize: '13px',
-                fontWeight: '800',
-                color: '#0f172a',
-                letterSpacing: '-0.2px',
-                lineHeight: 1.25
-              }}>
-                Toplu Push & Web Bildirimi Gönder
-              </div>
-              <div style={{
-                fontSize: '10.5px',
-                color: '#64748b',
-                fontWeight: '500',
-                marginTop: '3px',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }}>
-                Tüm kullanıcılara masaüstü ve mobil ekran bildirimi yayınlayın
-              </div>
-            </div>
-          </div>
-          <ChevronRight size={18} color="#D7147A" strokeWidth={2.5} style={{ flexShrink: 0 }} />
-        </div>
-
-        {/* 3. KARE İKON BUTONLARI KONTROL PANELİ (Kart İçinde) */}
+        {/* 2. KARE İKON BUTONLARI KONTROL PANELİ (Kart İçinde) */}
         <div style={{
           background: 'white',
           borderRadius: '16px',

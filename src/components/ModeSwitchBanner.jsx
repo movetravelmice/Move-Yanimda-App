@@ -117,7 +117,7 @@ export default function ModeSwitchBanner({ currentMode }) {
   // Hem "Bireysel Seyahat Asistanına Geç" hem de "Seyahat Uzmanı Paneline Geç" kartı
   if (!isIndividual && (currentMode === 'admin' || location.pathname.includes('/admin')) && userIsAdmin) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' }}>
         {/* Kart 1: Bireysel Seyahat Asistanına Geç */}
         <div 
           onClick={handleSwitchToIndividual}
@@ -193,6 +193,15 @@ export default function ModeSwitchBanner({ currentMode }) {
                 </div>
               )}
             </div>
+
+            {/* İkon ile Yazı Arasındaki Dikey Çizgi */}
+            <div style={{
+              width: '1px',
+              height: '24px',
+              background: '#F9BED8',
+              borderRadius: '1px',
+              flexShrink: 0
+            }} />
 
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{
@@ -307,6 +316,15 @@ export default function ModeSwitchBanner({ currentMode }) {
                 </div>
               )}
             </div>
+
+            {/* İkon ile Yazı Arasındaki Dikey Çizgi */}
+            <div style={{
+              width: '1px',
+              height: '24px',
+              background: '#BAE6FD',
+              borderRadius: '1px',
+              flexShrink: 0
+            }} />
 
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{
@@ -429,6 +447,15 @@ export default function ModeSwitchBanner({ currentMode }) {
             )}
           </div>
 
+          {/* İkon ile Yazı Arasındaki Dikey Çizgi */}
+          <div style={{
+            width: '1px',
+            height: '24px',
+            background: '#F9BED8',
+            borderRadius: '1px',
+            flexShrink: 0
+          }} />
+
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{
               fontSize: '13px',
@@ -546,6 +573,15 @@ export default function ModeSwitchBanner({ currentMode }) {
             </div>
           )}
         </div>
+
+        {/* İkon ile Yazı Arasındaki Dikey Çizgi */}
+        <div style={{
+          width: '1px',
+          height: '24px',
+          background: '#BFDBFE',
+          borderRadius: '1px',
+          flexShrink: 0
+        }} />
 
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{
