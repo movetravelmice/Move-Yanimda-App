@@ -43,6 +43,7 @@ function ScrollToTop() {
 
 function App() {
   const user = useAuthStore(state => state.user);
+  const recordAppActivity = useAuthStore(state => state.recordAppActivity);
   const activeMode = useAuthStore(state => state.activeMode);
   const corporateName = useSettingsStore(state => state.corporateName);
   const deleteTour = useTourStore(state => state.deleteTour);
@@ -85,6 +86,13 @@ function App() {
     initFirestoreChats();
     initFirestoreNotifications();
   }, [user?.id, user?.role, user?.secondaryRole, deleteTour, initFirestoreUsers, initFirestoreTours, initFirestoreChats, initFirestoreNotifications, resetUsers, resetTours, resetChats]);
+
+  // Mobil uygulama / web açılışında cihaz & oturum aktivitesini kaydet
+  useEffect(() => {
+    if (user?.id || user?.email) {
+      recordAppActivity();
+    }
+  }, [user?.id, user?.email, recordAppActivity]);
 
   // Synchronize authenticated session when Firestore user data updates safely
   useEffect(() => {

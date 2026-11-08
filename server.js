@@ -63,6 +63,10 @@ const isChildEmailAddress = (email) => {
     return false;
 };
 
+app.post('/api/record-app-activity', (req, res) => {
+    return res.json({ success: true, message: 'Local dev activity mock received' });
+});
+
 app.post('/api/send-email', async (req, res) => {
     const { host, port, user, pass, to, corporateName } = req.body;
     const senderBrand = corporateName || 'Base44';

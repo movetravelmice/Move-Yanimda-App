@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronDown, ChevronRight, Plus, Phone, PhoneOff, MessageCircle, X, Search, User as UserIcon, Building, Mail, CheckCircle2, History, Activity, Users, PlaneTakeoff, BellRing, BellOff, Trash2, AlertTriangle, FileSpreadsheet, FileText, Lock, UserPlus, Ticket, KeyRound, Send, Loader2, Settings, Check, AlertCircle, Sparkles, Filter, ExternalLink, Copy, MessageSquare, Info, Eye, EyeOff } from 'lucide-react';
+import { ChevronLeft, ChevronDown, ChevronRight, Plus, Phone, PhoneOff, MessageCircle, X, Search, User as UserIcon, Building, Mail, CheckCircle2, History, Activity, Users, PlaneTakeoff, BellRing, BellOff, Trash2, AlertTriangle, FileSpreadsheet, FileText, Lock, UserPlus, Ticket, KeyRound, Send, Loader2, Settings, Check, AlertCircle, Sparkles, Filter, ExternalLink, Copy, MessageSquare, Info, Eye, EyeOff, Smartphone, Globe, Monitor } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
 import ParticipantTransferManager from '../../components/ParticipantTransferManager';
@@ -223,12 +223,149 @@ export default function ParticipantsList() {
         return true;
     };
 
+    const getParticipantCommStatus = (p, globalP) => {
+        const gUser = globalP || findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
+        const isChild = isUserChild(gUser);
+        const pPhone = ((gUser.phone && gUser.phone !== '-') ? gUser.phone : (p.phone || '')).trim().replace(/\D/g, '').slice(-10);
+        const pEmail = (p.email || gUser.email || '').trim().toLowerCase();
+        const pName = (p.name || gUser.name || '').trim().toLowerCase();
+        const isPlaceholderEmail = !pEmail || pEmail === '-' || pEmail.endsWith('@move.local') || pEmail.endsWith('.local') || isChildEmail(pEmail);
+
+        // WhatsApp status
+        const hasPhone = pPhone && pPhone.length >= 7;
+        let waTourSent = false;
+        let waActivationSent = false;
+        let waWelcomeSent = false;
+        let waFailed = false;
+        let waLastDate = null;
+
+        (tour?.whatsappReports || []).forEach(rep => {
+            const d = (rep.details || []).find(item => {
+                if (item.id && (item.id === p.id || item.id === gUser.id)) return true;
+                if (pPhone && item.phone && String(item.phone).replace(/\D/g, '').slice(-10) === pPhone) return true;
+                if (item.name && item.name.trim().toLowerCase() === pName) return true;
+                return false;
+            });
+            if (d) {
+                if (d.status === 'success') {
+                    if (rep.templateKey === 'newTourTemplate') waTourSent = true;
+                    if (rep.templateKey === 'accountActivationTemplate') waActivationSent = true;
+                    if (rep.templateKey === 'newUserTemplate') waWelcomeSent = true;
+                    if (!waLastDate) waLastDate = rep.dateFormatted || rep.createdAt;
+                } else if (d.status === 'failed') {
+                    waFailed = true;
+                }
+            }
+        });
+
+        if (p.tourWaSent || gUser.tourWaSent) waTourSent = true;
+        if (p.activationWaSent || gUser.activationWaSent) waActivationSent = true;
+
+        // Email status
+        let emailSent = false;
+        let emailFailed = false;
+        let emailLastDate = null;
+
+        (tour?.emailReports || []).forEach(rep => {
+            const d = (rep.details || []).find(item => {
+                if (item.id && (item.id === p.id || item.id === gUser.id)) return true;
+                if (pEmail && d.email && d.email.trim().toLowerCase() === pEmail) return true;
+                if (item.name && item.name.trim().toLowerCase() === pName) return true;
+                return false;
+            });
+            if (d) {
+                if (d.status === 'success') {
+                    emailSent = true;
+                    if (!emailLastDate) emailLastDate = rep.dateFormatted || rep.createdAt;
+                } else if (d.status === 'failed') {
+                    emailFailed = true;
+                }
+            }
+        });
+
+        // Excel ile yüklenen ve e-posta tanımlı olan katılımcıların karşılama postası durumu
+        (tour?.importReports || []).forEach(rep => {
+            const d = (rep.details || []).find(item => {
+                if (item.id && (item.id === p.id || item.id === gUser.id)) return true;
+                if (pEmail && item.email && item.email.trim().toLowerCase() === pEmail) return true;
+                if (item.name && item.name.trim().toLowerCase() === pName) return true;
+                return false;
+            });
+            if (d && d.email && d.email !== '-' && !d.email.endsWith('@move.local') && !d.email.endsWith('.local')) {
+                emailSent = true;
+                if (!emailLastDate) emailLastDate = rep.dateFormatted || rep.createdAt;
+            }
+        });
+
+        if (p.emailSent || p.lastEmailSent || p.tourEmailSent || p.credentialSent || gUser.emailSent) {
+            emailSent = true;
+            if (!emailLastDate && p.emailSentDateFormatted) emailLastDate = p.emailSentDateFormatted;
+        }
+
+        // App & Login Status
+        const lastLoginAt = gUser.lastLoginAt || p.lastLoginAt || null;
+        const lastPlatform = gUser.lastPlatform || p.lastPlatform || null;
+        const hasInstalledApp = Boolean(gUser.hasInstalledApp || p.hasInstalledApp || (lastPlatform === 'ios' || lastPlatform === 'android'));
+        const loginCount = gUser.loginCount || p.loginCount || (lastLoginAt ? 1 : 0);
+
+        let appStatus = 'none'; // 'none' | 'native_ios' | 'native_android' | 'web'
+        if (hasInstalledApp || lastPlatform === 'ios' || lastPlatform === 'android') {
+            appStatus = lastPlatform === 'android' ? 'native_android' : 'native_ios';
+        } else if (lastLoginAt || lastPlatform === 'web') {
+            appStatus = 'web';
+        }
+
+        let lastLoginFormatted = null;
+        if (lastLoginAt) {
+            try {
+                const d = new Date(lastLoginAt);
+                if (!isNaN(d.getTime())) {
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const mins = String(d.getMinutes()).padStart(2, '0');
+                    lastLoginFormatted = `${day}.${month} ${hours}:${mins}`;
+                }
+            } catch (e) {}
+        }
+
+        return {
+            isChild,
+            hasPhone,
+            hasEmail: !isPlaceholderEmail,
+            waTourSent,
+            waActivationSent,
+            waWelcomeSent,
+            waFailed,
+            waAnySent: waTourSent || waActivationSent || waWelcomeSent,
+            waLastDate,
+            emailSent,
+            emailFailed,
+            emailLastDate,
+            // Mobil Uygulama & Giriş
+            lastLoginAt,
+            lastPlatform,
+            hasInstalledApp,
+            loginCount,
+            appStatus,
+            lastLoginFormatted
+        };
+    };
+
     const filterOptions = [
         { id: 'all', label: 'Tüm Katılımcılar', icon: Users, color: '#475569', bg: '#f1f5f9' },
+        { id: 'app_native', label: 'Mobil Uygulamada Aktif (iOS/Android)', icon: Smartphone, color: '#16a34a', bg: '#dcfce7' },
+        { id: 'app_web', label: 'Yalnızca Web\'den Girenler', icon: Globe, color: '#0284c7', bg: '#e0f2fe' },
+        { id: 'app_none', label: 'Henüz Giriş Yapmayanlar', icon: AlertCircle, color: '#d97706', bg: '#fef3c7' },
         { id: 'has_phone', label: 'Telefonu Olanlar', icon: Phone, color: '#16a34a', bg: '#dcfce7' },
         { id: 'no_phone', label: 'Telefonu Olmayanlar', icon: Phone, color: '#dc2626', bg: '#fee2e2' },
         { id: 'has_email', label: 'E-Postası Olanlar', icon: Mail, color: '#2563eb', bg: '#dbeafe' },
         { id: 'no_email', label: 'E-Postası Olmayanlar', icon: Mail, color: '#ea580c', bg: '#ffedd5' },
+        { id: 'wa_act_sent', label: 'WA Aktivasyon İletilenler', icon: KeyRound, color: '#059669', bg: '#d1fae5' },
+        { id: 'wa_act_pending', label: 'WA Aktivasyon Bekleyenler', icon: MessageSquare, color: '#d97706', bg: '#fef3c7' },
+        { id: 'wa_tour_sent', label: 'WA Seyahat Kaydı İletilenler', icon: Send, color: '#0284c7', bg: '#e0f2fe' },
+        { id: 'mail_sent', label: 'Mail İletilenler', icon: CheckCircle2, color: '#2563eb', bg: '#dbeafe' },
+        { id: 'mail_pending', label: 'Mail Bekleyenler', icon: Mail, color: '#64748b', bg: '#f1f5f9' },
         { id: 'has_ticket', label: 'Bileti Yüklenmiş Olanlar', icon: Ticket, color: '#059669', bg: '#d1fae5' },
         { id: 'no_ticket', label: 'Bileti Yüklenmemiş Olanlar', icon: AlertTriangle, color: '#d97706', bg: '#fef3c7' }
     ];
@@ -239,10 +376,33 @@ export default function ParticipantsList() {
         if (filterId === 'all') return participants.length;
         return participants.filter(p => {
             const globalP = findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
+            if (filterId === 'app_native') {
+                const s = getParticipantCommStatus(p, globalP);
+                return !s.isChild && (s.appStatus === 'native_ios' || s.appStatus === 'native_android');
+            }
+            if (filterId === 'app_web') {
+                const s = getParticipantCommStatus(p, globalP);
+                return !s.isChild && s.appStatus === 'web';
+            }
+            if (filterId === 'app_none') {
+                const s = getParticipantCommStatus(p, globalP);
+                return !s.isChild && s.appStatus === 'none';
+            }
             if (filterId === 'has_phone') return checkParticipantHasPhone(p, globalP);
             if (filterId === 'no_phone') return !checkParticipantHasPhone(p, globalP);
             if (filterId === 'has_email') return checkParticipantHasEmail(p, globalP);
             if (filterId === 'no_email') return !checkParticipantHasEmail(p, globalP);
+            if (filterId === 'wa_act_sent') return getParticipantCommStatus(p, globalP).waActivationSent;
+            if (filterId === 'wa_act_pending') {
+                const s = getParticipantCommStatus(p, globalP);
+                return !s.isChild && s.hasPhone && !s.waActivationSent;
+            }
+            if (filterId === 'wa_tour_sent') return getParticipantCommStatus(p, globalP).waTourSent;
+            if (filterId === 'mail_sent') return getParticipantCommStatus(p, globalP).emailSent;
+            if (filterId === 'mail_pending') {
+                const s = getParticipantCommStatus(p, globalP);
+                return !s.isChild && s.hasEmail && !s.emailSent;
+            }
             if (filterId === 'has_ticket') return getParticipantTickets(p, globalP).length > 0;
             if (filterId === 'no_ticket') return getParticipantTickets(p, globalP).length === 0;
             return true;
@@ -251,10 +411,33 @@ export default function ParticipantsList() {
 
     const filteredParticipants = participants.filter(p => {
         const globalP = findMatchingUser(p, users) || users.find(u => u.id === p.id) || p;
+        if (filterType === 'app_native') {
+            const s = getParticipantCommStatus(p, globalP);
+            if (s.isChild || (s.appStatus !== 'native_ios' && s.appStatus !== 'native_android')) return false;
+        }
+        if (filterType === 'app_web') {
+            const s = getParticipantCommStatus(p, globalP);
+            if (s.isChild || s.appStatus !== 'web') return false;
+        }
+        if (filterType === 'app_none') {
+            const s = getParticipantCommStatus(p, globalP);
+            if (s.isChild || s.appStatus !== 'none') return false;
+        }
         if (filterType === 'has_phone') return checkParticipantHasPhone(p, globalP);
         if (filterType === 'no_phone') return !checkParticipantHasPhone(p, globalP);
         if (filterType === 'has_email') return checkParticipantHasEmail(p, globalP);
         if (filterType === 'no_email') return !checkParticipantHasEmail(p, globalP);
+        if (filterType === 'wa_act_sent') return getParticipantCommStatus(p, globalP).waActivationSent;
+        if (filterType === 'wa_act_pending') {
+            const s = getParticipantCommStatus(p, globalP);
+            return !s.isChild && s.hasPhone && !s.waActivationSent;
+        }
+        if (filterType === 'wa_tour_sent') return getParticipantCommStatus(p, globalP).waTourSent;
+        if (filterType === 'mail_sent') return getParticipantCommStatus(p, globalP).emailSent;
+        if (filterType === 'mail_pending') {
+            const s = getParticipantCommStatus(p, globalP);
+            return !s.isChild && s.hasEmail && !s.emailSent;
+        }
         if (filterType === 'has_ticket') return getParticipantTickets(p, globalP).length > 0;
         if (filterType === 'no_ticket') return getParticipantTickets(p, globalP).length === 0;
 
@@ -636,6 +819,17 @@ export default function ParticipantsList() {
                     }
                     if (uData.email && !uData.email.endsWith('@move.local') && !uData.email.endsWith('.local') && !uData.email.startsWith('user_')) {
                         setContactForm(prev => ({ ...prev, email: uData.email }));
+                    }
+                    if (uData.lastLoginAt || uData.hasInstalledApp || uData.lastPlatform) {
+                        setSelectedUser(prev => ({
+                            ...prev,
+                            lastLoginAt: uData.lastLoginAt || prev?.lastLoginAt,
+                            lastPlatform: uData.lastPlatform || prev?.lastPlatform,
+                            hasInstalledApp: Boolean(uData.hasInstalledApp || prev?.hasInstalledApp),
+                            loginCount: uData.loginCount || prev?.loginCount,
+                            deviceInfo: uData.deviceInfo || prev?.deviceInfo,
+                            appVersion: uData.appVersion || prev?.appVersion
+                        }));
                     }
                 }
             }).catch(e => console.warn("Password & contact live fetch error:", e));
@@ -1028,17 +1222,38 @@ export default function ParticipantsList() {
 
             // WhatsApp bildirimi (varsa)
             const targetPhone = selectedUser.phone && selectedUser.phone !== '-' ? selectedUser.phone : (contactForm.phone || '');
+            let waSentOk = false;
             if (targetPhone && targetPhone.trim().length > 6) {
                 try {
-                    useSettingsStore.getState().sendWhatsAppNotification(
+                    const waRes = await useSettingsStore.getState().sendWhatsAppNotification(
                         targetPhone,
                         'accountActivationTemplate',
                         [selectedUser.name || 'Değerli Misafirimiz'],
                         setupLinkInfo?.token
                     );
+                    if (waRes?.success) waSentOk = true;
                 } catch (waErr) {
                     console.warn("WhatsApp notification error:", waErr);
                 }
+            }
+
+            // Katılımcının kartında anında görünmesi için tur kayıtlarını güncelle
+            try {
+                const updatedParts = (tour?.participants || []).map(tp => {
+                    if (tp.id === selectedUser.id || (targetEmail && tp.email?.toLowerCase() === targetEmail.toLowerCase())) {
+                        return {
+                            ...tp,
+                            emailSent: true,
+                            lastEmailSentAt: Date.now(),
+                            activationWaSent: waSentOk || tp.activationWaSent,
+                            lastWaSentAt: waSentOk ? Date.now() : tp.lastWaSentAt
+                        };
+                    }
+                    return tp;
+                });
+                await editTour(tourId, { participants: updatedParts });
+            } catch (partUpdateErr) {
+                console.warn("Could not update participant comm flags:", partUpdateErr);
             }
 
             setCredentialSentMessage(`Kullanıcı adı (${targetEmail}) ve şifre e-posta ile gönderildi.`);
@@ -1264,6 +1479,7 @@ export default function ParticipantsList() {
         setIsSendingBatchEmail(true);
         let successCount = 0;
         let failCount = 0;
+        const recipientResults = [];
 
         // Özel şablon varsa veritabanından al
         let customSubject = null;
@@ -1355,9 +1571,23 @@ export default function ParticipantsList() {
 
             if (sentOk) {
                 successCount++;
+                recipientResults.push({
+                    id: p.id || globalU.id || String(i),
+                    name: pName,
+                    email: targetEmail,
+                    status: 'success',
+                    reason: 'E-posta başarıyla iletildi.'
+                });
             } else {
                 failCount++;
                 console.warn(`Email send failed for ${targetEmail}:`, lastError);
+                recipientResults.push({
+                    id: p.id || globalU.id || String(i),
+                    name: pName,
+                    email: targetEmail,
+                    status: 'failed',
+                    reason: lastError || 'E-posta gönderimi başarısız oldu.'
+                });
             }
 
             // Gmail SMTP rate-limit önleme: Güvenli bekleme ve 25'li paket soğuma süresi
@@ -1366,6 +1596,38 @@ export default function ParticipantsList() {
             } else {
                 await new Promise(r => setTimeout(r, 650));
             }
+        }
+
+        const newEmailReport = {
+            id: 'mail_rep_' + Date.now(),
+            type: 'email',
+            templateKey: selectedEmailTemplateKey,
+            templateTitle: targetTpl.title,
+            createdAt: new Date().toISOString(),
+            dateFormatted: new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            totalRecipients: participants.length,
+            successCount,
+            failCount,
+            details: recipientResults
+        };
+
+        const existingEmailReports = tour?.emailReports || [];
+        const updatedEmailReports = [newEmailReport, ...existingEmailReports];
+
+        // Başarılı katılımcıların e-posta durumunu güncelle
+        const successfulEmails = new Set(recipientResults.filter(r => r.status === 'success').map(r => r.email.toLowerCase()));
+        const updatedParticipants = (tour?.participants || []).map(tp => {
+            const tpEmail = (tp.email || '').toLowerCase();
+            if (successfulEmails.has(tpEmail)) {
+                return { ...tp, emailSent: true, lastEmailSentAt: Date.now() };
+            }
+            return tp;
+        });
+
+        try {
+            await editTour(tourId, { emailReports: updatedEmailReports, participants: updatedParticipants });
+        } catch (e) {
+            console.warn("Could not save emailReports to tour:", e);
         }
 
         setIsSendingBatchEmail(false);
@@ -2144,6 +2406,60 @@ export default function ParticipantsList() {
                                 </div>
                             </div>
                         )}
+
+                        {/* 4.5. Mobil Uygulama & Giriş Durumu Card */}
+                        {!isUserChild(selectedUser) && (() => {
+                            const selStatus = getParticipantCommStatus(selectedUser, selectedUser);
+                            return (
+                                <div style={{ 
+                                    background: 'white', 
+                                    borderRadius: '18px', 
+                                    padding: '16px 14px', 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    gap: '12px', 
+                                    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.02)',
+                                    border: '1px solid #e2e8f0' 
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                                        <h3 style={{ fontSize: '13.5px', fontWeight: '700', margin: 0, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <Smartphone size={15} color="#d7147a" />
+                                            Mobil Uygulama & Oturum
+                                        </h3>
+                                        {selStatus.hasInstalledApp ? (
+                                            <span style={{ fontSize: '10.5px', fontWeight: '700', color: '#15803d', background: '#dcfce7', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                <Check size={11} strokeWidth={3} /> Yüklendi
+                                            </span>
+                                        ) : (
+                                            <span style={{ fontSize: '10.5px', fontWeight: '600', color: selStatus.appStatus === 'web' ? '#0369a1' : '#64748b', background: selStatus.appStatus === 'web' ? '#e0f2fe' : '#f1f5f9', border: selStatus.appStatus === 'web' ? '1px solid #bae6fd' : '1px solid #e2e8f0', padding: '2px 8px', borderRadius: '12px' }}>
+                                                {selStatus.appStatus === 'web' ? 'Yalnızca Web' : 'Giriş Bekleniyor'}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                                        <div>
+                                            <label style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', marginBottom: '3px', display: 'block' }}>Kullanılan Platform</label>
+                                            <div style={{ padding: '7px 10px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #f1f5f9', fontSize: '11.5px', fontWeight: '700', color: selStatus.appStatus === 'native_ios' || selStatus.appStatus === 'native_android' ? '#15803d' : (selStatus.appStatus === 'web' ? '#0369a1' : '#64748b') }}>
+                                                {selStatus.appStatus === 'native_ios' ? '📱 Apple iOS App' : (selStatus.appStatus === 'native_android' ? '🤖 Android App' : (selStatus.appStatus === 'web' ? '🌐 Web Tarayıcısı' : '⏳ Giriş Yapılmadı'))}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', marginBottom: '3px', display: 'block' }}>Toplam Oturum</label>
+                                            <div style={{ padding: '7px 10px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #f1f5f9', fontSize: '11.5px', fontWeight: '700', color: 'var(--text-main)' }}>
+                                                {selStatus.loginCount ? `${selStatus.loginCount} Giriş` : '0 Giriş'}
+                                            </div>
+                                        </div>
+                                        <div style={{ gridColumn: '1 / -1' }}>
+                                            <label style={{ fontSize: '10.5px', fontWeight: '600', color: '#64748b', marginBottom: '3px', display: 'block' }}>Son Giriş / Aktivite Tarihi</label>
+                                            <div style={{ padding: '7px 10px', borderRadius: '8px', background: '#f8fafc', border: '1px solid #f1f5f9', fontSize: '11.5px', fontWeight: '600', color: selStatus.lastLoginAt ? '#1e293b' : '#94a3b8' }}>
+                                                {selStatus.lastLoginAt ? new Date(selStatus.lastLoginAt).toLocaleString('tr-TR', { dateStyle: 'long', timeStyle: 'short' }) : 'Henüz sisteme giriş yapmadı'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
 
                         {/* 5. İletişim Bilgileri Card */}
                         {!isUserChild(selectedUser) && (
@@ -5315,6 +5631,7 @@ export default function ParticipantsList() {
                             const ticketCount = partTickets.length;
                             const hasTicketPdf = ticketCount > 0;
                             const companyName = globalP.company && globalP.company !== 'Bireysel Müşteri' && globalP.company !== 'Move Travel & Mice' ? globalP.company : null;
+                            const comm = getParticipantCommStatus(p, globalP);
 
                             return (
                                 <div 
@@ -5323,10 +5640,9 @@ export default function ParticipantsList() {
                                     style={{ 
                                         background: '#ffffff', 
                                         borderRadius: '16px', 
-                                        padding: '12px 14px', 
+                                        padding: '12px 14px 9px 14px', 
                                         display: 'flex', 
-                                        alignItems: 'center', 
-                                        gap: '12px', 
+                                        flexDirection: 'column', 
                                         border: '1px solid #f1f5f9', 
                                         boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)', 
                                         cursor: 'pointer', 
@@ -5344,7 +5660,9 @@ export default function ParticipantsList() {
                                         e.currentTarget.style.transform = 'translateY(0)';
                                     }}
                                 >
-                                    {/* Ticket Icon Indicator (Replaces Avatar) */}
+                                    {/* Üst Satır: Bilet İkonu, Katılımcı Bilgileri, Arama/Sohbet Butonları */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
+                                        {/* Ticket Icon Indicator (Replaces Avatar) */}
                                     <div style={{ position: 'relative', flexShrink: 0 }}>
                                         <div 
                                             onClick={(e) => {
@@ -5554,6 +5872,344 @@ export default function ParticipantsList() {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Ayrıcı ve Şık İletişim Şeridi */}
+                                <div style={{ 
+                                    marginTop: '10px', 
+                                    padding: '7px 10px', 
+                                    background: '#f8fafc', 
+                                    borderRadius: '12px', 
+                                    border: '1px solid #edf2f7', 
+                                    display: 'flex', 
+                                    flexDirection: 'column', 
+                                    gap: '6px', 
+                                    width: '100%',
+                                    boxSizing: 'border-box'
+                                }}>
+                                    {/* 1. Satır: WhatsApp & Mail İletişim Durumları */}
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'space-between', 
+                                        gap: '8px', 
+                                        width: '100%' 
+                                    }}>
+                                        {/* Sol: WhatsApp Durumu */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                                            <div 
+                                                style={{ 
+                                                    width: '20px', 
+                                                    height: '20px', 
+                                                    borderRadius: '6px', 
+                                                    background: '#dcfce7', 
+                                                    color: '#16a34a', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center', 
+                                                    flexShrink: 0 
+                                                }} 
+                                                title="WhatsApp Gönderim Durumları"
+                                            >
+                                                <MessageSquare size={11} strokeWidth={2.4} />
+                                            </div>
+
+                                            {comm.isChild ? (
+                                                <span style={{ 
+                                                    background: '#fdf4ff', 
+                                                    color: '#a21caf', 
+                                                    border: '1px solid #f5d0fe', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '600' 
+                                                }}>
+                                                    Ebeveynde
+                                                </span>
+                                            ) : !comm.hasPhone ? (
+                                                <span style={{ 
+                                                    background: '#fee2e2', 
+                                                    color: '#dc2626', 
+                                                    border: '1px solid #fecaca', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '600',
+                                                    display: 'inline-flex',
+                                                    alignItems: 'center',
+                                                    gap: '4px'
+                                                }} title="Katılımcının telefon numarası kayıtlı değil">
+                                                    <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#dc2626' }} />
+                                                    Numara Yok
+                                                </span>
+                                            ) : (
+                                                <>
+                                                    {/* Aktivasyon Şablonu */}
+                                                    <span style={{ 
+                                                        background: comm.waActivationSent ? '#dcfce7' : '#ffffff', 
+                                                        color: comm.waActivationSent ? '#15803d' : '#64748b', 
+                                                        border: comm.waActivationSent ? '1px solid #bbf7d0' : '1px solid #e2e8f0', 
+                                                        padding: '2px 8px', 
+                                                        borderRadius: '12px', 
+                                                        fontSize: '10px', 
+                                                        fontWeight: comm.waActivationSent ? '700' : '500',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        boxShadow: comm.waActivationSent ? '0 1px 2px rgba(22, 163, 74, 0.1)' : '0 1px 2px rgba(0,0,0,0.02)'
+                                                    }} title={comm.waActivationSent ? "Hesap Aktivasyon (welcome_account_activation) mesajı iletildi" : "welcome_account_activation henüz gönderilmedi"}>
+                                                        {comm.waActivationSent ? (
+                                                            <Check size={10} strokeWidth={3} />
+                                                        ) : (
+                                                            <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#94a3b8' }} />
+                                                        )}
+                                                        Aktivasyon
+                                                    </span>
+
+                                                    {/* Seyahat Kaydı Şablonu */}
+                                                    <span style={{ 
+                                                        background: comm.waTourSent ? '#dcfce7' : '#ffffff', 
+                                                        color: comm.waTourSent ? '#15803d' : '#64748b', 
+                                                        border: comm.waTourSent ? '1px solid #bbf7d0' : '1px solid #e2e8f0', 
+                                                        padding: '2px 8px', 
+                                                        borderRadius: '12px', 
+                                                        fontSize: '10px', 
+                                                        fontWeight: comm.waTourSent ? '700' : '500',
+                                                        display: 'inline-flex',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                        boxShadow: comm.waTourSent ? '0 1px 2px rgba(22, 163, 74, 0.1)' : '0 1px 2px rgba(0,0,0,0.02)'
+                                                    }} title={comm.waTourSent ? "Seyahat Kaydı (tour_registration) mesajı iletildi" : "Seyahat Kaydı mesajı henüz gönderilmedi"}>
+                                                        {comm.waTourSent ? (
+                                                            <Check size={10} strokeWidth={3} />
+                                                        ) : (
+                                                            <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#94a3b8' }} />
+                                                        )}
+                                                        Seyahat
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+
+                                        {/* Sağ: E-Posta (Mail) Durumu */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div 
+                                                style={{ 
+                                                    width: '20px', 
+                                                    height: '20px', 
+                                                    borderRadius: '6px', 
+                                                    background: '#dbeafe', 
+                                                    color: '#2563eb', 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center', 
+                                                    flexShrink: 0 
+                                                }} 
+                                                title="E-Posta Gönderim Durumu"
+                                            >
+                                                <Mail size={11} strokeWidth={2.4} />
+                                            </div>
+
+                                            {comm.isChild ? (
+                                                <span style={{ 
+                                                    background: '#fdf4ff', 
+                                                    color: '#a21caf', 
+                                                    border: '1px solid #f5d0fe', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '600' 
+                                                }}>
+                                                    Ebeveynde
+                                                </span>
+                                            ) : !comm.hasEmail ? (
+                                                <span style={{ 
+                                                    background: '#ffffff', 
+                                                    color: '#94a3b8', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '500' 
+                                                }} title="Kayıtlı e-posta adresi bulunmuyor">
+                                                    Tanımlı Değil
+                                                </span>
+                                            ) : comm.emailSent ? (
+                                                <span style={{ 
+                                                    background: '#dbeafe', 
+                                                    color: '#1d4ed8', 
+                                                    border: '1px solid #bfdbfe', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '700', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px',
+                                                    boxShadow: '0 1px 2px rgba(37, 99, 235, 0.1)'
+                                                }} title={comm.emailLastDate ? `${comm.emailLastDate} tarihinde iletildi` : "E-posta başarıyla iletildi"}>
+                                                    <Check size={10} strokeWidth={3} />
+                                                    İletildi
+                                                </span>
+                                            ) : comm.emailFailed ? (
+                                                <span style={{ 
+                                                    background: '#fee2e2', 
+                                                    color: '#b91c1c', 
+                                                    border: '1px solid #fecaca', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '700', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px' 
+                                                }} title="E-posta gönderimi başarısız oldu">
+                                                    <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#b91c1c' }} />
+                                                    Başarısız
+                                                </span>
+                                            ) : (
+                                                <span style={{ 
+                                                    background: '#ffffff', 
+                                                    color: '#64748b', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '500', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px' 
+                                                }} title="E-posta henüz gönderilmedi">
+                                                    <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#94a3b8' }} />
+                                                    Bekliyor
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Satır: Mobil Uygulama & Giriş Durumu */}
+                                    <div style={{ 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'space-between', 
+                                        gap: '8px', 
+                                        paddingTop: '6px', 
+                                        borderTop: '1px dashed #e2e8f0', 
+                                        width: '100%' 
+                                    }}>
+                                        {/* Sol: Uygulama İkonu & Rozeti */}
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <div 
+                                                style={{ 
+                                                    width: '20px', 
+                                                    height: '20px', 
+                                                    borderRadius: '6px', 
+                                                    background: comm.appStatus === 'native_ios' || comm.appStatus === 'native_android' ? '#dcfce7' : (comm.appStatus === 'web' ? '#e0f2fe' : '#f1f5f9'), 
+                                                    color: comm.appStatus === 'native_ios' || comm.appStatus === 'native_android' ? '#16a34a' : (comm.appStatus === 'web' ? '#0284c7' : '#64748b'), 
+                                                    display: 'flex', 
+                                                    alignItems: 'center', 
+                                                    justifyContent: 'center', 
+                                                    flexShrink: 0 
+                                                }} 
+                                                title="Mobil Uygulama Durumu"
+                                            >
+                                                <Smartphone size={11} strokeWidth={2.4} />
+                                            </div>
+
+                                            {comm.isChild ? (
+                                                <span style={{ 
+                                                    background: '#fdf4ff', 
+                                                    color: '#a21caf', 
+                                                    border: '1px solid #f5d0fe', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '600' 
+                                                }}>
+                                                    Ebeveynde
+                                                </span>
+                                            ) : comm.appStatus === 'native_ios' ? (
+                                                <span style={{ 
+                                                    background: '#dcfce7', 
+                                                    color: '#15803d', 
+                                                    border: '1px solid #bbf7d0', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '700', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px',
+                                                    boxShadow: '0 1px 2px rgba(22, 163, 74, 0.1)'
+                                                }} title="Apple App Store uygulamasını indirip giriş yaptı">
+                                                    <Check size={10} strokeWidth={3} />
+                                                    iOS App Aktif
+                                                </span>
+                                            ) : comm.appStatus === 'native_android' ? (
+                                                <span style={{ 
+                                                    background: '#dcfce7', 
+                                                    color: '#15803d', 
+                                                    border: '1px solid #bbf7d0', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '700', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px',
+                                                    boxShadow: '0 1px 2px rgba(22, 163, 74, 0.1)'
+                                                }} title="Google Play Store uygulamasını indirip giriş yaptı">
+                                                    <Check size={10} strokeWidth={3} />
+                                                    Android App Aktif
+                                                </span>
+                                            ) : comm.appStatus === 'web' ? (
+                                                <span style={{ 
+                                                    background: '#e0f2fe', 
+                                                    color: '#0369a1', 
+                                                    border: '1px solid #bae6fd', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '600', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px',
+                                                    boxShadow: '0 1px 2px rgba(2, 132, 199, 0.08)'
+                                                }} title="Yalnızca web tarayıcısı üzerinden giriş yaptı">
+                                                    <Globe size={10} strokeWidth={2.4} />
+                                                    Yalnızca Web
+                                                </span>
+                                            ) : (
+                                                <span style={{ 
+                                                    background: '#ffffff', 
+                                                    color: '#94a3b8', 
+                                                    border: '1px solid #e2e8f0', 
+                                                    padding: '2px 8px', 
+                                                    borderRadius: '12px', 
+                                                    fontSize: '10px', 
+                                                    fontWeight: '500', 
+                                                    display: 'inline-flex', 
+                                                    alignItems: 'center', 
+                                                    gap: '4px' 
+                                                }} title="Henüz mobil uygulamayı indirmedi veya giriş yapmadı">
+                                                    <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#94a3b8' }} />
+                                                    Giriş Yok
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Sağ: Son Giriş Tarihi veya Durum */}
+                                        <div style={{ fontSize: '10px', color: '#64748b', fontWeight: '500' }}>
+                                            {comm.isChild ? '' : comm.lastLoginFormatted ? (
+                                                <span title={`Son giriş: ${comm.lastLoginFormatted}`}>
+                                                    Son: <strong style={{ color: '#334155' }}>{comm.lastLoginFormatted}</strong>
+                                                </span>
+                                            ) : (
+                                                <span style={{ color: '#94a3b8' }}>İndirme Bekleniyor</span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                             );
                         })}
                     </div>

@@ -729,10 +729,14 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                     linkedTo: resolvedParentIds
                 });
 
+                const hasValidEmail = !row.isChildExplicit && !isChildEmail(finalEmail) && !!finalEmail && finalEmail !== '-' && !finalEmail.endsWith('@move.local');
                 const participantPayload = {
                     ...newUser,
                     isChildProfile: row.isChildExplicit,
-                    userType: row.isChildExplicit ? 'child' : 'corporate'
+                    userType: row.isChildExplicit ? 'child' : 'corporate',
+                    emailSent: hasValidEmail,
+                    lastEmailSentAt: hasValidEmail ? new Date().toISOString() : null,
+                    emailSentDateFormatted: hasValidEmail ? new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
                 };
 
                 if (row.ticketUrl && row.ticketUrl.startsWith('http')) {

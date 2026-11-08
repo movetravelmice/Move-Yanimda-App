@@ -346,8 +346,36 @@ app.post('/api/login', async (req, res) => {
             return res.status(403).json({ success: false, message: 'Hesabınız askıya alınmıştır. Lütfen yönetici ile iletişime geçin.' });
         }
 
-        const token = generateSessionToken(matchedUser);
-        const safeUser = stripSensitiveFields(matchedUser);
+        // Platform & Cihaz Giriş Bilgilerini Kaydet
+        const { platform, isNative, userAgent, appVersion } = req.body || {};
+        const nowIso = new Date().toISOString();
+        const isNativeApp = Boolean(isNative || platform === 'ios' || platform === 'android');
+        const resolvedPlatform = isNativeApp ? (platform === 'android' ? 'android' : 'ios') : 'web';
+
+        const loginUpdates = {
+            lastLoginAt: nowIso,
+            lastPlatform: resolvedPlatform,
+            isNative: isNativeApp,
+            hasInstalledApp: isNativeApp || Boolean(matchedUser.hasInstalledApp),
+            loginCount: (matchedUser.loginCount || 0) + 1,
+            appVersion: appVersion || matchedUser.appVersion || '2.4.8',
+            deviceInfo: {
+                platform: resolvedPlatform,
+                isNative: isNativeApp,
+                userAgent: userAgent || '',
+                updatedAt: nowIso
+            }
+        };
+
+        try {
+            await db.collection('users').doc(matchedUser.id).set(loginUpdates, { merge: true });
+        } catch (dbErr) {
+            console.error("Firestore user login info update error:", dbErr);
+        }
+
+        const mergedUser = { ...matchedUser, ...loginUpdates };
+        const token = generateSessionToken(mergedUser);
+        const safeUser = stripSensitiveFields(mergedUser);
 
         return res.json({
             success: true,
@@ -357,6 +385,71 @@ app.post('/api/login', async (req, res) => {
     } catch (err) {
         console.error("Login endpoint error:", err);
         return res.status(500).json({ success: false, message: 'Giriş yapılırken sunucu hatası oluştu.' });
+    }
+});
+
+// 1.1 APP AKTİVİTE VE CİHAZ BİLGİSİ KAYDI (UYGULAMAYI AÇTIĞINDA / ARKA PLANDA)
+app.post('/api/record-app-activity', async (req, res) => {
+    try {
+        const { userId, email, platform, isNative, userAgent, appVersion } = req.body || {};
+        if (!userId && !email) {
+            return res.status(400).json({ success: false, message: 'Kullanıcı kimliği veya e-posta belirtilmedi.' });
+        }
+
+        const db = admin.firestore();
+        let userDocRef = null;
+        let userData = null;
+
+        if (userId) {
+            const doc = await db.collection('users').doc(userId).get();
+            if (doc.exists) {
+                userDocRef = doc.ref;
+                userData = doc.data();
+            }
+        }
+
+        if (!userDocRef && email) {
+            const cleanEmail = normalizeUserEmail(email);
+            const snap = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
+            if (!snap.empty) {
+                userDocRef = snap.docs[0].ref;
+                userData = snap.docs[0].data();
+            }
+        }
+
+        if (!userDocRef) {
+            return res.status(404).json({ success: false, message: 'Kullanıcı bulunamadı.' });
+        }
+
+        const nowIso = new Date().toISOString();
+        const isNativeApp = Boolean(isNative || platform === 'ios' || platform === 'android');
+        const resolvedPlatform = isNativeApp ? (platform === 'android' ? 'android' : 'ios') : 'web';
+
+        const updates = {
+            lastLoginAt: nowIso,
+            lastPlatform: resolvedPlatform,
+            isNative: isNativeApp,
+            hasInstalledApp: isNativeApp || Boolean(userData.hasInstalledApp),
+            appVersion: appVersion || userData.appVersion || '2.4.8',
+            deviceInfo: {
+                platform: resolvedPlatform,
+                isNative: isNativeApp,
+                userAgent: userAgent || '',
+                updatedAt: nowIso
+            }
+        };
+
+        // Eğer son girişten bu yana 10 dakikadan fazla geçmişse giriş sayısını artır
+        if (!userData.lastLoginAt || (Date.now() - new Date(userData.lastLoginAt).getTime() > 10 * 60 * 1000)) {
+            updates.loginCount = (userData.loginCount || 0) + 1;
+        }
+
+        await userDocRef.set(updates, { merge: true });
+
+        return res.json({ success: true, updates });
+    } catch (err) {
+        console.error("Record app activity error:", err);
+        return res.status(500).json({ success: false, message: 'Aktivite kaydedilemedi.', error: err.message });
     }
 });
 

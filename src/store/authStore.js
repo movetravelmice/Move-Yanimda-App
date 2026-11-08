@@ -4,6 +4,7 @@ import { useSettingsStore } from './settingsStore';
 import { useUserStore } from './userStore';
 import { normalizeEmail, normalizeTurkish } from '../utils/userUtils';
 import { getApiBaseUrl } from '../utils/apiConfig';
+import { getAppDeviceInfo } from '../utils/deviceUtils';
 
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -123,11 +124,19 @@ export const useAuthStore = create(persist((set, get) => ({
       }
 
       try {
+          const deviceInfo = getAppDeviceInfo();
           const baseUrl = getApiBaseUrl();
           const res = await fetch(`${baseUrl}/api/login`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ identifier: cleanInput, password: cleanPassword })
+              body: JSON.stringify({ 
+                  identifier: cleanInput, 
+                  password: cleanPassword,
+                  platform: deviceInfo.platform,
+                  isNative: deviceInfo.isNative,
+                  userAgent: deviceInfo.userAgent,
+                  appVersion: deviceInfo.appVersion
+              })
           });
           const data = await res.json();
 
@@ -183,4 +192,49 @@ export const useAuthStore = create(persist((set, get) => ({
       
       return { user: updatedUser };
   }),
+  recordAppActivity: async () => {
+    const state = get();
+    if (!state.user) return;
+    const userId = state.user.id;
+    const email = state.user.email;
+    const pingKey = `app_active_ping_${userId || email}`;
+
+    try {
+      const lastPing = sessionStorage.getItem(pingKey);
+      if (lastPing && Date.now() - Number(lastPing) < 10 * 60 * 1000) {
+        return; // Son 10 dakika içinde ping gönderildi
+      }
+    } catch (e) {}
+
+    try {
+      const deviceInfo = getAppDeviceInfo();
+      const baseUrl = getApiBaseUrl();
+      const res = await fetch(`${baseUrl}/api/record-app-activity`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          email,
+          platform: deviceInfo.platform,
+          isNative: deviceInfo.isNative,
+          userAgent: deviceInfo.userAgent,
+          appVersion: deviceInfo.appVersion
+        })
+      });
+
+      if (res.ok) {
+        try {
+          sessionStorage.setItem(pingKey, String(Date.now()));
+        } catch (e) {}
+        const data = await res.json();
+        if (data.success && data.updates) {
+          set(s => ({
+            user: s.user ? stripSensitiveAuthFields({ ...s.user, ...data.updates }) : s.user
+          }));
+        }
+      }
+    } catch (err) {
+      console.warn("App activity ping error:", err);
+    }
+  },
 }), { name: 'travel-auth-storage-v4' }));
