@@ -432,6 +432,8 @@ export const normalizeTurkishTitleCase = (str) => {
     return toTurkishTitleCase(str).trim().replace(/\s+/g, ' ');
 };
 
+export const formatTitleCase = (str) => normalizeTurkishTitleCase(str);
+
 export const getCurrentSessionUser = () => {
     try {
         const raw = localStorage.getItem('travel-auth-storage-v4');

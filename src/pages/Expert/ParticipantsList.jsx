@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronDown, ChevronRight, Plus, Phone, PhoneOff, MessageCircle, X, Search, User as UserIcon, Building, Mail, CheckCircle2, History, Activity, Users, PlaneTakeoff, BellRing, BellOff, Trash2, AlertTriangle, FileSpreadsheet, FileText, Lock, UserPlus, Ticket, KeyRound, Send, Loader2, Settings, Check, AlertCircle, Sparkles, Filter, ExternalLink, Copy, MessageSquare, Info, Eye, EyeOff, Smartphone, Globe, Monitor } from 'lucide-react';
 import { useTourStore } from '../../store/tourStore';
-import { useUserStore } from '../../store/userStore';
+import { useUserStore, formatTitleCase } from '../../store/userStore';
 import ParticipantTransferManager from '../../components/ParticipantTransferManager';
 import BulkParticipantManager from '../../components/BulkParticipantManager';
 import { useAuthStore } from '../../store/authStore';
@@ -680,12 +680,21 @@ export default function ParticipantsList() {
     const [searchError, setSearchError] = useState('');
     const [showAutocomplete, setShowAutocomplete] = useState(false);
 
-    const filteredUsers = users.filter(u =>
-        u.role === 'customer' &&
-        (u.email.toLowerCase().includes(emailQuery.toLowerCase()) ||
-            u.name.toLowerCase().includes(emailQuery.toLowerCase())) &&
-        emailQuery.length > 0
-    );
+    const filteredUsers = (users || []).filter(u => {
+        if (!u || u.role !== 'customer') return false;
+        const q = (emailQuery || '').trim();
+        if (!q) return false;
+        const qNorm = normalizeTurkish(q);
+        const nameNorm = normalizeTurkish(u.name || '');
+        const emailLower = (u.email || '').toLowerCase();
+        const phoneClean = (u.phone || '').replace(/\D/g, '');
+        const qDigits = q.replace(/\D/g, '');
+
+        if (nameNorm.includes(qNorm)) return true;
+        if (emailLower && !emailLower.endsWith('@move.local') && emailLower.includes(q.toLowerCase())) return true;
+        if (qDigits.length >= 3 && phoneClean.includes(qDigits)) return true;
+        return false;
+    });
 
     // New User form state
     const [newCustomerType, setNewCustomerType] = useState('parent'); // 'parent' or 'child'
@@ -1750,58 +1759,117 @@ export default function ParticipantsList() {
         }
     };
 
-    const handleEmailSearch = async () => {
-        if (!emailQuery.trim()) return;
-        setSearchError('');
-
-        const rawQuery = emailQuery.trim();
-        const query = normalizeEmail(rawQuery);
-        const cleanPhoneQuery = rawQuery.replace(/\D/g, '');
-
-        let existing = findUserByEmail(query || rawQuery);
-        if (!existing && cleanPhoneQuery.length >= 7) {
-            existing = users.find(u => {
-                const uPhone = (u.phone || '').replace(/\D/g, '');
-                return uPhone.length >= 7 && (uPhone.endsWith(cleanPhoneQuery.slice(-10)) || cleanPhoneQuery.endsWith(uPhone.slice(-10)));
-            });
-        }
-        if (!existing && query.length >= 3) {
-            existing = users.find(u => u.name && u.name.trim().toLowerCase() === query);
-        }
-
-        if (existing) {
-            if (existing.role !== 'customer') {
+    const selectUserFromAutocomplete = async (u) => {
+        try {
+            setShowAutocomplete(false);
+            if (!u) return;
+            if (u.role !== 'customer') {
                 setSearchError('Sadece müşteri rolündeki kullanıcılar katılımcı olarak eklenebilir!');
                 return;
             }
-            const isAlreadyInTour = participants.some(p => p.id === existing.id || isRealEmailMatch(p.email, existing.email));
+            const isAlreadyInTour = participants.some(p => p.id === u.id || isRealEmailMatch(p.email, u.email));
             if (isAlreadyInTour) {
                 setSearchError('Bu müşteri zaten seyahate kayıtlı!');
-            } else {
-                addParticipantToTour(tourId, existing);
-                const isExistingChild = isUserChild(existing);
-                if (!isExistingChild) {
-                    await sendTourAssignmentEmail(existing.name, existing.email, null, existing.phone);
-                }
-                setSuccessPopup({
-                    title: isExistingChild ? 'Çocuk Katılımcı Eklendi' : 'Katılımcı Başarıyla Eklendi',
-                    description: isExistingChild 
-                        ? `${existing.name} adlı çocuk katılımcı seyahate dahil edildi.` 
-                        : `Kullanıcı sistemde bulundu (${existing.name}) ve seyahate dahil edildi.`,
-                    email: isExistingChild ? undefined : (existing.email || existing.phone),
-                    tourName: tour.name
+                return;
+            }
+            addParticipantToTour(tourId, u);
+            const isExistingChild = isUserChild(u);
+            if (!isExistingChild) {
+                await sendTourAssignmentEmail(u.name, u.email, null, u.phone);
+            }
+            setSuccessPopup({
+                title: isExistingChild ? 'Çocuk Katılımcı Eklendi' : 'Katılımcı Başarıyla Eklendi',
+                description: isExistingChild 
+                    ? `${u.name} adlı çocuk katılımcı seyahate dahil edildi.` 
+                    : `Kullanıcı sistemde bulundu (${u.name}) ve seyahate dahil edildi.`,
+                email: isExistingChild ? undefined : (u.email || u.phone),
+                tourName: tour.name
+            });
+            resetWizard();
+        } catch (err) {
+            console.error("selectUserFromAutocomplete error:", err);
+            setSearchError('Katılımcı eklenirken bir hata oluştu: ' + (err.message || ''));
+        }
+    };
+
+    const handleEmailSearch = async () => {
+        try {
+            if (!emailQuery || !emailQuery.trim()) return;
+            setSearchError('');
+
+            const rawQuery = emailQuery.trim();
+            const query = normalizeEmail(rawQuery);
+            const cleanPhoneQuery = rawQuery.replace(/\D/g, '');
+
+            let existing = findUserByEmail(query || rawQuery);
+            if (!existing && cleanPhoneQuery.length >= 7) {
+                existing = users.find(u => {
+                    const uPhone = (u.phone || '').replace(/\D/g, '');
+                    return uPhone.length >= 7 && (uPhone.endsWith(cleanPhoneQuery.slice(-10)) || cleanPhoneQuery.endsWith(uPhone.slice(-10)));
                 });
-                resetWizard();
             }
-        } else {
-            if (cleanPhoneQuery.length >= 10 && !query.includes('@')) {
-                setNewPhone(formatPhoneNumber(cleanPhoneQuery));
-                setEmailQuery('');
-            } else if (!query.includes('@') && isNaN(query.replace(/\s/g, ''))) {
-                setNewName(formatTitleCase(emailQuery));
-                setEmailQuery('');
+
+            // Name Search (Exact or Partial match)
+            if (!existing && rawQuery.length >= 2) {
+                const normQ = normalizeTurkish(rawQuery);
+                // 1. Exact name
+                existing = users.find(u => u.name && normalizeTurkish(u.name) === normQ);
+                
+                // 2. Single candidate with startsWith or includes
+                if (!existing) {
+                    const candidates = (users || []).filter(u => u.role === 'customer' && u.name && normalizeTurkish(u.name).includes(normQ));
+                    if (candidates.length === 1) {
+                        existing = candidates[0];
+                    } else if (candidates.length > 1) {
+                        setShowAutocomplete(true);
+                        setSearchError(`'${rawQuery}' ile eşleşen ${candidates.length} kayıtlı misafir bulundu. Lütfen listeden seçin.`);
+                        return;
+                    }
+                }
             }
-            setStep(1.5);
+
+            if (existing) {
+                if (existing.role !== 'customer') {
+                    setSearchError('Sadece müşteri rolündeki kullanıcılar katılımcı olarak eklenebilir!');
+                    return;
+                }
+                const isAlreadyInTour = participants.some(p => p.id === existing.id || isRealEmailMatch(p.email, existing.email));
+                if (isAlreadyInTour) {
+                    setSearchError('Bu müşteri zaten seyahate kayıtlı!');
+                } else {
+                    addParticipantToTour(tourId, existing);
+                    const isExistingChild = isUserChild(existing);
+                    if (!isExistingChild) {
+                        await sendTourAssignmentEmail(existing.name, existing.email, null, existing.phone);
+                    }
+                    setSuccessPopup({
+                        title: isExistingChild ? 'Çocuk Katılımcı Eklendi' : 'Katılımcı Başarıyla Eklendi',
+                        description: isExistingChild 
+                            ? `${existing.name} adlı çocuk katılımcı seyahate dahil edildi.` 
+                            : `Kullanıcı sistemde bulundu (${existing.name}) ve seyahate dahil edildi.`,
+                        email: isExistingChild ? undefined : (existing.email || existing.phone),
+                        tourName: tour.name
+                    });
+                    resetWizard();
+                }
+            } else {
+                if (cleanPhoneQuery.length >= 10 && !rawQuery.includes('@')) {
+                    setNewPhone(formatPhoneNumber(cleanPhoneQuery));
+                    setEmailQuery('');
+                    setNewName('');
+                } else if (!rawQuery.includes('@') && isNaN(rawQuery.replace(/\s/g, ''))) {
+                    setNewName(formatTitleCase(rawQuery));
+                    setEmailQuery('');
+                    setNewPhone('');
+                } else {
+                    setNewName('');
+                    setNewPhone('');
+                }
+                setStep(1.5);
+            }
+        } catch (err) {
+            console.error("handleEmailSearch error:", err);
+            setSearchError('Arama sırasında bir hata oluştu: ' + (err.message || ''));
         }
     };
 
@@ -6366,25 +6434,38 @@ export default function ParticipantsList() {
                                             setSearchError('');
                                             setShowAutocomplete(true);
                                         }}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                setShowAutocomplete(false);
+                                                handleEmailSearch();
+                                            }
+                                        }}
                                         style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '12.5px' }}
                                     />
                                 </div>
 
                                 {showAutocomplete && filteredUsers.length > 0 && (
-                                    <div style={{ position: 'absolute', top: '110px', left: 0, right: 0, background: 'white', border: '1px solid #cbd5e1', borderRadius: '10px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', zIndex: 50, overflow: 'hidden' }}>
-                                        {filteredUsers.map(u => (
+                                    <div style={{ maxHeight: '180px', overflowY: 'auto', background: 'white', border: '1px solid #cbd5e1', borderRadius: '10px', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', marginBottom: '14px' }}>
+                                        <div style={{ padding: '6px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: '11px', fontWeight: '700', color: '#64748b' }}>
+                                            Eşleşen Kayıtlı Misafirler ({filteredUsers.length})
+                                        </div>
+                                        {filteredUsers.slice(0, 6).map(u => (
                                             <div
                                                 key={u.id}
-                                                onClick={() => {
-                                                    setEmailQuery(u.email);
-                                                    setShowAutocomplete(false);
-                                                }}
+                                                onClick={() => selectUserFromAutocomplete(u)}
                                                 style={{ padding: '9px 12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                                                 onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                                                 onMouseLeave={e => e.currentTarget.style.background = 'white'}
                                             >
-                                                <span style={{ fontSize: '12.5px', color: 'var(--text-main)', fontWeight: '600' }}>{u.email}</span>
-                                                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>({u.name})</span>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                                    <span style={{ fontSize: '12.5px', color: 'var(--text-main)', fontWeight: '700' }}>{u.name}</span>
+                                                    <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                                        {u.email && !u.email.endsWith('@move.local') ? u.email : (u.phone || 'Kayıtlı Profil')}
+                                                        {u.company ? ` • ${u.company}` : ''}
+                                                    </span>
+                                                </div>
+                                                <span style={{ fontSize: '11.5px', color: 'var(--primary)', fontWeight: '700', background: '#fdf2f8', padding: '3px 8px', borderRadius: '6px' }}>+ Dahil Et</span>
                                             </div>
                                         ))}
                                     </div>
@@ -6400,20 +6481,11 @@ export default function ParticipantsList() {
                             <div style={{ animation: 'slideRight 0.3s ease' }}>
                                 <div style={{ background: '#fef9c3', color: '#854d0e', padding: '12px 14px', borderRadius: '10px', fontSize: '12px', marginBottom: '16px', lineHeight: 1.4 }}>
                                     <b style={{ display: 'block', marginBottom: '6px', fontSize: '12.5px' }}>Kullanıcı tespit edilemedi! ⚠️</b>
-                                    <b>{emailQuery || newPhone || newName}</b> sistemde kayıtlı değil. Bu kişi ilk kez mi bir seyahate katılıyor?
+                                    <b>{newName || emailQuery || newPhone || 'Bu kişi'}</b> sistemde kayıtlı değil. Bu kişi ilk kez mi bir seyahate katılıyor?
                                 </div>
                                 <div style={{ display: 'flex', gap: '10px' }}>
                                     <button onClick={() => setStep(1)} style={{ flex: 1, padding: '9px', borderRadius: '8px', border: '1px solid #cbd5e1', background: 'white', color: 'var(--text-main)', fontWeight: '600', fontSize: '12px', cursor: 'pointer' }}>Hayır, Düzelt</button>
                                     <button onClick={() => {
-                                        const q = (emailQuery || '').trim();
-                                        const cleanP = q.replace(/\D/g, '');
-                                        if (cleanP.length >= 10 && !q.includes('@')) {
-                                            setNewPhone(formatPhoneNumber(cleanP));
-                                            setEmailQuery('');
-                                        } else if (!q.includes('@') && isNaN(q.replace(/\s/g, ''))) {
-                                            setNewName(formatTitleCase(q));
-                                            setEmailQuery('');
-                                        }
                                         setStep(2);
                                     }} style={{ flex: 1, padding: '9px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: '700', fontSize: '12px', cursor: 'pointer' }}>Evet, Doğru</button>
                                 </div>
