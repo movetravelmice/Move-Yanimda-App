@@ -25,6 +25,23 @@ const generateSecurePassword = (fullName) => {
     return prefix + numPart + specialChar;
 };
 
+const isRealEmailMatch = (email1, email2) => {
+    if (!email1 || !email2) return false;
+    const e1 = String(email1).trim().toLowerCase();
+    const e2 = String(email2).trim().toLowerCase();
+    if (!e1 || !e2 || e1 === '-' || e2 === '-') return false;
+    if (e1.endsWith('@move.local') || e1.endsWith('.local') || e1.startsWith('user_') || e1.startsWith('child_')) return false;
+    if (e2.endsWith('@move.local') || e2.endsWith('.local') || e2.startsWith('user_') || e2.startsWith('child_')) return false;
+    return e1 === e2;
+};
+
+const resolveParticipantUser = (p, userList = []) => {
+    if (!p) return null;
+    const gUser = findMatchingUser(p, userList) || 
+                  (Array.isArray(userList) ? userList.find(u => u.id === p.id || isRealEmailMatch(u.email, p.email)) : null);
+    return gUser || p;
+};
+
 const waModalTemplates = [
     {
         key: 'newTourTemplate',
@@ -502,7 +519,7 @@ export default function ParticipantsList() {
             let sentCount = 0;
             
             for (const p of participants) {
-                const globalUser = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email);
+                const globalUser = resolveParticipantUser(p, users);
                 if (!globalUser) continue;
 
                 // Çocuk kullanıcılar e-posta almaz ve bildirim gönderilmez
@@ -652,8 +669,8 @@ export default function ParticipantsList() {
         if (transferTarget && participants.length > 0) {
             const userToOpen = participants.find(p => p.id === transferTarget || p.id === parseInt(transferTarget, 10));
             if (userToOpen) {
-                const globalUser = findMatchingUser(userToOpen, users) || users.find(u => u.id === userToOpen.id || u.email === userToOpen.email) || userToOpen;
-                setSelectedUser(globalUser);
+                const globalUser = resolveParticipantUser(userToOpen, users);
+                setSelectedUser({ ...userToOpen, ...globalUser });
                 setShowTransferSheet(true);
             }
             // Clear URL so it doesn't keep opening on refresh
@@ -665,9 +682,9 @@ export default function ParticipantsList() {
     // Keep selectedUser in sync with real-time Firestore updates
     React.useEffect(() => {
         if (selectedUser) {
-            const upToDate = findMatchingUser(selectedUser, users) || users.find(u => u.id === selectedUser.id || u.email === selectedUser.email);
+            const upToDate = resolveParticipantUser(selectedUser, users);
             if (upToDate && (upToDate.pushEnabled !== selectedUser.pushEnabled || upToDate.phone !== selectedUser.phone || upToDate.email !== selectedUser.email)) {
-                setSelectedUser(upToDate);
+                setSelectedUser(prev => ({ ...prev, ...upToDate }));
             }
         }
     }, [users, selectedUser]);
@@ -783,8 +800,8 @@ export default function ParticipantsList() {
     const handleBack = () => navigate(-1);
 
     const openProfile = (p) => {
-        const globalUser = findMatchingUser(p, users) || users.find(u => u.id === p.id || (u.email && u.email === p.email)) || p;
-        setSelectedUser(globalUser);
+        const globalUser = resolveParticipantUser(p, users);
+        setSelectedUser({ ...p, ...globalUser });
         setCredentialSentMessage(null);
         setShowContactPassword(false);
         setPasswordCopied(false);
@@ -1289,7 +1306,7 @@ export default function ParticipantsList() {
         }
 
         const eligible = participants.filter(p => {
-            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = resolveParticipantUser(p, users);
             if (isUserChild(globalU)) return false;
             const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
             return phone && phone !== '-' && phone.length > 6;
@@ -1313,7 +1330,7 @@ export default function ParticipantsList() {
 
         for (let i = 0; i < eligible.length; i++) {
             const p = eligible[i];
-            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = resolveParticipantUser(p, users);
             const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
             const pName = p.name || globalU.name || 'Katılımcı';
             const pPass = globalU.password || p.password || '123456';
@@ -1390,9 +1407,9 @@ export default function ParticipantsList() {
         }
 
         // Atlanan / Numarası olmayan katılımcılar
-        const nonEligible = participants.filter(p => !eligible.some(ep => (ep.id && ep.id === p.id) || (ep.email && ep.email === p.email) || isUserMatch(ep, p)));
+        const nonEligible = participants.filter(p => !eligible.some(ep => (ep.id && ep.id === p.id) || (isRealEmailMatch(ep.email, p.email)) || isUserMatch(ep, p)));
         const skippedDetails = nonEligible.map(sp => {
-            const globalU = findMatchingUser(sp, users) || users.find(u => u.id === sp.id || u.email === sp.email) || sp;
+            const globalU = resolveParticipantUser(sp, users);
             const isChild = isUserChild(globalU);
             const userPhone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (sp.phone || '')).trim();
             return {
@@ -1457,7 +1474,7 @@ export default function ParticipantsList() {
         }
 
         const eligible = participants.filter(p => {
-            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = resolveParticipantUser(p, users);
             if (isUserChild(globalU)) return false;
             const email = (p.email || globalU.email || '').trim().toLowerCase();
             if (!email || !email.includes('@')) return false;
@@ -1500,7 +1517,7 @@ export default function ParticipantsList() {
 
         for (let i = 0; i < eligible.length; i++) {
             const p = eligible[i];
-            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = resolveParticipantUser(p, users);
             const targetEmail = (p.email || globalU.email || '').trim().toLowerCase();
             const pName = p.name || globalU.name || targetEmail;
             let pPass = (globalU.password || p.password || '').trim();
@@ -1774,7 +1791,7 @@ export default function ParticipantsList() {
                 setSearchError('Sadece müşteri rolündeki kullanıcılar katılımcı olarak eklenebilir!');
                 return;
             }
-            const isAlreadyInTour = participants.some(p => p.id === existing.id || p.email === existing.email);
+            const isAlreadyInTour = participants.some(p => p.id === existing.id || isRealEmailMatch(p.email, existing.email));
             if (isAlreadyInTour) {
                 setSearchError('Bu müşteri zaten seyahate kayıtlı!');
             } else {
@@ -2087,7 +2104,7 @@ export default function ParticipantsList() {
 
                         {/* 2. E-Bilet (PDF) Card */}
                         {(() => {
-                            const userPart = participants.find(p => p.id === selectedUser.id || p.email === selectedUser.email);
+                            const userPart = participants.find(p => p.id === selectedUser.id || isRealEmailMatch(p.email, selectedUser.email));
                             const tickets = (Array.isArray(userPart?.ticketFiles) && userPart.ticketFiles.length > 0)
                                 ? userPart.ticketFiles
                                 : ((Array.isArray(selectedUser?.ticketFiles) && selectedUser.ticketFiles.length > 0)
@@ -3974,14 +3991,14 @@ export default function ParticipantsList() {
         }
 
         const eligible = participants.filter(p => {
-            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = resolveParticipantUser(p, users);
             if (isUserChild(globalU)) return false;
             const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
             return phone && phone !== '-' && phone.length > 6;
         });
         const missingCount = participants.length - eligible.length;
         const missingPhoneAdultsCount = participants.filter(p => {
-            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = resolveParticipantUser(p, users);
             if (isUserChild(globalU)) return false;
             const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
             return !phone || phone === '-' || phone.length <= 6;
@@ -4000,7 +4017,7 @@ export default function ParticipantsList() {
 
             if (participants && participants.length > 0) {
                 const details = participants.map((p, idx) => {
-                    const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+                    const globalU = resolveParticipantUser(p, users);
                     const isChild = isUserChild(globalU);
                     const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
                     const hasPhone = phone && phone !== '-' && phone.length > 6;
@@ -4618,7 +4635,7 @@ export default function ParticipantsList() {
 
     const renderEmailPageView = () => {
         const eligible = participants.filter(p => {
-            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = resolveParticipantUser(p, users);
             if (isUserChild(globalU)) return false;
             const email = (p.email || globalU.email || '').trim().toLowerCase();
             if (!email || !email.includes('@')) return false;
@@ -4627,7 +4644,7 @@ export default function ParticipantsList() {
         });
         const missingCount = participants.length - eligible.length;
         const missingEmailAdultsCount = participants.filter(p => {
-            const globalU = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+            const globalU = resolveParticipantUser(p, users);
             if (isUserChild(globalU)) return false;
             const email = (p.email || globalU.email || '').trim().toLowerCase();
             return !email || !email.includes('@') || email.endsWith('@move.local') || email.endsWith('.local') || isChildEmail(email);
@@ -5816,7 +5833,7 @@ export default function ParticipantsList() {
                                                 <button 
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        const globalP = findMatchingUser(p, users) || users.find(u => u.id === p.id || u.email === p.email) || p;
+                                                        const globalP = resolveParticipantUser(p, users);
                                                         const callPhone = ((globalP.phone && globalP.phone !== '-') ? globalP.phone : (p.phone || '')).trim();
                                                         if (callPhone && callPhone !== '-') {
                                                             window.location.href = `tel:${callPhone}`;
