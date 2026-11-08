@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { formatTitleCase, useUserStore } from './userStore';
-import { isUserChild, getCurrentSessionUser, isStaffSessionUser, isRelatedFamilyOrSelf } from '../utils/userUtils';
+import { isUserChild, getCurrentSessionUser, isStaffSessionUser, isRelatedFamilyOrSelf, isRealEmailMatch, resolveParticipantUser } from '../utils/userUtils';
 
 const excelSerialToDate = (serial) => {
     const s = Number(serial);
@@ -754,7 +754,7 @@ export const useTourStore = create((set, get) => ({
       if (!tour || !tour.rollCall) return;
       
       const attendees = tour.rollCall.attendees || [];
-      const exists = attendees.some(p => p.id === userObj.id || p.email === userObj.email);
+      const exists = attendees.some(p => (userObj.id && p.id === userObj.id) || isRealEmailMatch(p.email, userObj.email));
       
       if (!exists) {
           const newAttendees = [...attendees, { 
@@ -781,7 +781,7 @@ export const useTourStore = create((set, get) => ({
           
           let updatedParticipants = false;
           const newParticipants = tour.participants.map(p => {
-              const globalUser = users.find(u => u.id === p.id || u.email === p.email) || p;
+              const globalUser = resolveParticipantUser(p, users);
               const isChild = isUserChild(globalUser, users);
               if (isChild) return p;
 
@@ -845,7 +845,7 @@ export const useTourStore = create((set, get) => ({
           if (diffHours >= 24) {
               let updatedParticipants = false;
               const newParticipants = (tour.participants || []).map(p => {
-                  const globalUser = users.find(u => u.id === p.id || u.email === p.email) || p;
+                  const globalUser = resolveParticipantUser(p, users);
                   const isChild = isUserChild(globalUser, users);
                   if (isChild) return p;
                   

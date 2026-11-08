@@ -8,7 +8,7 @@ import {
 import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore, formatTitleCase } from '../store/userStore';
-import { isUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, checkEmailDomainTypo, normalizeTurkish } from '../utils/userUtils';
+import { isUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, checkEmailDomainTypo, normalizeTurkish, isRealEmailMatch, resolveParticipantUser } from '../utils/userUtils';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import { sendWelcomeAndActivationWhatsApp, createPasswordSetupLink } from '../services/authLinkService';
 
@@ -230,7 +230,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
     };
 
     const sendTourAssignmentEmail = async (participantName, participantEmail, password = null, participantPhone = '') => {
-        const targetUser = users.find(u => u.email === participantEmail || u.name === participantName);
+        const targetUser = resolveParticipantUser({ name: participantName, email: participantEmail, phone: participantPhone }, users);
         if (isUserChild(targetUser, users) || isChildEmail(participantEmail)) {
             console.log(`Çocuk kullanıcı (${participantName}) için e-posta gönderimi atlandı.`);
             return;
@@ -279,7 +279,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         if (smtpConfig?.host && smtpConfig?.user && canUserReceiveEmail(participantEmail, users) && !isInternalPlaceholder) {
             try {
                 let setupLinkInfo = null;
-                const userObj = targetUser || users.find(u => u.email === participantEmail);
+                const userObj = targetUser || (participantEmail ? users.find(u => isRealEmailMatch(u.email, participantEmail)) : null);
                 if (userObj && userObj.id) {
                     try {
                         setupLinkInfo = await createPasswordSetupLink(userObj);
@@ -861,7 +861,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         try {
             const XLSX = await import('xlsx');
             const rowsToExport = (tour.participants || []).map((p, idx) => {
-                const gu = users.find(u => u.id === p.id || u.email === p.email) || p;
+                const gu = resolveParticipantUser(p, users);
                 const nameParts = (p.name || '').trim().split(' ');
                 const firstName = nameParts.length > 1 ? nameParts.slice(0, -1).join(' ') : (p.name || '');
                 const lastName = nameParts.length > 1 ? nameParts[nameParts.length - 1] : '';
@@ -935,7 +935,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
     if (importReports.length === 0) {
         const currentParticipants = tour.participants || [];
         const synthDetails = currentParticipants.map((p, idx) => {
-            const gu = users.find(u => u.id === p.id || u.email === p.email) || p;
+            const gu = resolveParticipantUser(p, users);
             const isChild = p.isChildProfile || isUserChild(gu, users);
             const isExisting = idx % 3 === 0;
             return {

@@ -3,7 +3,7 @@ import { ChevronLeft, FileText, Upload, Save, Bus, Plus, Trash2, Eye, Download, 
 import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore } from '../store/userStore';
-import { isUserChild, canUserReceiveEmail, isChildEmail } from '../utils/userUtils';
+import { isUserChild, canUserReceiveEmail, isChildEmail, resolveParticipantUser } from '../utils/userUtils';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import ConfirmModal from './ConfirmModal';
 
@@ -174,7 +174,7 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
           const primaryTicket = ticketFiles.length > 0 ? ticketFiles[0] : null;
           await updateParticipantTransfers(tourId, participant.id, existingFlights, transfers, primaryTicket, ticketFiles);
 
-          const globalUser = users.find(u => u.id === participant.id || u.email === participant.email);
+          const globalUser = resolveParticipantUser(participant, users);
           if (!globalUser) {
               alert('Bilet ve Transfer bilgileri kaydedildi, ancak kullanıcı veritabanında bulunamadığı için bildirim gönderilemedi.');
               onClose();

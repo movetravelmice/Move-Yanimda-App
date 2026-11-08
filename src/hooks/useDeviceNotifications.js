@@ -3,7 +3,7 @@ import { useAuthStore } from '../store/authStore';
 import { useNotificationStore } from '../store/notificationStore';
 import { useTourStore } from '../store/tourStore';
 import { useChatStore } from '../store/chatStore';
-import { isUserMatch } from '../utils/userUtils';
+import { isUserMatch, isRealEmailMatch } from '../utils/userUtils';
 import { Capacitor } from '@capacitor/core';
 import { LocalNotifications } from '@capacitor/local-notifications';
 
@@ -163,11 +163,11 @@ export function useDeviceNotifications() {
         if (!user || user.role !== 'customer') return;
         
         tours.forEach(t => {
-            const isParticipant = t.participants?.some(p => isUserMatch(p, user) || p.id === user.id || p.email === user.email);
+            const isParticipant = t.participants?.some(p => isUserMatch(p, user) || (user.id && p.id === user.id) || isRealEmailMatch(p.email, user.email));
             if (!isParticipant) return;
 
             const isActive = t.rollCall?.active && (t.rollCall?.endTime > Date.now());
-            const hasMarkedPresent = (t.rollCall?.attendees || []).some(p => isUserMatch(p, user) || p.id === user.id || p.email === user.email);
+            const hasMarkedPresent = (t.rollCall?.attendees || []).some(p => isUserMatch(p, user) || (user.id && p.id === user.id) || isRealEmailMatch(p.email, user.email));
             
             const prevActiveState = prevRollCallStates.current[t.id];
 
@@ -245,7 +245,7 @@ export function useDeviceNotifications() {
                         if (t.status === 'past' && isExpiredArchivedTour(t.dates)) return false;
 
                         if (user.role === 'customer') {
-                            return t.participants?.some(p => p.id === user.id || p.email === user.email);
+                            return t.participants?.some(p => isUserMatch(p, user) || (user.id && p.id === user.id) || isRealEmailMatch(p.email, user.email));
                         }
                         if (user.role === 'expert' || user.role === 'admin' || user.role === 'ticketing') {
                             return (t.guideName === user.name) || (t.expert?.name === user.name) || (t.expert?.email === user.email) || (t.expert2?.name === user.name) || (t.expert2?.email === user.email);

@@ -5,7 +5,7 @@ import Header from '../../components/Header';
 import { useTourStore, isTourActive } from '../../store/tourStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
-import { findMatchingParticipant, isUserMatch, isUserChild } from '../../utils/userUtils';
+import { findMatchingParticipant, isUserMatch, isUserChild, isRealEmailMatch } from '../../utils/userUtils';
 
 export default function Transfers() {
   const navigate = useNavigate();
@@ -44,7 +44,7 @@ export default function Transfers() {
           return p.avatar;
       }
       if (matched?.avatar) return matched.avatar;
-      if (user?.avatar && (p.id === user?.id || p.email === user?.email)) return user.avatar;
+      if (user?.avatar && (p.id === user?.id || isRealEmailMatch(p.email, user?.email))) return user.avatar;
       if (p.avatar) return p.avatar;
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(p.name || 'M')}&background=D7147A&color=fff&bold=true`;
   };

@@ -39,7 +39,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import { useChatStore } from '../../store/chatStore';
 import { useTourStore, getTourExperts, isTourActive, isTourPast } from '../../store/tourStore';
 import { useUserStore } from '../../store/userStore';
-import { findMatchingParticipant, isUserMatch } from '../../utils/userUtils';
+import { findMatchingParticipant, isUserMatch, isRealEmailMatch } from '../../utils/userUtils';
 import { storage } from '../../lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
@@ -272,8 +272,8 @@ export default function Chat() {
       sColor = '#4ade80';
       
       const pId = resolvedDirectUser.id;
-      const shTours = tours.filter(t => t.status === 'active' && t.participants?.some(p => p.id === pId || p.email === resolvedDirectUser.email));
-      resolvedTour = shTours[0] || tours.find(t => t.participants?.some(p => p.id === pId || p.email === resolvedDirectUser.email));
+      const shTours = tours.filter(t => t.status === 'active' && t.participants?.some(p => (pId && p.id === pId) || isRealEmailMatch(p.email, resolvedDirectUser.email)));
+      resolvedTour = shTours[0] || tours.find(t => t.participants?.some(p => (pId && p.id === pId) || isRealEmailMatch(p.email, resolvedDirectUser.email)));
       
       if (resolvedDirectUser.role === 'customer') {
           subtitle = resolvedTour ? resolvedTour.name : "Müşteri";

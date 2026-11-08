@@ -8,7 +8,7 @@ import BulkParticipantManager from '../../components/BulkParticipantManager';
 import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useNotificationStore } from '../../store/notificationStore';
-import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, normalizeTurkish, normalizeEmail, formatPhoneInputWithoutPrefix, isUserMatch, findMatchingUser } from '../../utils/userUtils';
+import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, normalizeTurkish, normalizeEmail, formatPhoneInputWithoutPrefix, isUserMatch, findMatchingUser, isRealEmailMatch, resolveParticipantUser } from '../../utils/userUtils';
 import { createPasswordSetupLink, sendWelcomeAndActivationWhatsApp } from '../../services/authLinkService';
 
 const generateSecurePassword = (fullName) => {
@@ -23,23 +23,6 @@ const generateSecurePassword = (fullName) => {
     const specialChar = chars[Math.floor(Math.random() * chars.length)];
     
     return prefix + numPart + specialChar;
-};
-
-const isRealEmailMatch = (email1, email2) => {
-    if (!email1 || !email2) return false;
-    const e1 = String(email1).trim().toLowerCase();
-    const e2 = String(email2).trim().toLowerCase();
-    if (!e1 || !e2 || e1 === '-' || e2 === '-') return false;
-    if (e1.endsWith('@move.local') || e1.endsWith('.local') || e1.startsWith('user_') || e1.startsWith('child_')) return false;
-    if (e2.endsWith('@move.local') || e2.endsWith('.local') || e2.startsWith('user_') || e2.startsWith('child_')) return false;
-    return e1 === e2;
-};
-
-const resolveParticipantUser = (p, userList = []) => {
-    if (!p) return null;
-    const gUser = findMatchingUser(p, userList) || 
-                  (Array.isArray(userList) ? userList.find(u => u.id === p.id || isRealEmailMatch(u.email, p.email)) : null);
-    return gUser || p;
 };
 
 const waModalTemplates = [

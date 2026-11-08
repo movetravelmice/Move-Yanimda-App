@@ -2,6 +2,16 @@
  * Utility functions for user and child profile validation and email suppression
  */
 
+export const isRealEmailMatch = (email1, email2) => {
+    if (!email1 || !email2) return false;
+    const e1 = String(email1).trim().toLowerCase();
+    const e2 = String(email2).trim().toLowerCase();
+    if (!e1 || !e2 || e1 === '-' || e2 === '-') return false;
+    if (e1.endsWith('@move.local') || e1.endsWith('.local') || e1.startsWith('user_') || e1.startsWith('child_') || e1.startsWith('cocuk_')) return false;
+    if (e2.endsWith('@move.local') || e2.endsWith('.local') || e2.startsWith('user_') || e2.startsWith('child_') || e2.startsWith('cocuk_')) return false;
+    return e1 === e2;
+};
+
 export const isChildEmail = (email) => {
     if (!email || typeof email !== 'string') return false;
     const lower = email.trim().toLowerCase();
@@ -14,7 +24,7 @@ export const isChildEmail = (email) => {
 export const isUserChild = (u, allUsers = []) => {
     if (!u) return false;
     const userList = Array.isArray(allUsers) ? allUsers : [];
-    const fullUser = (userList.length > 0 ? userList.find(usr => usr.id === u.id || (u.email && usr.email === u.email)) : null) || u;
+    const fullUser = (userList.length > 0 ? userList.find(usr => (u.id && usr.id === u.id) || isRealEmailMatch(usr.email, u.email)) : null) || u;
     if (!fullUser) return false;
 
     // Explicit child profile flag
@@ -192,6 +202,13 @@ export const findMatchingUser = (p, users = []) => {
     }
 
     return best;
+};
+
+export const resolveParticipantUser = (p, userList = []) => {
+    if (!p) return null;
+    const gUser = findMatchingUser(p, userList) || 
+                  (Array.isArray(userList) ? userList.find(u => (p.id && u.id === p.id) || isRealEmailMatch(u.email, p.email)) : null);
+    return gUser || p;
 };
 
 export const canUserReceiveEmail = (u, allUsers = []) => {

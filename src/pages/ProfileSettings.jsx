@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useTourStore, isTourActive, isTourPast } from '../store/tourStore';
 import { useUserStore, formatTitleCase } from '../store/userStore';
-import { normalizePhoneNumber, checkEmailDomainTypo, normalizeTurkishTitleCase } from '../utils/userUtils';
+import { normalizePhoneNumber, checkEmailDomainTypo, normalizeTurkishTitleCase, isRealEmailMatch } from '../utils/userUtils';
 import { triggerDeviceNotification } from '../hooks/useDeviceNotifications';
 import ConfirmModal from '../components/ConfirmModal';
 import { Capacitor, registerPlugin } from '@capacitor/core';
@@ -441,7 +441,7 @@ export default function ProfileSettings({ hideHeader = false }) {
 
   const myTours = tours.filter(t => {
       if (user?.role === 'expert') return (t.guideName === user?.name) || (t.expert?.name === user?.name);
-      if (user?.role === 'customer') return t.participants?.some(p => p.id === user?.id || p.email === user?.email);
+      if (user?.role === 'customer') return t.participants?.some(p => (user?.id && p.id === user?.id) || isRealEmailMatch(p.email, user?.email));
       return true;
   });
   
