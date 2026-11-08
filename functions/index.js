@@ -584,6 +584,26 @@ app.post('/api/users/delete', async (req, res) => {
     }
 });
 
+// 5.1 TOPLU GEÇERSİZ KULLANICI TEMİZLEME (İLETİŞİM BİLGİSİ OLMAYANLAR)
+app.post('/api/admin/clean-invalid-users', async (req, res) => {
+    try {
+        const { userIds } = req.body || {};
+        if (!Array.isArray(userIds) || userIds.length === 0) {
+            return res.status(400).json({ success: false, message: 'Eksik veya boş userIds listesi.' });
+        }
+        const db = admin.firestore();
+        const batch = db.batch();
+        for (const uid of userIds) {
+            batch.delete(db.collection('users').doc(uid));
+        }
+        await batch.commit();
+        return res.json({ success: true, count: userIds.length });
+    } catch (e) {
+        console.error("Batch delete users error:", e);
+        return res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 // ==========================================
 // GÜVENLİ SİSTEM VE KURUMSAL AYARLAR SERVİSİ
 // ==========================================

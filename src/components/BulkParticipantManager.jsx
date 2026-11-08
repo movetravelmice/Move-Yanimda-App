@@ -555,6 +555,29 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 continue;
             }
 
+            // C. Yetişkin İletişim Bilgisi Zorunluluğu:
+            // Excel'de açıkça 'Çocuk' olarak seçilmemiş tüm yetişkinlerin en az bir iletişim bilgisi (Telefon veya E-posta) olmak zorundadır!
+            const cleanDigits = (row.phone || '').replace(/\D/g, '');
+            const hasValidPhone = cleanDigits.length >= 7;
+            const hasValidEmail = Boolean(row.correctedEmail && row.correctedEmail.includes('@') && !row.correctedEmail.endsWith('@move.local') && !row.correctedEmail.endsWith('.local'));
+
+            if (!row.isChildExplicit && !hasValidPhone && !hasValidEmail) {
+                errorRowsCount++;
+                reportDetails.push({
+                    id: `det_${row.rowIdx}_${Date.now()}`,
+                    name: row.name || `Satır ${row.rowIdx + 1}`,
+                    phone: row.phone || '-',
+                    email: row.correctedEmail || row.email || '-',
+                    tcNo: row.tcNo || '',
+                    passportNo: row.passportNo || '',
+                    userType: 'corporate',
+                    company: row.company || '',
+                    status: 'invalid',
+                    reason: 'Yetişkin katılımcıların en az bir iletişim bilgisi (Telefon veya E-posta) olmak zorundadır. Çocuk seçilmediği ve iletişim bilgisi bulunmadığı için aktarılmadı.'
+                });
+                continue;
+            }
+
             if (row.isChildExplicit) {
                 childrenCount++;
             } else {
