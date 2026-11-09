@@ -15,12 +15,12 @@ import {
   X,
   AlertCircle
 } from 'lucide-react';
-import { collection, query, where, getDocs, doc, setDoc } from 'firebase/firestore';
-import { db } from '../../lib/firebase';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore, formatTitleCase } from '../../store/userStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { normalizePhoneNumber, formatPhoneInputWithoutPrefix, checkEmailDomainTypo } from '../../utils/userUtils';
+import { getApiBaseUrl } from '../../utils/apiConfig';
+import { getAppDeviceInfo } from '../../utils/deviceUtils';
 
 export default function RegisterIndividual() {
   const navigate = useNavigate();
@@ -89,54 +89,54 @@ export default function RegisterIndividual() {
     }
 
     setIsLoading(true);
+    setError('');
 
     try {
-      // 1. Check if email already registered in Firestore
-      const usersRef = collection(db, 'users');
-      const emailQuery = query(usersRef, where('email', '==', cleanEmail));
-      const emailSnap = await getDocs(emailQuery);
+      const baseUrl = getApiBaseUrl();
+      const deviceInfo = getAppDeviceInfo();
 
-      if (!emailSnap.empty) {
-        setError('Bu e-posta adresi ile zaten kayıtlı bir hesap bulunmaktadır. Lütfen giriş yapın.');
+      const res = await fetch(`${baseUrl}/api/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          firstName: cleanFirst,
+          lastName: cleanLast,
+          email: cleanEmail,
+          phone: cleanPhone,
+          password: cleanPass,
+          platform: deviceInfo.platform,
+          isNative: deviceInfo.isNative,
+          userAgent: deviceInfo.userAgent,
+          appVersion: deviceInfo.appVersion
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setError(data.message || 'Kayıt oluşturulurken bir hata oluştu.');
         setIsLoading(false);
         return;
       }
 
-      // 2. Generate unique corporate user record (with access to both corporate & individual tools)
-      const userId = 'cust_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
-      const fullName = formatTitleCase(`${cleanFirst} ${cleanLast}`);
-      const safeName = encodeURIComponent(fullName);
-      const avatarUrl = `https://ui-avatars.com/api/?name=${safeName}&background=2563eb&color=fff&bold=true`;
+      // Update auth store with user & token
+      useAuthStore.setState({ 
+        user: data.user, 
+        token: data.token, 
+        activeMode: 'corporate' 
+      });
 
-      const newUser = {
-        id: userId,
-        name: fullName,
-        email: cleanEmail,
-        phone: cleanPhone ? normalizePhoneNumber(cleanPhone) : '-',
-        password: cleanPass,
-        avatar: avatarUrl,
-        userType: 'corporate',
-        role: 'customer',
-        company: 'Move Travel & Mice',
-        status: 'Aktif',
-        createdAt: new Date().toISOString()
-      };
-
-      // 3. Save to Firestore
-      await setDoc(doc(db, 'users', userId), newUser);
-
-      // 4. Update userStore state
+      // Update userStore if users array exists
       const currentUsers = useUserStore.getState().users;
-      useUserStore.setState({ users: [newUser, ...currentUsers] });
+      if (Array.isArray(currentUsers)) {
+        useUserStore.setState({ users: [data.user, ...currentUsers] });
+      }
 
-      // 5. Authenticate user immediately
-      useAuthStore.setState({ user: newUser, activeMode: 'corporate' });
-
-      // 6. Direct to main dashboard
+      // Direct to main dashboard
       navigate('/dashboard');
     } catch (err) {
       console.error("Bireysel kayıt hatası:", err);
-      setError('Kayıt oluşturulurken bir hata oluştu: ' + (err.message || 'Lütfen tekrar deneyin.'));
+      setError('Kayıt oluşturulurken bir hata oluştu: ' + (err.message || 'Lütfen internet bağlantınızı kontrol edip tekrar deneyin.'));
     } finally {
       setIsLoading(false);
     }

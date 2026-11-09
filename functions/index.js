@@ -388,6 +388,133 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
+// 1.05 GÜVENLİ BİREYSEL KAYIT (REGISTER) ENDPOINT'İ
+app.post('/api/register', async (req, res) => {
+    try {
+        const { firstName, lastName, email, phone, password, platform, isNative, userAgent, appVersion } = req.body || {};
+        
+        const cleanFirst = (firstName || '').trim();
+        const cleanLast = (lastName || '').trim();
+        const cleanEmail = normalizeUserEmail(email);
+        const cleanPhone = (phone || '').trim();
+        const cleanPassword = (password || '').trim();
+
+        if (!cleanFirst || !cleanLast) {
+            return res.status(400).json({ success: false, message: 'Lütfen adınızı ve soyadınızı girin.' });
+        }
+
+        if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+            return res.status(400).json({ success: false, message: 'Lütfen geçerli bir e-posta adresi girin.' });
+        }
+
+        if (cleanPassword.length < 6) {
+            return res.status(400).json({ success: false, message: 'Şifreniz en az 6 karakter olmalıdır.' });
+        }
+
+        // Rate limit: Max 5 kayıt denemesi / 10 dakika
+        const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+        const rateKey = `register_${clientIp}`;
+        if (!checkHttpRateLimit(rateKey, 5, 10 * 60 * 1000)) {
+            return res.status(429).json({
+                success: false,
+                message: 'Çok fazla kayıt denemesi yapıldı. Güvenliğiniz için lütfen birkaç dakika sonra tekrar deneyin.'
+            });
+        }
+
+        const db = admin.firestore();
+        
+        // 1. E-posta sistemde zaten var mı?
+        const existingEmailSnap = await db.collection('users').where('email', '==', cleanEmail).get();
+        if (!existingEmailSnap.empty) {
+            return res.status(400).json({
+                success: false,
+                message: 'Bu e-posta adresi ile zaten kayıtlı bir hesap bulunmaktadır. Lütfen giriş yapın.'
+            });
+        }
+
+        // 2. Telefon numarası sistemde zaten var mı?
+        const cleanPhoneDigits = cleanPhone.replace(/\D/g, '');
+        if (cleanPhoneDigits.length >= 10) {
+            const allUsersSnap = await db.collection('users').get();
+            const phoneMatch = allUsersSnap.docs.some(docSnap => {
+                const u = docSnap.data();
+                const uDigits = (u.phone || '').replace(/\D/g, '');
+                return uDigits.length >= 10 && (uDigits.endsWith(cleanPhoneDigits.slice(-10)) || cleanPhoneDigits.endsWith(uDigits.slice(-10)));
+            });
+            if (phoneMatch) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Bu telefon numarası ile zaten kayıtlı bir hesap bulunmaktadır. Lütfen giriş yapın.'
+                });
+            }
+        }
+
+        // 3. Yeni kullanıcı profili oluştur
+        const userId = 'cust_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+        const fullName = `${cleanFirst} ${cleanLast}`.trim();
+        const safeName = encodeURIComponent(fullName);
+        const avatarUrl = `https://ui-avatars.com/api/?name=${safeName}&background=2563eb&color=fff&bold=true`;
+        const nowIso = new Date().toISOString();
+
+        const isNativeApp = Boolean(isNative || platform === 'ios' || platform === 'android');
+        const resolvedPlatform = isNativeApp ? (platform === 'android' ? 'android' : 'ios') : 'web';
+
+        // Telefonu standart formatta kaydet
+        let formattedPhone = cleanPhone;
+        if (cleanPhoneDigits.length === 10) {
+            formattedPhone = `+90 ${cleanPhoneDigits.slice(0, 3)} ${cleanPhoneDigits.slice(3, 6)} ${cleanPhoneDigits.slice(6, 8)} ${cleanPhoneDigits.slice(8, 10)}`;
+        } else if (cleanPhoneDigits.length === 12 && cleanPhoneDigits.startsWith('90')) {
+            const d10 = cleanPhoneDigits.slice(2);
+            formattedPhone = `+90 ${d10.slice(0, 3)} ${d10.slice(3, 6)} ${d10.slice(6, 8)} ${d10.slice(8, 10)}`;
+        } else if (!cleanPhone || cleanPhone === '-') {
+            formattedPhone = '-';
+        }
+
+        const newUser = {
+            id: userId,
+            name: fullName,
+            email: cleanEmail,
+            phone: formattedPhone,
+            password: cleanPassword,
+            avatar: avatarUrl,
+            userType: 'corporate',
+            role: 'customer',
+            company: 'Move Travel & Mice',
+            status: 'Aktif',
+            createdAt: nowIso,
+            lastLoginAt: nowIso,
+            lastPlatform: resolvedPlatform,
+            isNative: isNativeApp,
+            hasInstalledApp: isNativeApp,
+            loginCount: 1,
+            appVersion: appVersion || '2.4.8',
+            kvkkAccepted: true,
+            kvkkAcceptedAt: nowIso,
+            deviceInfo: {
+                platform: resolvedPlatform,
+                isNative: isNativeApp,
+                userAgent: userAgent || '',
+                updatedAt: nowIso
+            }
+        };
+
+        await db.collection('users').doc(userId).set(newUser);
+
+        const token = generateSessionToken(newUser);
+        const safeUser = stripSensitiveFields(newUser);
+
+        return res.json({
+            success: true,
+            user: safeUser,
+            token: token,
+            message: 'Hesabınız başarıyla oluşturuldu.'
+        });
+    } catch (err) {
+        console.error("Register API error:", err);
+        return res.status(500).json({ success: false, message: 'Kayıt oluşturulurken bir sunucu hatası oluştu.' });
+    }
+});
+
 // 1.1 APP AKTİVİTE VE CİHAZ BİLGİSİ KAYDI (UYGULAMAYI AÇTIĞINDA / ARKA PLANDA)
 app.post('/api/record-app-activity', async (req, res) => {
     try {
