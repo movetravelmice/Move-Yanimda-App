@@ -6096,7 +6096,157 @@ export default function ParticipantsList() {
                                         e.currentTarget.style.transform = 'translateY(0)';
                                     }}
                                 >
-                                    {/* Üst Satır: Bilet İkonu, Katılımcı Bilgileri, Arama/Sohbet Butonları */}
+                                    {/* 1. En Üst Satır: Bilet Bilgisi Alanı ve Yatay Çizgi */}
+                                    <div 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (hasTicketPdf && primaryTicketUrl) {
+                                                window.open(primaryTicketUrl, '_blank');
+                                            } else {
+                                                setSelectedUser({
+                                                    ...globalP,
+                                                    ...p,
+                                                    id: p.id,
+                                                    participantId: p.id,
+                                                    userId: globalP?.id || p.id,
+                                                    ticketPdf: p.ticketPdf || globalP?.ticketPdf || null,
+                                                    ticketFiles: (Array.isArray(p.ticketFiles) && p.ticketFiles.length > 0) ? p.ticketFiles : (Array.isArray(globalP?.ticketFiles) ? globalP.ticketFiles : [])
+                                                });
+                                                setShowTransferSheet(true);
+                                            }
+                                        }}
+                                        style={{ 
+                                            width: '100%', 
+                                            paddingBottom: '8px', 
+                                            marginBottom: '10px', 
+                                            borderBottom: '1px solid #e2e8f0', 
+                                            display: 'flex', 
+                                            alignItems: 'center', 
+                                            justifyContent: 'space-between',
+                                            gap: '8px',
+                                            cursor: 'pointer',
+                                            boxSizing: 'border-box'
+                                        }}
+                                        title={hasTicketPdf ? `${ticketFileName} (Görüntülemek için tıklayın)` : "Bilet yüklemek için tıklayın"}
+                                    >
+                                        {hasTicketPdf ? (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+                                                <div style={{
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    borderRadius: '5px',
+                                                    background: '#fef2f2',
+                                                    border: '1px solid #fee2e2',
+                                                    color: '#dc2626',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>
+                                                    <FileText size={10} strokeWidth={2.5} />
+                                                </div>
+                                                <span style={{ 
+                                                    fontSize: '11px', 
+                                                    fontWeight: '600', 
+                                                    color: '#334155', 
+                                                    whiteSpace: 'nowrap', 
+                                                    overflow: 'hidden', 
+                                                    textOverflow: 'ellipsis',
+                                                    letterSpacing: '-0.1px' 
+                                                }}>
+                                                    {ticketFileName}
+                                                </span>
+                                                {ticketCount > 1 && (
+                                                    <span style={{ 
+                                                        fontSize: '9.5px', 
+                                                        background: '#dcfce7', 
+                                                        color: '#15803d', 
+                                                        border: '1px solid #bbf7d0', 
+                                                        padding: '0 5px', 
+                                                        borderRadius: '8px', 
+                                                        fontWeight: '700', 
+                                                        flexShrink: 0,
+                                                        lineHeight: '14px' 
+                                                    }}>
+                                                        +{ticketCount - 1}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
+                                                <div style={{
+                                                    width: '18px',
+                                                    height: '18px',
+                                                    borderRadius: '5px',
+                                                    background: '#f8fafc',
+                                                    border: '1px solid #e2e8f0',
+                                                    color: '#94a3b8',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    flexShrink: 0
+                                                }}>
+                                                    <FileText size={10} strokeWidth={2} />
+                                                </div>
+                                                <span style={{ 
+                                                    fontSize: '11px', 
+                                                    fontWeight: '500', 
+                                                    color: '#94a3b8',
+                                                    whiteSpace: 'nowrap',
+                                                    overflow: 'hidden',
+                                                    textOverflow: 'ellipsis'
+                                                }}>
+                                                    Katılımcıya henüz bilet yüklenmedi
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Sağ Aksiyon: Aç / İndir veya Bilet Ekle */}
+                                        {hasTicketPdf ? (
+                                            primaryTicketUrl && (
+                                                <a 
+                                                    href={primaryTicketUrl} 
+                                                    target="_blank" 
+                                                    rel="noreferrer" 
+                                                    onClick={(e) => e.stopPropagation()} 
+                                                    style={{ 
+                                                        fontSize: '10.5px', 
+                                                        fontWeight: '600', 
+                                                        color: '#16a34a', 
+                                                        textDecoration: 'none', 
+                                                        display: 'inline-flex', 
+                                                        alignItems: 'center', 
+                                                        gap: '3px', 
+                                                        flexShrink: 0, 
+                                                        padding: '1px 6px', 
+                                                        borderRadius: '6px', 
+                                                        background: '#f0fdf4', 
+                                                        border: '1px solid #bbf7d0',
+                                                        transition: 'all 0.15s ease'
+                                                    }}
+                                                    title="Bileti Yeni Sekmede Aç"
+                                                >
+                                                    <span>Aç</span>
+                                                    <ExternalLink size={9} />
+                                                </a>
+                                            )
+                                        ) : (
+                                            <span style={{ 
+                                                fontSize: '10px', 
+                                                fontWeight: '600', 
+                                                color: '#0284c7', 
+                                                padding: '1px 6px', 
+                                                borderRadius: '6px', 
+                                                background: '#f0f9ff', 
+                                                border: '1px solid #bae6fd',
+                                                flexShrink: 0
+                                            }}>
+                                                + Bilet Ekle
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* 2. Orta Satır: Bilet İkonu, Katılımcı Bilgileri, Arama/Sohbet Butonları */}
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
                                         {/* Ticket Icon Indicator (Replaces Avatar) */}
                                     <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -6317,159 +6467,9 @@ export default function ParticipantsList() {
                                     </div>
                                 </div>
 
-                                {/* Yatay Çizgi ve Bilet Bilgisi Alanı */}
-                                <div 
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (hasTicketPdf && primaryTicketUrl) {
-                                            window.open(primaryTicketUrl, '_blank');
-                                        } else {
-                                            setSelectedUser({
-                                                ...globalP,
-                                                ...p,
-                                                id: p.id,
-                                                participantId: p.id,
-                                                userId: globalP?.id || p.id,
-                                                ticketPdf: p.ticketPdf || globalP?.ticketPdf || null,
-                                                ticketFiles: (Array.isArray(p.ticketFiles) && p.ticketFiles.length > 0) ? p.ticketFiles : (Array.isArray(globalP?.ticketFiles) ? globalP.ticketFiles : [])
-                                            });
-                                            setShowTransferSheet(true);
-                                        }
-                                    }}
-                                    style={{ 
-                                        width: '100%', 
-                                        marginTop: '8px', 
-                                        paddingTop: '7px', 
-                                        borderTop: '1px solid #e2e8f0', 
-                                        display: 'flex', 
-                                        alignItems: 'center', 
-                                        justifyContent: 'space-between',
-                                        gap: '8px',
-                                        cursor: 'pointer',
-                                        boxSizing: 'border-box'
-                                    }}
-                                    title={hasTicketPdf ? `${ticketFileName} (Görüntülemek için tıklayın)` : "Bilet yüklemek için tıklayın"}
-                                >
-                                    {hasTicketPdf ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
-                                            <div style={{
-                                                width: '18px',
-                                                height: '18px',
-                                                borderRadius: '5px',
-                                                background: '#fef2f2',
-                                                border: '1px solid #fee2e2',
-                                                color: '#dc2626',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                flexShrink: 0
-                                            }}>
-                                                <FileText size={10} strokeWidth={2.5} />
-                                            </div>
-                                            <span style={{ 
-                                                fontSize: '11px', 
-                                                fontWeight: '600', 
-                                                color: '#334155', 
-                                                whiteSpace: 'nowrap', 
-                                                overflow: 'hidden', 
-                                                textOverflow: 'ellipsis',
-                                                letterSpacing: '-0.1px' 
-                                            }}>
-                                                {ticketFileName}
-                                            </span>
-                                            {ticketCount > 1 && (
-                                                <span style={{ 
-                                                    fontSize: '9.5px', 
-                                                    background: '#dcfce7', 
-                                                    color: '#15803d', 
-                                                    border: '1px solid #bbf7d0', 
-                                                    padding: '0 5px', 
-                                                    borderRadius: '8px', 
-                                                    fontWeight: '700', 
-                                                    flexShrink: 0,
-                                                    lineHeight: '14px' 
-                                                }}>
-                                                    +{ticketCount - 1}
-                                                </span>
-                                            )}
-                                        </div>
-                                    ) : (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1 }}>
-                                            <div style={{
-                                                width: '18px',
-                                                height: '18px',
-                                                borderRadius: '5px',
-                                                background: '#f8fafc',
-                                                border: '1px solid #e2e8f0',
-                                                color: '#94a3b8',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                flexShrink: 0
-                                            }}>
-                                                <FileText size={10} strokeWidth={2} />
-                                            </div>
-                                            <span style={{ 
-                                                fontSize: '11px', 
-                                                fontWeight: '500', 
-                                                color: '#94a3b8',
-                                                whiteSpace: 'nowrap',
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis'
-                                            }}>
-                                                Katılımcıya henüz bilet yüklenmedi
-                                            </span>
-                                        </div>
-                                    )}
-
-                                    {/* Sağ Aksiyon: Aç / İndir veya Bilet Ekle */}
-                                    {hasTicketPdf ? (
-                                        primaryTicketUrl && (
-                                            <a 
-                                                href={primaryTicketUrl} 
-                                                target="_blank" 
-                                                rel="noreferrer" 
-                                                onClick={(e) => e.stopPropagation()} 
-                                                style={{ 
-                                                    fontSize: '10.5px', 
-                                                    fontWeight: '600', 
-                                                    color: '#16a34a', 
-                                                    textDecoration: 'none', 
-                                                    display: 'inline-flex', 
-                                                    alignItems: 'center', 
-                                                    gap: '3px', 
-                                                    flexShrink: 0, 
-                                                    padding: '1px 6px', 
-                                                    borderRadius: '6px', 
-                                                    background: '#f0fdf4', 
-                                                    border: '1px solid #bbf7d0',
-                                                    transition: 'all 0.15s ease'
-                                                }}
-                                                title="Bileti Yeni Sekmede Aç"
-                                            >
-                                                <span>Aç</span>
-                                                <ExternalLink size={9} />
-                                            </a>
-                                        )
-                                    ) : (
-                                        <span style={{ 
-                                            fontSize: '10px', 
-                                            fontWeight: '600', 
-                                            color: '#0284c7', 
-                                            padding: '1px 6px', 
-                                            borderRadius: '6px', 
-                                            background: '#f0f9ff', 
-                                            border: '1px solid #bae6fd',
-                                            flexShrink: 0
-                                        }}>
-                                            + Bilet Ekle
-                                        </span>
-                                    )}
-                                </div>
-
                                 {/* Ayrıcı ve Şık İletişim Şeridi */}
                                 <div style={{ 
-                                    marginTop: '8px', 
+                                    marginTop: '10px', 
                                     padding: '7px 10px', 
                                     background: '#f8fafc', 
                                     borderRadius: '12px', 
