@@ -6167,21 +6167,8 @@ export default function ParticipantsList() {
                                                         Bilet
                                                     </span>
 
-                                                    {/* PDF İkonu */}
-                                                    <div style={{
-                                                        width: '18px',
-                                                        height: '18px',
-                                                        borderRadius: '5px',
-                                                        background: '#fef2f2',
-                                                        border: '1px solid #fee2e2',
-                                                        color: '#dc2626',
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        flexShrink: 0
-                                                    }}>
-                                                        <FileText size={10} strokeWidth={2.5} />
-                                                    </div>
+                                                    {/* Dikey Çizgi */}
+                                                    <div style={{ width: '1px', height: '13px', background: '#cbd5e1', flexShrink: 0, margin: '0 2px' }} />
 
                                                     {/* Dosya Adı */}
                                                     <span style={{ 
@@ -6229,6 +6216,8 @@ export default function ParticipantsList() {
                                                     }}>
                                                         Bilet
                                                     </span>
+                                                    {/* Dikey Çizgi */}
+                                                    <div style={{ width: '1px', height: '13px', background: '#e2e8f0', flexShrink: 0, margin: '0 2px' }} />
                                                     <span style={{ 
                                                         fontSize: '11px', 
                                                         fontWeight: '500', 
