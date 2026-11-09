@@ -3,7 +3,7 @@ import { ChevronLeft, FileText, Upload, Save, Bus, Plus, Trash2, Eye, Download, 
 import { useTourStore } from '../store/tourStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore } from '../store/userStore';
-import { isUserChild, canUserReceiveEmail, isChildEmail, resolveParticipantUser } from '../utils/userUtils';
+import { isUserChild, canUserReceiveEmail, isChildEmail, resolveParticipantUser, normalizeTurkish, isRealEmailMatch } from '../utils/userUtils';
 import { getApiBaseUrl } from '../utils/apiConfig';
 import ConfirmModal from './ConfirmModal';
 
@@ -11,8 +11,17 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
   const { tours, updateParticipantTransfers } = useTourStore();
   const { smtpConfig } = useSettingsStore();
   const { users } = useUserStore();
-  const tour = tours.find(t => t.id === tourId);
-  const existingPart = tour?.participants.find(p => p.id === participant.id);
+  const tour = tours.find(t => String(t.id) === String(tourId));
+  const existingPart = tour?.participants?.find(p => 
+      p.id === participant.id || 
+      (participant.participantId && p.id === participant.participantId) ||
+      (p.tcNo && participant.tcNo && String(p.tcNo) === String(participant.tcNo)) ||
+      (p.passportNo && participant.passportNo && String(p.passportNo).trim().toUpperCase() === String(participant.passportNo).trim().toUpperCase()) ||
+      (p.name && participant.name && normalizeTurkish(p.name) === normalizeTurkish(participant.name)) ||
+      (p.email && participant.email && isRealEmailMatch(p.email, participant.email))
+  ) || participant;
+
+  const targetParticipantId = existingPart?.id || participant?.participantId || participant?.id;
 
   const fileInputRef = useRef(null);
   const [ticketFiles, setTicketFiles] = useState([]);
@@ -28,15 +37,22 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
 
   useEffect(() => {
     let initialFiles = [];
-    if (Array.isArray(existingPart?.ticketFiles) && existingPart.ticketFiles.length > 0) {
-       initialFiles = [...existingPart.ticketFiles];
-    } else if (existingPart?.ticketPdf) {
-       initialFiles = [existingPart.ticketPdf];
+    const sourcePart = existingPart || participant;
+
+    if (Array.isArray(sourcePart?.ticketFiles) && sourcePart.ticketFiles.length > 0) {
+       initialFiles = [...sourcePart.ticketFiles];
+    } else if (Array.isArray(participant?.ticketFiles) && participant.ticketFiles.length > 0) {
+       initialFiles = [...participant.ticketFiles];
+    } else if (sourcePart?.ticketPdf) {
+       initialFiles = [sourcePart.ticketPdf];
+    } else if (participant?.ticketPdf) {
+       initialFiles = [participant.ticketPdf];
     }
     setTicketFiles(initialFiles);
     
-    if (existingPart?.transfers?.length > 0) {
-        setTransfersInput(existingPart.transfers.map(tr => ({
+    const sourceTransfers = (sourcePart?.transfers?.length > 0 ? sourcePart.transfers : (participant?.transfers?.length > 0 ? participant.transfers : []));
+    if (sourceTransfers.length > 0) {
+        setTransfersInput(sourceTransfers.map(tr => ({
             id: Math.random(),
             desc: tr.desc || '',
             vehicle: tr.vehicle || '',
@@ -45,7 +61,7 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
             time: tr.date && tr.date.includes(',') ? tr.date.split(',')[1].trim() : ''
         })));
     }
-  }, [existingPart]);
+  }, [existingPart, participant]);
 
   const formatFileSize = (bytes) => {
       if (!bytes || bytes === 0) return '0 KB';
@@ -81,7 +97,7 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
                   ? crypto.randomUUID() 
                   : `${Date.now()}_${Math.random().toString(36).substring(2, 12)}_${Math.random().toString(36).substring(2, 12)}`;
               const safeFileName = `ticket_${secureRandomId}.${fileExt || 'pdf'}`;
-              const storageRef = ref(storage, `tours/${tourId}/tickets/${participant.id}/${safeFileName}`);
+              const storageRef = ref(storage, `tours/${tourId}/tickets/${targetParticipantId}/${safeFileName}`);
               
               const snapshot = await uploadBytes(storageRef, file);
               const downloadUrl = await getDownloadURL(snapshot.ref);
@@ -137,9 +153,9 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
           });
 
           // Keep any existing flights for backwards compatibility if any
-          const existingFlights = existingPart?.flights || [];
+          const existingFlights = existingPart?.flights || participant?.flights || [];
           const primaryTicket = ticketFiles.length > 0 ? ticketFiles[0] : null;
-          await updateParticipantTransfers(tourId, participant.id, existingFlights, transfers, primaryTicket, ticketFiles);
+          await updateParticipantTransfers(tourId, targetParticipantId, existingFlights, transfers, primaryTicket, ticketFiles);
 
           alert(ticketFiles.length > 1 
             ? `${ticketFiles.length} Adet Bilet PDF ve Transfer bilgileri başarıyla kaydedildi!` 
@@ -170,9 +186,9 @@ export default function ParticipantTransferManager({ tourId, participant, onClos
               }
           });
 
-          const existingFlights = existingPart?.flights || [];
+          const existingFlights = existingPart?.flights || participant?.flights || [];
           const primaryTicket = ticketFiles.length > 0 ? ticketFiles[0] : null;
-          await updateParticipantTransfers(tourId, participant.id, existingFlights, transfers, primaryTicket, ticketFiles);
+          await updateParticipantTransfers(tourId, targetParticipantId, existingFlights, transfers, primaryTicket, ticketFiles);
 
           const globalUser = resolveParticipantUser(participant, users);
           if (!globalUser) {

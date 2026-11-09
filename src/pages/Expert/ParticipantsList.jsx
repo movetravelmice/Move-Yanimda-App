@@ -661,7 +661,15 @@ export default function ParticipantsList() {
             const userToOpen = participants.find(p => p.id === transferTarget || p.id === parseInt(transferTarget, 10));
             if (userToOpen) {
                 const globalUser = resolveParticipantUser(userToOpen, users);
-                setSelectedUser({ ...userToOpen, ...globalUser });
+                setSelectedUser({
+                    ...globalUser,
+                    ...userToOpen,
+                    id: userToOpen.id,
+                    participantId: userToOpen.id,
+                    userId: globalUser?.id || userToOpen.id,
+                    ticketPdf: userToOpen.ticketPdf || globalUser?.ticketPdf || null,
+                    ticketFiles: (Array.isArray(userToOpen.ticketFiles) && userToOpen.ticketFiles.length > 0) ? userToOpen.ticketFiles : (Array.isArray(globalUser?.ticketFiles) ? globalUser.ticketFiles : [])
+                });
                 setShowTransferSheet(true);
             }
             // Clear URL so it doesn't keep opening on refresh
@@ -801,7 +809,15 @@ export default function ParticipantsList() {
 
     const openProfile = (p) => {
         const globalUser = resolveParticipantUser(p, users);
-        setSelectedUser({ ...p, ...globalUser });
+        setSelectedUser({
+            ...globalUser,
+            ...p,
+            id: p.id,
+            participantId: p.id,
+            userId: globalUser?.id || p.id,
+            ticketPdf: p.ticketPdf || globalUser?.ticketPdf || null,
+            ticketFiles: (Array.isArray(p.ticketFiles) && p.ticketFiles.length > 0) ? p.ticketFiles : (Array.isArray(globalUser?.ticketFiles) ? globalUser.ticketFiles : [])
+        });
         setCredentialSentMessage(null);
         setShowContactPassword(false);
         setPasswordCopied(false);
@@ -3350,7 +3366,20 @@ export default function ParticipantsList() {
                     <ParticipantTransferManager
                         tourId={tourId}
                         participant={selectedUser}
-                        onClose={() => setShowTransferSheet(false)}
+                        onClose={() => {
+                            setShowTransferSheet(false);
+                            const freshTour = useTourStore.getState().tours.find(t => String(t.id) === String(tourId));
+                            const freshP = freshTour?.participants?.find(p => p.id === (selectedUser.participantId || selectedUser.id));
+                            if (freshP) {
+                                setSelectedUser(prev => ({
+                                    ...prev,
+                                    ticketPdf: freshP.ticketPdf,
+                                    ticketFiles: freshP.ticketFiles,
+                                    transfers: freshP.transfers,
+                                    flights: freshP.flights
+                                }));
+                            }
+                        }}
                     />
                 )}
             </div>
@@ -6058,7 +6087,15 @@ export default function ParticipantsList() {
                                         <div 
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                setSelectedUser(globalP);
+                                                setSelectedUser({
+                                                    ...globalP,
+                                                    ...p,
+                                                    id: p.id,
+                                                    participantId: p.id,
+                                                    userId: globalP?.id || p.id,
+                                                    ticketPdf: p.ticketPdf || globalP?.ticketPdf || null,
+                                                    ticketFiles: (Array.isArray(p.ticketFiles) && p.ticketFiles.length > 0) ? p.ticketFiles : (Array.isArray(globalP?.ticketFiles) ? globalP.ticketFiles : [])
+                                                });
                                                 setShowTransferSheet(true);
                                             }}
                                             style={{ 
@@ -6736,7 +6773,20 @@ export default function ParticipantsList() {
                 <ParticipantTransferManager
                     tourId={tourId}
                     participant={selectedUser}
-                    onClose={() => setShowTransferSheet(false)}
+                    onClose={() => {
+                        setShowTransferSheet(false);
+                        const freshTour = useTourStore.getState().tours.find(t => String(t.id) === String(tourId));
+                        const freshP = freshTour?.participants?.find(p => p.id === (selectedUser.participantId || selectedUser.id));
+                        if (freshP) {
+                            setSelectedUser(prev => ({
+                                ...prev,
+                                ticketPdf: freshP.ticketPdf,
+                                ticketFiles: freshP.ticketFiles,
+                                transfers: freshP.transfers,
+                                flights: freshP.flights
+                            }));
+                        }
+                    }}
                 />
             )}
 
