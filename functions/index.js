@@ -1826,8 +1826,9 @@ app.post('/api/send-whatsapp', async (req, res) => {
 
         let resData = await response.json();
 
-        // Fallback: If OTP button component failed because template in Meta was created without button, retry with only body
-        if (!response.ok && isAuthTemplate && bodyData.template.components && bodyData.template.components.length > 1) {
+        // Fallback: If button component failed (e.g. template does not have button or wrong button parameters), retry with body only
+        if (!response.ok && bodyData.template.components && bodyData.template.components.length > 1) {
+            console.warn(`WhatsApp template ${templateName} button failed, retrying with body only:`, resData);
             const fallbackBodyData = {
                 ...bodyData,
                 template: {
@@ -1835,7 +1836,10 @@ app.post('/api/send-whatsapp', async (req, res) => {
                     components: [
                         {
                             type: "body",
-                            parameters: [{ type: "text", text: codeVal }]
+                            parameters: (parameters || []).map(p => ({
+                                type: "text",
+                                text: String(p)
+                            }))
                         }
                     ]
                 }

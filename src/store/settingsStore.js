@@ -341,7 +341,7 @@ export const useSettingsStore = create((set, get) => ({
                   templateName: templateName,
                   languageCode: 'tr',
                   parameters: parameters,
-                  buttonParameter: buttonParameter || (parameters && parameters.length > 1 ? parameters[1] : undefined)
+                  buttonParameter: buttonParameter || undefined
               })
           });
           const data = await res.json();
