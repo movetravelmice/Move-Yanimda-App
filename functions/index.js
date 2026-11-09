@@ -297,35 +297,48 @@ app.post('/api/login', async (req, res) => {
         }
 
         const db = admin.firestore();
-        const snap = await db.collection('users').get();
+        let candidates = [];
 
-        const matchCandidate = (u) => {
-            if (!u) return false;
-            const uEmail = normalizeUserEmail(u.email);
-            if (uEmail && uEmail === cleanEmail) return true;
-            if (!cleanInput.includes('@') && uEmail && uEmail.split('@')[0] === cleanEmail) return true;
-            if (u.name && normalizeUserTurkish(u.name) === normalizeUserTurkish(cleanInput)) return true;
-            if (cleanDigits.length >= 10) {
-                const uPhone = (u.phone || '').replace(/\D/g, '');
-                if (uPhone && (uPhone.endsWith(cleanDigits.slice(-10)) || cleanDigits.endsWith(uPhone.slice(-10)))) return true;
-                if (uEmail && uEmail.includes(cleanDigits.slice(-10))) return true;
+        // Hızlı Sorgu: E-posta adresi girildiyse doğrudan Firestore indeksli sorgu
+        if (cleanEmail && cleanEmail.includes('@')) {
+            const emailSnap = await db.collection('users').where('email', '==', cleanEmail).limit(5).get();
+            if (!emailSnap.empty) {
+                emailSnap.forEach(docSnap => {
+                    candidates.push({ id: docSnap.id, ...docSnap.data() });
+                });
             }
-            if (cleanDigits.length === 11) {
-                const uTc = String(u.tcNo || u.tc || '').replace(/\D/g, '');
-                if (uTc && uTc === cleanDigits) return true;
-            }
-            return false;
-        };
+        }
 
-        const candidates = [];
-        snap.forEach(docSnap => {
-            const d = { id: docSnap.id, ...docSnap.data() };
-            if (matchCandidate(d)) {
-                candidates.push(d);
-            }
-        });
+        // Eğer e-posta ile bulunamadıysa veya telefon/isim/tc girildiyse tüm adayları tara
+        if (candidates.length === 0) {
+            const matchCandidate = (u) => {
+                if (!u) return false;
+                const uEmail = normalizeUserEmail(u.email);
+                if (uEmail && uEmail === cleanEmail) return true;
+                if (!cleanInput.includes('@') && uEmail && uEmail.split('@')[0] === cleanEmail) return true;
+                if (u.name && normalizeUserTurkish(u.name) === normalizeUserTurkish(cleanInput)) return true;
+                if (cleanDigits.length >= 10) {
+                    const uPhone = (u.phone || '').replace(/\D/g, '');
+                    if (uPhone && (uPhone.endsWith(cleanDigits.slice(-10)) || cleanDigits.endsWith(uPhone.slice(-10)))) return true;
+                    if (uEmail && uEmail.includes(cleanDigits.slice(-10))) return true;
+                }
+                if (cleanDigits.length === 11) {
+                    const uTc = String(u.tcNo || u.tc || '').replace(/\D/g, '');
+                    if (uTc && uTc === cleanDigits) return true;
+                }
+                return false;
+            };
 
-        console.log("LOGIN ATTEMPT:", { cleanEmail, snapCount: snap.size, candidatesCount: candidates.length, candidates: candidates.map(c => ({ id: c.id, email: c.email, hasPass: Boolean(c.password) })) });
+            const snap = await db.collection('users').get();
+            snap.forEach(docSnap => {
+                const d = { id: docSnap.id, ...docSnap.data() };
+                if (matchCandidate(d)) {
+                    candidates.push(d);
+                }
+            });
+        }
+
+        console.log("LOGIN ATTEMPT:", { cleanEmail, candidatesCount: candidates.length, candidates: candidates.map(c => ({ id: c.id, email: c.email, hasPass: Boolean(c.password) })) });
         if (candidates.length > 0) {
             console.log("PASS DEBUG:", {
                 inputPass: cleanPassword,
@@ -2874,5 +2887,11 @@ exports.dailyFuelPriceUpdate = onSchedule({
 });
 
 // Expose the Express app as a single Cloud Function named 'backend' using Gen 2
-exports.backend = onRequest({ cors: true, maxInstances: 10 }, app);
+exports.backend = onRequest({ 
+    cors: true, 
+    maxInstances: 10,
+    minInstances: 1,
+    memory: "512MiB",
+    timeoutSeconds: 120
+}, app);
 

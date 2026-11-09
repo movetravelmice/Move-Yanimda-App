@@ -7,18 +7,15 @@ import { Capacitor } from '@capacitor/core';
 export const getApiBaseUrl = () => {
   // 1. Capacitor Native (Android & iOS)
   if (Capacitor.isNativePlatform()) {
-    return 'https://move-yanimda.web.app';
+    return 'https://app.move.com.tr';
   }
 
-  // 2. Browser Environment
+  // 2. Browser Environment (Localhost, app.move.com.tr, move-yanimda.web.app)
+  // Relative path '' ensures same-origin requests without CORS preflight delays.
   if (typeof window !== 'undefined') {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    // If local dev server with active port, relative URL is handled by Vite proxy
-    if (isLocalhost && window.location.port !== '') {
-      return '';
-    }
+    return '';
   }
 
-  // 3. Production Web / PWA
-  return 'https://move-yanimda.web.app';
+  // 3. Fallback
+  return 'https://app.move.com.tr';
 };
