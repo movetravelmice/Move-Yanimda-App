@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { formatTitleCase, useUserStore } from './userStore';
-import { isUserChild, getCurrentSessionUser, isStaffSessionUser, isRelatedFamilyOrSelf, isRealEmailMatch, resolveParticipantUser } from '../utils/userUtils';
+import { isUserChild, getCurrentSessionUser, isStaffSessionUser, isRelatedFamilyOrSelf, isRealEmailMatch, resolveParticipantUser, normalizeTurkish } from '../utils/userUtils';
 
 const excelSerialToDate = (serial) => {
     const s = Number(serial);
@@ -516,7 +516,16 @@ export const useTourStore = create((set, get) => ({
       const cleanEmail = (userObj.email || '').trim().toLowerCase();
       const cleanName = formatTitleCase(userObj.name || '');
       const sanitizedUserObj = { ...userObj, name: cleanName, email: cleanEmail };
-      const exists = (tour.participants || []).some(p => p.id === userObj.id || (p.email && p.email.trim().toLowerCase() === cleanEmail));
+      const exists = (tour.participants || []).some(p => {
+          if (p.id === userObj.id) return true;
+          if (userObj.tcNo && p.tcNo && p.tcNo === userObj.tcNo) return true;
+          if (cleanEmail && !cleanEmail.endsWith('@move.local') && !cleanEmail.endsWith('.local') && p.email && p.email.trim().toLowerCase() === cleanEmail) {
+              const pNorm = normalizeTurkish(p.name);
+              const uNorm = normalizeTurkish(userObj.name);
+              if (pNorm && uNorm && pNorm === uNorm) return true;
+          }
+          return false;
+      });
       if (!exists) {
           const newParticipants = [...(tour.participants || []), sanitizedUserObj];
           const sanitized = sanitizeForFirestore(newParticipants);

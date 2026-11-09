@@ -603,13 +603,29 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 });
             }
 
-            // 3. Match by Real Email (ignoring placeholders)
+            // 3. Match by Real Email (ignoring placeholders) ONLY IF names do not clash (prevents generic company email collision)
             if (!existingUser && (row.email || row.correctedEmail)) {
                 const isPlaceholder = (em) => !em || em.endsWith('@move.local') || em.endsWith('.local');
                 existingUser = currentUsersList.find(u => {
                     const uEmail = (u.email || '').trim().toLowerCase();
                     if (isPlaceholder(uEmail)) return false;
-                    return (row.email && uEmail === row.email.toLowerCase()) || (row.correctedEmail && uEmail === row.correctedEmail.toLowerCase());
+                    const emailMatches = (row.email && uEmail === row.email.toLowerCase()) || (row.correctedEmail && uEmail === row.correctedEmail.toLowerCase());
+                    if (!emailMatches) return false;
+
+                    // If both have names, verify they do not clash (e.g. Süleyman vs Ali with shared info@sual.com.tr)
+                    if (row.name && u.name) {
+                        const uNorm = normalizeTurkish(u.name);
+                        const rowNorm = normalizeTurkish(row.name);
+                        const uParts = uNorm.split(/\s+/).filter(Boolean);
+                        const rowParts = rowNorm.split(/\s+/).filter(Boolean);
+                        const uSurname = uParts[uParts.length - 1];
+                        const rowSurname = rowParts[rowParts.length - 1];
+                        const uFirst = uParts[0];
+                        const rowFirst = rowParts[0];
+                        if (uFirst && rowFirst && uFirst !== rowFirst) return false;
+                        if (uSurname && rowSurname && uSurname !== rowSurname) return false;
+                    }
+                    return true;
                 });
             }
 
@@ -662,12 +678,29 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                     await updateUser(existingUser.id, userUpdates);
                 }
 
-                const isAlreadyInTour = tour.participants?.some(p => 
-                    p.id === existingUser.id || 
-                    (p.email && p.email.trim().toLowerCase() === existingUser.email?.trim().toLowerCase()) || 
-                    (row.correctedEmail && p.email && p.email.trim().toLowerCase() === row.correctedEmail.toLowerCase()) ||
-                    (row.tcNo && p.tcNo && p.tcNo === row.tcNo)
-                );
+                const isAlreadyInTour = tour.participants?.some(p => {
+                    if (p.id === existingUser.id) return true;
+                    if (row.tcNo && p.tcNo && p.tcNo === row.tcNo) return true;
+                    if (existingUser.tcNo && p.tcNo && p.tcNo === existingUser.tcNo) return true;
+                    // Email match: Only consider already in tour if name does not clash
+                    const isPlaceholder = (em) => !em || em.endsWith('@move.local') || em.endsWith('.local');
+                    const cleanRowEmail = (row.correctedEmail || row.email || existingUser.email || '').trim().toLowerCase();
+                    const cleanPEmail = (p.email || '').trim().toLowerCase();
+                    if (cleanRowEmail && cleanPEmail && !isPlaceholder(cleanRowEmail) && !isPlaceholder(cleanPEmail) && cleanRowEmail === cleanPEmail) {
+                        const pNorm = normalizeTurkish(p.name);
+                        const rowNorm = normalizeTurkish(row.name || existingUser.name);
+                        const pParts = pNorm.split(/\s+/).filter(Boolean);
+                        const rowParts = rowNorm.split(/\s+/).filter(Boolean);
+                        const pSurname = pParts[pParts.length - 1];
+                        const rowSurname = rowParts[rowParts.length - 1];
+                        const pFirst = pParts[0];
+                        const rowFirst = rowParts[0];
+                        if ((!pFirst || !rowFirst || pFirst === rowFirst) && (!pSurname || !rowSurname || pSurname === rowSurname)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                });
 
                 if (isAlreadyInTour) {
                     alreadyInTourCount++;

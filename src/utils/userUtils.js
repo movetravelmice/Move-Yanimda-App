@@ -207,7 +207,7 @@ export const findMatchingUser = (p, users = []) => {
 export const resolveParticipantUser = (p, userList = []) => {
     if (!p) return null;
     const gUser = findMatchingUser(p, userList) || 
-                  (Array.isArray(userList) ? userList.find(u => (p.id && u.id === p.id) || isRealEmailMatch(u.email, p.email)) : null);
+                  (Array.isArray(userList) ? userList.find(u => (p.id && u.id === p.id) || (isRealEmailMatch(u.email, p.email) && isUserMatch(p, u))) : null);
     return gUser || p;
 };
 
