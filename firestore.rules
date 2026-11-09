@@ -24,7 +24,8 @@ service cloud.firestore {
 
     // 1.1. Tek kullanımlık şifre belirleme / oturum tokenları
     match /auth_tokens/{tokenId} {
-      allow read, create, update: if isValidPayloadSize();
+      allow read: if true;
+      allow create, update: if isValidPayloadSize();
       allow delete: if true;
     }
 

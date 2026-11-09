@@ -9,7 +9,14 @@ import { useAuthStore } from '../../store/authStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useNotificationStore } from '../../store/notificationStore';
 import { isUserChild as checkUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, normalizeTurkish, normalizeEmail, formatPhoneInputWithoutPrefix, isUserMatch, findMatchingUser, isRealEmailMatch, resolveParticipantUser } from '../../utils/userUtils';
-import { createPasswordSetupLink, sendWelcomeAndActivationWhatsApp } from '../../services/authLinkService';
+import { getApiBaseUrl } from '../../utils/apiConfig';
+import { 
+    createPasswordSetupLink, 
+    sendWelcomeAndActivationWhatsApp,
+    sendActivationOnlyWhatsApp,
+    sendTourRegistrationOnlyWhatsApp,
+    sendTourParticipantWhatsAppSequence 
+} from '../../services/authLinkService';
 
 const generateSecurePassword = (fullName) => {
     const nameStr = (fullName || '').replace(/[^a-zA-ZğüşıöçĞÜŞİÖÇ]/g, '');
@@ -598,6 +605,7 @@ export default function ParticipantsList() {
     const actionsMenuRef = useRef(null);
 
     const [showWhatsAppPage, setShowWhatsAppPage] = useState(false);
+    const [sendingWaParticipantId, setSendingWaParticipantId] = useState(null);
     const [selectedWaReportForView, setSelectedWaReportForView] = useState(null);
     const [waReportSearchQuery, setWaReportSearchQuery] = useState('');
     const [waReportFilterTab, setWaReportFilterTab] = useState('');
@@ -1654,11 +1662,11 @@ export default function ParticipantsList() {
         });
     };
 
-    const sendTourAssignmentEmail = async (participantName, participantEmail, password = null, participantPhone = '') => {
-        const targetUser = users.find(u => u.email === participantEmail || u.name === participantName);
+    const sendTourAssignmentEmail = async (participantName, participantEmail, password = null, participantPhone = '', userObj = null) => {
+        const targetUser = userObj || users.find(u => (participantEmail && u.email === participantEmail) || (participantName && u.name === participantName));
         if (isUserChild(targetUser) || isChildEmail(participantEmail)) {
             console.log(`Çocuk kullanıcı (${participantName}) için e-posta ve bildirim gönderimi atlandı.`);
-            return;
+            return { emailSent: false, waActivationSent: false, waTourSent: false };
         }
 
         let phone = participantPhone;
@@ -1667,41 +1675,32 @@ export default function ParticipantsList() {
         }
         const isInternalPlaceholder = participantEmail && (participantEmail.endsWith('@move.local') || participantEmail.endsWith('.local'));
 
+        let waActivationSent = false;
+        let waTourSent = false;
+
+        // WhatsApp Bildirimleri (Aktivasyon & Seyahat Kaydı)
         if (phone && phone !== '-' && phone.trim().length > 6) {
-            if (password) {
-                // Yeni kullanıcı eklendiğinde sırasıyla:
-                // 1) welcome_customer
-                // 2) welcome_account_activation
-                sendWelcomeAndActivationWhatsApp(targetUser || {
-                    id: targetUser?.id || participantEmail,
+            try {
+                const userForWa = targetUser || {
+                    id: targetUser?.id || userObj?.id || participantEmail,
                     name: participantName,
                     phone: phone,
                     email: participantEmail
-                }).then(() => {
-                    // 3) tour_registration (2 params: Name, Tour Name)
-                    useSettingsStore.getState().sendWhatsAppNotification(
-                        phone,
-                        'newTourTemplate',
-                        [participantName, tour.name]
-                    );
-                }).catch(err => {
-                    console.warn("sendWelcomeAndActivationWhatsApp in sendTourAssignmentEmail error:", err);
-                    useSettingsStore.getState().sendWhatsAppNotification(
-                        phone,
-                        'newTourTemplate',
-                        [participantName, tour.name]
-                    );
+                };
+
+                const waSeq = await sendTourParticipantWhatsAppSequence(userForWa, tour?.name || 'Seyahat', {
+                    sendActivation: true,
+                    sendTour: true
                 });
-            } else {
-                // 1) tour_registration (2 params: Name, Tour Name)
-                useSettingsStore.getState().sendWhatsAppNotification(
-                    phone,
-                    'newTourTemplate',
-                    [participantName, tour.name]
-                );
+
+                waActivationSent = !!waSeq.activationSent;
+                waTourSent = !!waSeq.tourSent;
+            } catch (waErr) {
+                console.warn(`WhatsApp sequence error for ${participantName}:`, waErr);
             }
         }
 
+        let emailSent = false;
         if (canUserReceiveEmail(participantEmail, users) && !isInternalPlaceholder) {
             if (smtpConfig?.host && smtpConfig?.user) {
                 try {
@@ -1720,17 +1719,16 @@ export default function ParticipantsList() {
                     }
 
                     let setupLinkInfo = null;
-                    const userObj = targetUser || users.find(u => u.email === participantEmail || u.name === participantName);
-                    if (userObj && userObj.id) {
+                    const finalUserObj = targetUser || users.find(u => u.email === participantEmail || u.name === participantName);
+                    if (finalUserObj && finalUserObj.id) {
                         try {
-                            setupLinkInfo = await createPasswordSetupLink(userObj);
+                            setupLinkInfo = await createPasswordSetupLink(finalUserObj);
                         } catch (lnkErr) {
                             console.warn("Setup link generation error in sendTourAssignmentEmail:", lnkErr);
                         }
                     }
 
-                    // Determine base URL: Use current origin in dev, or the production cloud functions URL
-                    const baseUrl = window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://move-yanimda.web.app';
+                    const baseUrl = getApiBaseUrl();
                     const res = await fetch(`${baseUrl}/api/send-tour-email`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -1746,9 +1744,11 @@ export default function ParticipantsList() {
                         })
                     });
 
-                    if (!res.ok) {
+                    if (res.ok) {
+                        emailSent = true;
+                    } else {
                         const err = await res.json().catch(() => ({}));
-                        alert("Mail Gönderim Hatası: " + (err.message || `Sunucu ${res.status} hatası döndürdü.`));
+                        console.warn("Mail Gönderim Uyarısı:", err.message || res.status);
                     }
                 } catch(e) {
                     console.error("Email send error", e);
@@ -1757,6 +1757,295 @@ export default function ParticipantsList() {
                 console.log("SMTP ayarları bulunamadı, e-posta gönderimi atlandı.");
             }
         }
+
+        // Katılımcının kartında anında görünmesi için tur kayıtlarını güncelle
+        if (waActivationSent || waTourSent || emailSent) {
+            try {
+                const updatedParts = (tour?.participants || []).map(tp => {
+                    const isTarget = (userObj?.id && tp.id === userObj.id) ||
+                                     (targetUser?.id && tp.id === targetUser.id) ||
+                                     (participantEmail && tp.email && tp.email.toLowerCase() === participantEmail.toLowerCase()) ||
+                                     (tp.name && tp.name.toLowerCase() === participantName.toLowerCase());
+                    if (isTarget) {
+                        return {
+                            ...tp,
+                            emailSent: emailSent || tp.emailSent,
+                            activationWaSent: waActivationSent || tp.activationWaSent,
+                            tourWaSent: waTourSent || tp.tourWaSent,
+                            lastWaSentAt: (waActivationSent || waTourSent) ? Date.now() : tp.lastWaSentAt
+                        };
+                    }
+                    return tp;
+                });
+
+                const nowIso = new Date().toISOString();
+                const dateFormattedStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const newReports = [];
+                if (waActivationSent) {
+                    newReports.push({
+                        id: 'wa_rep_act_' + Date.now(),
+                        type: 'whatsapp',
+                        templateKey: 'accountActivationTemplate',
+                        templateTitle: 'Hesap Aktivasyonu & Şifre Belirleme Şablonu',
+                        createdAt: nowIso,
+                        dateFormatted: dateFormattedStr,
+                        totalRecipients: 1,
+                        successCount: 1,
+                        failCount: 0,
+                        details: [{ id: targetUser?.id || userObj?.id || participantEmail, name: participantName, phone, status: 'success' }]
+                    });
+                }
+                if (waTourSent) {
+                    newReports.push({
+                        id: 'wa_rep_tour_' + (Date.now() + 1),
+                        type: 'whatsapp',
+                        templateKey: 'newTourTemplate',
+                        templateTitle: 'Seyahat Kaydı Şablonu',
+                        createdAt: nowIso,
+                        dateFormatted: dateFormattedStr,
+                        totalRecipients: 1,
+                        successCount: 1,
+                        failCount: 0,
+                        details: [{ id: targetUser?.id || userObj?.id || participantEmail, name: participantName, phone, status: 'success' }]
+                    });
+                }
+
+                const existingReports = tour?.whatsappReports || [];
+                await editTour(tourId, {
+                    participants: updatedParts,
+                    whatsappReports: [...newReports, ...existingReports].slice(0, 30)
+                });
+            } catch (partUpErr) {
+                console.warn("Could not save participant comm flags to tour:", partUpErr);
+            }
+        }
+
+        return { emailSent, waActivationSent, waTourSent };
+    };
+
+    const handleSendSingleWa = async (p, templateKey) => {
+        const globalU = resolveParticipantUser(p, users);
+        if (isUserChild(globalU)) {
+            alert('Çocuk profillerine doğrudan WhatsApp mesajı iletilmez.');
+            return;
+        }
+
+        const phone = ((globalU.phone && globalU.phone !== '-') ? globalU.phone : (p.phone || '')).trim();
+        if (!phone || phone === '-' || phone.length < 7) {
+            alert('Katılımcının kayıtlı geçerli bir telefon numarası bulunamadı.');
+            return;
+        }
+
+        const opKey = `${p.id}_${templateKey}`;
+        setSendingWaParticipantId(opKey);
+
+        try {
+            const userForWa = globalU || {
+                id: p.id,
+                name: p.name,
+                phone: phone,
+                email: p.email
+            };
+
+            let isSuccess = false;
+            let setupUrl = null;
+            const pName = p.name || globalU.name || 'Değerli Misafirimiz';
+
+            if (templateKey === 'accountActivationTemplate') {
+                const actRes = await sendActivationOnlyWhatsApp(userForWa);
+                isSuccess = !!actRes?.success;
+                setupUrl = actRes?.setupUrl;
+            } else if (templateKey === 'newTourTemplate') {
+                const tourRes = await sendTourRegistrationOnlyWhatsApp(userForWa, tour?.name || 'Seyahat');
+                isSuccess = !!tourRes?.success;
+            }
+
+            if (isSuccess) {
+                const updatedParts = (tour?.participants || []).map(tp => {
+                    if (tp.id === p.id || (p.email && tp.email?.toLowerCase() === p.email.toLowerCase())) {
+                        return {
+                            ...tp,
+                            activationWaSent: templateKey === 'accountActivationTemplate' ? true : tp.activationWaSent,
+                            tourWaSent: templateKey === 'newTourTemplate' ? true : tp.tourWaSent,
+                            lastWaSentAt: Date.now()
+                        };
+                    }
+                    return tp;
+                });
+
+                const nowIso = new Date().toISOString();
+                const dateFormattedStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const newReport = {
+                    id: 'wa_rep_' + Date.now(),
+                    type: 'whatsapp',
+                    templateKey,
+                    templateTitle: templateKey === 'accountActivationTemplate' ? 'Hesap Aktivasyonu & Şifre Belirleme Şablonu' : 'Seyahat Kaydı Şablonu',
+                    createdAt: nowIso,
+                    dateFormatted: dateFormattedStr,
+                    totalRecipients: 1,
+                    successCount: 1,
+                    failCount: 0,
+                    details: [{
+                        id: p.id,
+                        name: pName,
+                        phone,
+                        status: 'success'
+                    }]
+                };
+
+                const existingReports = tour?.whatsappReports || [];
+                await editTour(tourId, {
+                    participants: updatedParts,
+                    whatsappReports: [newReport, ...existingReports].slice(0, 30)
+                });
+
+                setSuccessPopup({
+                    title: 'WhatsApp İletildi',
+                    description: `${pName} adlı misafire ${templateKey === 'accountActivationTemplate' ? 'Hesap Aktivasyonu' : 'Seyahat Kaydı'} WhatsApp mesajı başarıyla iletildi.`,
+                    type: 'success'
+                });
+            } else {
+                alert('WhatsApp mesajı iletilemedi. Lütfen WhatsApp servis bağlantısını ve alıcı numarasını kontrol edin.');
+            }
+        } catch (err) {
+            console.error("Single WA error:", err);
+            alert('Mesaj gönderilirken hata oluştu: ' + err.message);
+        } finally {
+            setSendingWaParticipantId(null);
+        }
+    };
+
+    const handleSendAllPendingWhatsApp = async () => {
+        const eligible = participants.filter(p => {
+            const globalU = resolveParticipantUser(p, users);
+            if (isUserChild(globalU)) return false;
+            const comm = getParticipantCommStatus(p, globalU);
+            return comm.hasPhone && (!comm.waActivationSent || !comm.waTourSent);
+        });
+
+        if (eligible.length === 0) {
+            setSuccessPopup({
+                title: 'Bekleyen Bildirim Yok',
+                description: 'Tüm katılımcıların Aktivasyon ve Seyahat WhatsApp bildirimleri zaten iletilmiş durumda.',
+                type: 'info'
+            });
+            return;
+        }
+
+        if (!window.confirm(`${eligible.length} katılımcının eksik olan Aktivasyon ve Seyahat WhatsApp mesajları sırayla iletilecektir. Devam etmek istiyor musunuz?`)) {
+            return;
+        }
+
+        setIsSendingBatchWa(true);
+        let successCount = 0;
+        let failCount = 0;
+        const actDetails = [];
+        const tourDetails = [];
+        let updatedParts = [...(tour?.participants || [])];
+
+        for (let i = 0; i < eligible.length; i++) {
+            const p = eligible[i];
+            const globalU = resolveParticipantUser(p, users);
+            const pName = p.name || globalU.name || 'Katılımcı';
+            const comm = getParticipantCommStatus(p, globalU);
+            const userForWa = globalU || p;
+
+            setBatchWaProgress({ current: i + 1, total: eligible.length, name: pName, successCount, failCount });
+
+            let actSent = comm.waActivationSent;
+            let tourSent = comm.waTourSent;
+
+            if (!actSent) {
+                const actRes = await sendActivationOnlyWhatsApp(userForWa);
+                if (actRes.success) {
+                    actSent = true;
+                    actDetails.push({ id: p.id, name: pName, phone: userForWa.phone, status: 'success' });
+                } else {
+                    actDetails.push({ id: p.id, name: pName, phone: userForWa.phone, status: 'failed' });
+                }
+                await new Promise(r => setTimeout(r, 1000));
+            }
+
+            if (!tourSent) {
+                const trRes = await sendTourRegistrationOnlyWhatsApp(userForWa, tour.name);
+                if (trRes.success) {
+                    tourSent = true;
+                    tourDetails.push({ id: p.id, name: pName, phone: userForWa.phone, status: 'success' });
+                } else {
+                    tourDetails.push({ id: p.id, name: pName, phone: userForWa.phone, status: 'failed' });
+                }
+            }
+
+            if (actSent || tourSent) {
+                successCount++;
+                updatedParts = updatedParts.map(tp => {
+                    if (tp.id === p.id || (p.email && tp.email?.toLowerCase() === p.email.toLowerCase())) {
+                        return {
+                            ...tp,
+                            activationWaSent: actSent,
+                            tourWaSent: tourSent,
+                            lastWaSentAt: Date.now()
+                        };
+                    }
+                    return tp;
+                });
+            } else {
+                failCount++;
+            }
+
+            await new Promise(r => setTimeout(r, 500));
+        }
+
+        const nowIso = new Date().toISOString();
+        const dateFormattedStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        const newReports = [];
+        if (actDetails.length > 0) {
+            newReports.push({
+                id: 'wa_rep_act_' + Date.now(),
+                type: 'whatsapp',
+                templateKey: 'accountActivationTemplate',
+                templateTitle: 'Hesap Aktivasyonu & Şifre Belirleme Şablonu',
+                createdAt: nowIso,
+                dateFormatted: dateFormattedStr,
+                totalRecipients: actDetails.length,
+                successCount: actDetails.filter(d => d.status === 'success').length,
+                failCount: actDetails.filter(d => d.status === 'failed').length,
+                details: actDetails
+            });
+        }
+        if (tourDetails.length > 0) {
+            newReports.push({
+                id: 'wa_rep_tour_' + (Date.now() + 1),
+                type: 'whatsapp',
+                templateKey: 'newTourTemplate',
+                templateTitle: 'Seyahat Kaydı Şablonu',
+                createdAt: nowIso,
+                dateFormatted: dateFormattedStr,
+                totalRecipients: tourDetails.length,
+                successCount: tourDetails.filter(d => d.status === 'success').length,
+                failCount: tourDetails.filter(d => d.status === 'failed').length,
+                details: tourDetails
+            });
+        }
+
+        const existingReports = tour?.whatsappReports || [];
+        await editTour(tourId, {
+            participants: updatedParts,
+            whatsappReports: [...newReports, ...existingReports].slice(0, 30)
+        });
+
+        setIsSendingBatchWa(false);
+        setBatchWaProgress(null);
+        setSuccessPopup({
+            title: 'Toplu WhatsApp Gönderimi Tamamlandı',
+            description: `${successCount} katılımcıya eksik WhatsApp bildirimleri başarıyla ulaştırıldı.`,
+            stats: [
+                { label: 'Toplam', value: eligible.length },
+                { label: 'Başarılı', value: successCount, color: '#16a34a' },
+                { label: 'Başarısız', value: failCount, color: failCount > 0 ? '#dc2626' : '#64748b' }
+            ],
+            type: failCount === eligible.length ? 'error' : 'success'
+        });
     };
 
     const selectUserFromAutocomplete = async (u) => {
@@ -1775,7 +2064,7 @@ export default function ParticipantsList() {
             addParticipantToTour(tourId, u);
             const isExistingChild = isUserChild(u);
             if (!isExistingChild) {
-                await sendTourAssignmentEmail(u.name, u.email, null, u.phone);
+                await sendTourAssignmentEmail(u.name, u.email, null, u.phone, u);
             }
             setSuccessPopup({
                 title: isExistingChild ? 'Çocuk Katılımcı Eklendi' : 'Katılımcı Başarıyla Eklendi',
@@ -1840,7 +2129,7 @@ export default function ParticipantsList() {
                     addParticipantToTour(tourId, existing);
                     const isExistingChild = isUserChild(existing);
                     if (!isExistingChild) {
-                        await sendTourAssignmentEmail(existing.name, existing.email, null, existing.phone);
+                        await sendTourAssignmentEmail(existing.name, existing.email, null, existing.phone, existing);
                     }
                     setSuccessPopup({
                         title: isExistingChild ? 'Çocuk Katılımcı Eklendi' : 'Katılımcı Başarıyla Eklendi',
@@ -1964,8 +2253,8 @@ export default function ParticipantsList() {
                 description: `${newUser.name} adlı çocuk profili başarıyla oluşturuldu${parentNames ? ' ve ' + parentNames + ' hesabına bağlandı.' : '.'}`
             });
         } else {
-            if (newUser.email) {
-                await sendTourAssignmentEmail(newUser.name, newUser.email, newUserPassword, newUser.phone);
+            if (newUser.email || (newUser.phone && newUser.phone !== '-')) {
+                await sendTourAssignmentEmail(newUser.name, newUser.email, newUserPassword, newUser.phone, newUser);
             }
             setSuccessPopup({
                 title: 'Yeni Profil Oluşturuldu',
@@ -5259,6 +5548,40 @@ export default function ParticipantsList() {
                                     </div>
                                 </button>
 
+                                {/* 2.1. Bekleyen Aktivasyon & Seyahat Gönder */}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowActionsMenu(false);
+                                        handleSendAllPendingWhatsApp();
+                                    }}
+                                    style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
+                                        padding: '9px 12px',
+                                        borderRadius: '10px',
+                                        border: 'none',
+                                        background: 'transparent',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        transition: 'background 0.15s'
+                                    }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#fef3c7'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                                    title="Eksik olan Aktivasyon ve Seyahat bildirimlerini tüm katılımcılara sırayla iletir"
+                                >
+                                    <div style={{ width: '30px', height: '30px', borderRadius: '8px', background: '#fef3c7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706', flexShrink: 0 }}>
+                                        <Send size={15} />
+                                    </div>
+                                    <div style={{ width: '1px', height: '22px', background: '#e2e8f0', flexShrink: 0 }} />
+                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <span style={{ fontSize: '11.5px', fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap' }}>Bekleyen Aktivasyon & Seyahat Gönder</span>
+                                        <span style={{ fontSize: '9.5px', color: '#b45309', whiteSpace: 'nowrap' }}>Eksik bildirimleri tamamla</span>
+                                    </div>
+                                </button>
+
                                 {/* 3. Mail Sistemi İle Mesaj Gönder */}
                                 <button
                                     type="button"
@@ -6012,48 +6335,74 @@ export default function ParticipantsList() {
                                             ) : (
                                                 <>
                                                     {/* Aktivasyon Şablonu */}
-                                                    <span style={{ 
-                                                        background: comm.waActivationSent ? '#dcfce7' : '#ffffff', 
-                                                        color: comm.waActivationSent ? '#15803d' : '#64748b', 
-                                                        border: comm.waActivationSent ? '1px solid #bbf7d0' : '1px solid #e2e8f0', 
-                                                        padding: '2px 8px', 
-                                                        borderRadius: '12px', 
-                                                        fontSize: '10px', 
-                                                        fontWeight: comm.waActivationSent ? '700' : '500',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        boxShadow: comm.waActivationSent ? '0 1px 2px rgba(22, 163, 74, 0.1)' : '0 1px 2px rgba(0,0,0,0.02)'
-                                                    }} title={comm.waActivationSent ? "Hesap Aktivasyon (welcome_account_activation) mesajı iletildi" : "welcome_account_activation henüz gönderilmedi"}>
-                                                        {comm.waActivationSent ? (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleSendSingleWa(p, 'accountActivationTemplate');
+                                                        }}
+                                                        disabled={sendingWaParticipantId === `${p.id}_accountActivationTemplate`}
+                                                        style={{ 
+                                                            background: comm.waActivationSent ? '#dcfce7' : '#ffffff', 
+                                                            color: comm.waActivationSent ? '#15803d' : '#64748b', 
+                                                            border: comm.waActivationSent ? '1px solid #bbf7d0' : '1px solid #cbd5e1', 
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '12px', 
+                                                            fontSize: '10px', 
+                                                            fontWeight: comm.waActivationSent ? '700' : '600',
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '4px', 
+                                                            cursor: 'pointer',
+                                                            boxShadow: comm.waActivationSent ? '0 1px 2px rgba(22, 163, 74, 0.1)' : '0 1px 2px rgba(0,0,0,0.04)',
+                                                            transition: 'all 0.15s ease'
+                                                        }} 
+                                                        title={comm.waActivationSent ? "Hesap Aktivasyon mesajı iletildi (Tekrar göndermek için tıklayın)" : "Aktivasyon mesajı henüz gönderilmedi. Göndermek için tıklayın"}
+                                                    >
+                                                        {sendingWaParticipantId === `${p.id}_accountActivationTemplate` ? (
+                                                            <Loader2 size={10} className="animate-spin" />
+                                                        ) : comm.waActivationSent ? (
                                                             <Check size={10} strokeWidth={3} />
                                                         ) : (
                                                             <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#94a3b8' }} />
                                                         )}
                                                         Aktivasyon
-                                                    </span>
+                                                    </button>
 
                                                     {/* Seyahat Kaydı Şablonu */}
-                                                    <span style={{ 
-                                                        background: comm.waTourSent ? '#dcfce7' : '#ffffff', 
-                                                        color: comm.waTourSent ? '#15803d' : '#64748b', 
-                                                        border: comm.waTourSent ? '1px solid #bbf7d0' : '1px solid #e2e8f0', 
-                                                        padding: '2px 8px', 
-                                                        borderRadius: '12px', 
-                                                        fontSize: '10px', 
-                                                        fontWeight: comm.waTourSent ? '700' : '500',
-                                                        display: 'inline-flex',
-                                                        alignItems: 'center',
-                                                        gap: '4px',
-                                                        boxShadow: comm.waTourSent ? '0 1px 2px rgba(22, 163, 74, 0.1)' : '0 1px 2px rgba(0,0,0,0.02)'
-                                                    }} title={comm.waTourSent ? "Seyahat Kaydı (tour_registration) mesajı iletildi" : "Seyahat Kaydı mesajı henüz gönderilmedi"}>
-                                                        {comm.waTourSent ? (
+                                                    <button 
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleSendSingleWa(p, 'newTourTemplate');
+                                                        }}
+                                                        disabled={sendingWaParticipantId === `${p.id}_newTourTemplate`}
+                                                        style={{ 
+                                                            background: comm.waTourSent ? '#dcfce7' : '#ffffff', 
+                                                            color: comm.waTourSent ? '#15803d' : '#64748b', 
+                                                            border: comm.waTourSent ? '1px solid #bbf7d0' : '1px solid #cbd5e1', 
+                                                            padding: '2px 8px', 
+                                                            borderRadius: '12px', 
+                                                            fontSize: '10px', 
+                                                            fontWeight: comm.waTourSent ? '700' : '600',
+                                                            display: 'inline-flex', 
+                                                            alignItems: 'center', 
+                                                            gap: '4px', 
+                                                            cursor: 'pointer',
+                                                            boxShadow: comm.waTourSent ? '0 1px 2px rgba(22, 163, 74, 0.1)' : '0 1px 2px rgba(0,0,0,0.04)',
+                                                            transition: 'all 0.15s ease'
+                                                        }} 
+                                                        title={comm.waTourSent ? "Seyahat Kaydı mesajı iletildi (Tekrar göndermek için tıklayın)" : "Seyahat Kaydı mesajı henüz gönderilmedi. Göndermek için tıklayın"}
+                                                    >
+                                                        {sendingWaParticipantId === `${p.id}_newTourTemplate` ? (
+                                                            <Loader2 size={10} className="animate-spin" />
+                                                        ) : comm.waTourSent ? (
                                                             <Check size={10} strokeWidth={3} />
                                                         ) : (
                                                             <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#94a3b8' }} />
                                                         )}
                                                         Seyahat
-                                                    </span>
+                                                    </button>
                                                 </>
                                             )}
                                         </div>

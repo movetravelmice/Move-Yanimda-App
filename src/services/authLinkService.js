@@ -249,3 +249,138 @@ export const sendWelcomeAndActivationWhatsApp = async (user) => {
     token: setupInfo?.token
   };
 };
+
+/**
+ * Katılımcıya yalnızca Hesap Aktivasyon & Şifre Belirleme Şablonunu (welcome_account_activation) iletir
+ * @param {Object} user 
+ * @returns {Promise<{success: boolean, setupUrl?: string, token?: string, message?: string}>}
+ */
+export const sendActivationOnlyWhatsApp = async (user) => {
+  if (!user) return { success: false, message: 'Kullanıcı bulunamadı.' };
+
+  const isChild = user.isChild || user.role === 'child' || (user.email && (user.email.endsWith('@move.local') || user.email.includes('_child_')));
+  if (isChild) {
+    return { success: false, message: 'Çocuk profillerine doğrudan aktivasyon mesajı iletilmez.' };
+  }
+
+  const cleanPhone = (user.phone || '').trim();
+  if (!cleanPhone || cleanPhone === '-' || cleanPhone.length < 7) {
+    return { success: false, message: 'Kayıtlı geçerli bir telefon numarası bulunamadı.' };
+  }
+
+  const userName = user.name || 'Değerli Misafirimiz';
+  const { sendWhatsAppNotification } = useSettingsStore.getState();
+
+  try {
+    const setupInfo = await createPasswordSetupLink(user);
+    const res = await sendWhatsAppNotification(
+      cleanPhone,
+      'accountActivationTemplate',
+      [userName],
+      setupInfo.token
+    );
+    return {
+      success: !!res?.success,
+      setupUrl: setupInfo.url,
+      token: setupInfo.token,
+      message: res?.message
+    };
+  } catch (err) {
+    console.error("sendActivationOnlyWhatsApp error:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+/**
+ * Katılımcıya yalnızca Seyahat Kaydı Şablonunu (tour_registration) iletir
+ * @param {Object} user 
+ * @param {string} tourName 
+ * @returns {Promise<{success: boolean, message?: string}>}
+ */
+export const sendTourRegistrationOnlyWhatsApp = async (user, tourName) => {
+  if (!user) return { success: false, message: 'Kullanıcı bulunamadı.' };
+
+  const isChild = user.isChild || user.role === 'child' || (user.email && (user.email.endsWith('@move.local') || user.email.includes('_child_')));
+  if (isChild) {
+    return { success: false, message: 'Çocuk profillerine doğrudan seyahat mesajı iletilmez.' };
+  }
+
+  const cleanPhone = (user.phone || '').trim();
+  if (!cleanPhone || cleanPhone === '-' || cleanPhone.length < 7) {
+    return { success: false, message: 'Kayıtlı geçerli bir telefon numarası bulunamadı.' };
+  }
+
+  const userName = user.name || 'Değerli Misafirimiz';
+  const targetTourName = tourName || 'Seyahat';
+  const { sendWhatsAppNotification } = useSettingsStore.getState();
+
+  try {
+    const res = await sendWhatsAppNotification(
+      cleanPhone,
+      'newTourTemplate',
+      [userName, targetTourName]
+    );
+    return {
+      success: !!res?.success,
+      message: res?.message
+    };
+  } catch (err) {
+    console.error("sendTourRegistrationOnlyWhatsApp error:", err);
+    return { success: false, message: err.message };
+  }
+};
+
+/**
+ * Yeni veya tura eklenen katılımcıya sırayla Aktivasyon ve Seyahat Kaydı şablonlarını gönderir
+ * @param {Object} user 
+ * @param {string} tourName 
+ * @param {Object} options { sendActivation: boolean, sendTour: boolean }
+ * @returns {Promise<{activationSent: boolean, tourSent: boolean, setupUrl?: string}>}
+ */
+export const sendTourParticipantWhatsAppSequence = async (user, tourName, options = { sendActivation: true, sendTour: true }) => {
+  const result = {
+    activationSent: false,
+    tourSent: false,
+    setupUrl: null
+  };
+
+  if (!user) return result;
+
+  const isChild = user.isChild || user.role === 'child' || (user.email && (user.email.endsWith('@move.local') || user.email.includes('_child_')));
+  if (isChild) return result;
+
+  const cleanPhone = (user.phone || '').trim();
+  if (!cleanPhone || cleanPhone === '-' || cleanPhone.length < 7) return result;
+
+  // 1. Aktivasyon Şablonu (welcome_account_activation)
+  if (options.sendActivation !== false) {
+    try {
+      const actRes = await sendActivationOnlyWhatsApp(user);
+      if (actRes.success) {
+        result.activationSent = true;
+        result.setupUrl = actRes.setupUrl;
+      }
+    } catch (e) {
+      console.warn("sendTourParticipantWhatsAppSequence activation error:", e);
+    }
+  }
+
+  // Araya kısa bekleme koy (sıralı teslimat ve rate limit koruması)
+  if (options.sendActivation !== false && options.sendTour !== false) {
+    await new Promise(r => setTimeout(r, 1200));
+  }
+
+  // 2. Seyahat Kaydı Şablonu (tour_registration)
+  if (options.sendTour !== false && tourName) {
+    try {
+      const tourRes = await sendTourRegistrationOnlyWhatsApp(user, tourName);
+      if (tourRes.success) {
+        result.tourSent = true;
+      }
+    } catch (e) {
+      console.warn("sendTourParticipantWhatsAppSequence tour error:", e);
+    }
+  }
+
+  return result;
+};

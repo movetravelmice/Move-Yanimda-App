@@ -10,7 +10,11 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useUserStore, formatTitleCase } from '../store/userStore';
 import { isUserChild, canUserReceiveEmail, isChildEmail, normalizePhoneNumber, checkEmailDomainTypo, normalizeTurkish, isRealEmailMatch, resolveParticipantUser } from '../utils/userUtils';
 import { getApiBaseUrl } from '../utils/apiConfig';
-import { sendWelcomeAndActivationWhatsApp, createPasswordSetupLink } from '../services/authLinkService';
+import { 
+    sendWelcomeAndActivationWhatsApp, 
+    sendTourParticipantWhatsAppSequence, 
+    createPasswordSetupLink 
+} from '../services/authLinkService';
 
 /**
  * Excel Date Serial / String Parser
@@ -229,11 +233,11 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         reader.readAsBinaryString(file);
     };
 
-    const sendTourAssignmentEmail = async (participantName, participantEmail, password = null, participantPhone = '') => {
-        const targetUser = resolveParticipantUser({ name: participantName, email: participantEmail, phone: participantPhone }, users);
+    const sendTourAssignmentEmail = async (participantName, participantEmail, password = null, participantPhone = '', userObj = null) => {
+        const targetUser = userObj || resolveParticipantUser({ name: participantName, email: participantEmail, phone: participantPhone }, users);
         if (isUserChild(targetUser, users) || isChildEmail(participantEmail)) {
-            console.log(`Çocuk kullanıcı (${participantName}) için e-posta gönderimi atlandı.`);
-            return;
+            console.log(`Çocuk kullanıcı (${participantName}) için e-posta ve bildirim gönderimi atlandı.`);
+            return { emailSent: false, waActivationSent: false, waTourSent: false };
         }
 
         let phone = participantPhone;
@@ -242,47 +246,38 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         }
         const isInternalPlaceholder = participantEmail && (participantEmail.endsWith('@move.local') || participantEmail.endsWith('.local'));
 
+        let waActivationSent = false;
+        let waTourSent = false;
+
         if (phone && phone !== '-' && phone.trim().length > 6) {
-            if (password) {
-                // Yeni kullanıcı eklendiğinde sırasıyla:
-                // 1) welcome_customer
-                // 2) welcome_account_activation
-                sendWelcomeAndActivationWhatsApp(targetUser || {
-                    id: targetUser?.id || participantEmail,
+            try {
+                const userForWa = targetUser || {
+                    id: targetUser?.id || userObj?.id || participantEmail,
                     name: participantName,
                     phone: phone,
                     email: participantEmail
-                }).then(() => {
-                    // 3) tour_registration
-                    useSettingsStore.getState().sendWhatsAppNotification(
-                        phone,
-                        'newTourTemplate',
-                        [participantName, tour.name]
-                    );
-                }).catch(err => {
-                    console.warn("sendWelcomeAndActivationWhatsApp in bulk error:", err);
-                    useSettingsStore.getState().sendWhatsAppNotification(
-                        phone,
-                        'newTourTemplate',
-                        [participantName, tour.name]
-                    );
+                };
+
+                const waSeq = await sendTourParticipantWhatsAppSequence(userForWa, tour?.name || 'Seyahat', {
+                    sendActivation: true,
+                    sendTour: true
                 });
-            } else {
-                useSettingsStore.getState().sendWhatsAppNotification(
-                    phone,
-                    'newTourTemplate',
-                    [participantName, tour.name]
-                );
+
+                waActivationSent = !!waSeq.activationSent;
+                waTourSent = !!waSeq.tourSent;
+            } catch (waErr) {
+                console.warn(`sendTourParticipantWhatsAppSequence bulk error for ${participantName}:`, waErr);
             }
         }
 
+        let emailSent = false;
         if (smtpConfig?.host && smtpConfig?.user && canUserReceiveEmail(participantEmail, users) && !isInternalPlaceholder) {
             try {
                 let setupLinkInfo = null;
-                const userObj = targetUser || (participantEmail ? users.find(u => isRealEmailMatch(u.email, participantEmail)) : null);
-                if (userObj && userObj.id) {
+                const finalUserObj = targetUser || (participantEmail ? users.find(u => isRealEmailMatch(u.email, participantEmail)) : null);
+                if (finalUserObj && finalUserObj.id) {
                     try {
-                        setupLinkInfo = await createPasswordSetupLink(userObj);
+                        setupLinkInfo = await createPasswordSetupLink(finalUserObj);
                     } catch (lnkErr) {
                         console.warn("Could not create setup link in bulk email:", lnkErr);
                     }
@@ -303,7 +298,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 }
 
                 const baseUrl = getApiBaseUrl();
-                await fetch(`${baseUrl}/api/send-tour-email`, {
+                const mailRes = await fetch(`${baseUrl}/api/send-tour-email`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -317,10 +312,13 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                         customHtml
                     })
                 });
+                if (mailRes.ok) emailSent = true;
             } catch(e) {
                 console.error("Email send error", e);
             }
         }
+
+        return { emailSent, waActivationSent, waTourSent };
     };
 
     const generateSecurePassword = (fullName) => {
@@ -516,6 +514,8 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         let adultsCount = 0;
         let childrenCount = 0;
         const reportDetails = [];
+        const waActResults = [];
+        const waTourResults = [];
 
         for (const row of processedRows) {
             // A. Duplicate in Excel Check -> BU KİŞİLER YÜKLENMESİN!
@@ -684,12 +684,36 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                         reason: 'Kullanıcı sistemde mevcut ve bu tura zaten daha önceden atanmış durumda.'
                     });
                 } else {
+                    let commResult = { emailSent: false, waActivationSent: false, waTourSent: false };
+                    if (!row.isChildExplicit && !isUserChild(existingUser, users) && !isChildEmail(existingUser.email)) {
+                        commResult = await sendTourAssignmentEmail(existingUser.name, existingUser.email, null, existingUser.phone || row.phone, existingUser);
+                        if (existingUser.phone || row.phone) {
+                            waActResults.push({
+                                id: existingUser.id || `act_${row.rowIdx}`,
+                                name: existingUser.name,
+                                phone: existingUser.phone || row.phone,
+                                status: commResult.waActivationSent ? 'success' : 'failed'
+                            });
+                            waTourResults.push({
+                                id: existingUser.id || `tour_${row.rowIdx}`,
+                                name: existingUser.name,
+                                phone: existingUser.phone || row.phone,
+                                status: commResult.waTourSent ? 'success' : 'failed'
+                            });
+                        }
+                    }
+
                     const participantPayload = {
                         ...existingUser,
                         ...userUpdates,
                         isChildProfile: row.isChildExplicit || existingUser.isChildProfile || false,
-                        userType: row.isChildExplicit ? 'child' : (existingUser.userType || 'corporate')
+                        userType: row.isChildExplicit ? 'child' : (existingUser.userType || 'corporate'),
+                        emailSent: commResult.emailSent || false,
+                        activationWaSent: commResult.waActivationSent || false,
+                        tourWaSent: commResult.waTourSent || false,
+                        lastWaSentAt: (commResult.waActivationSent || commResult.waTourSent) ? new Date().toISOString() : null
                     };
+
                     if (row.ticketUrl && row.ticketUrl.startsWith('http')) {
                         const ticketObj = {
                             id: `ticket_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -701,9 +725,7 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                         participantPayload.ticketFiles = [ticketObj];
                     }
                     addParticipantToTour(tourId, participantPayload);
-                    if (!row.isChildExplicit && !isUserChild(existingUser, users) && !isChildEmail(existingUser.email)) {
-                        await sendTourAssignmentEmail(existingUser.name, existingUser.email, null, existingUser.phone || row.phone);
-                    }
+
                     existingUsersAdded++;
                     reportDetails.push({
                         id: `det_${row.rowIdx}_${Date.now()}`,
@@ -752,14 +774,36 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                     linkedTo: resolvedParentIds
                 });
 
+                let commResult = { emailSent: false, waActivationSent: false, waTourSent: false };
+                if (!row.isChildExplicit && !isChildEmail(finalEmail)) {
+                    commResult = await sendTourAssignmentEmail(newUser.name, newUser.email, newUserPassword, newUser.phone || row.phone, newUser);
+                    if (newUser.phone || row.phone) {
+                        waActResults.push({
+                            id: newUser.id || `act_${row.rowIdx}`,
+                            name: newUser.name,
+                            phone: newUser.phone || row.phone,
+                            status: commResult.waActivationSent ? 'success' : 'failed'
+                        });
+                        waTourResults.push({
+                            id: newUser.id || `tour_${row.rowIdx}`,
+                            name: newUser.name,
+                            phone: newUser.phone || row.phone,
+                            status: commResult.waTourSent ? 'success' : 'failed'
+                        });
+                    }
+                }
+
                 const hasValidEmail = !row.isChildExplicit && !isChildEmail(finalEmail) && !!finalEmail && finalEmail !== '-' && !finalEmail.endsWith('@move.local');
                 const participantPayload = {
                     ...newUser,
                     isChildProfile: row.isChildExplicit,
                     userType: row.isChildExplicit ? 'child' : 'corporate',
-                    emailSent: hasValidEmail,
+                    emailSent: commResult.emailSent || hasValidEmail,
                     lastEmailSentAt: hasValidEmail ? new Date().toISOString() : null,
-                    emailSentDateFormatted: hasValidEmail ? new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null
+                    emailSentDateFormatted: hasValidEmail ? new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : null,
+                    activationWaSent: commResult.waActivationSent || false,
+                    tourWaSent: commResult.waTourSent || false,
+                    lastWaSentAt: (commResult.waActivationSent || commResult.waTourSent) ? new Date().toISOString() : null
                 };
 
                 if (row.ticketUrl && row.ticketUrl.startsWith('http')) {
@@ -774,9 +818,6 @@ export default function BulkParticipantManager({ tourId, onClose }) {
                 }
 
                 addParticipantToTour(tourId, participantPayload);
-                if (!row.isChildExplicit && !isChildEmail(finalEmail)) {
-                    await sendTourAssignmentEmail(newUser.name, newUser.email, newUserPassword, newUser.phone || row.phone);
-                }
                 newUsersCreated++;
                 reportDetails.push({
                     id: `det_${row.rowIdx}_${Date.now()}`,
@@ -794,11 +835,14 @@ export default function BulkParticipantManager({ tourId, onClose }) {
         }
 
         // --- STEP 4: Save Report to Tour and Firestore ---
+        const nowIso = new Date().toISOString();
+        const dateFormattedStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
         const newReportRecord = {
             id: `rep_${Date.now()}`,
             fileName: fileName || selectedFile?.name || 'Katilimcilar.xlsx',
-            createdAt: new Date().toISOString(),
-            dateFormatted: new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            createdAt: nowIso,
+            dateFormatted: dateFormattedStr,
             totalRows: fileData.length,
             newUsersCount: newUsersCreated,
             existingUsersCount: existingUsersAdded,
@@ -812,10 +856,48 @@ export default function BulkParticipantManager({ tourId, onClose }) {
 
         const existingReports = tour.importReports || [];
         const updatedReports = [newReportRecord, ...existingReports].slice(0, 20);
+
+        // WhatsApp Raporlarını da tur kaydına ekle
+        const newWaReports = [];
+        if (waActResults.length > 0) {
+            newWaReports.push({
+                id: 'wa_rep_act_' + Date.now(),
+                type: 'whatsapp',
+                templateKey: 'accountActivationTemplate',
+                templateTitle: 'Hesap Aktivasyonu & Şifre Belirleme Şablonu',
+                createdAt: nowIso,
+                dateFormatted: dateFormattedStr,
+                totalRecipients: waActResults.length,
+                successCount: waActResults.filter(d => d.status === 'success').length,
+                failCount: waActResults.filter(d => d.status === 'failed').length,
+                details: waActResults
+            });
+        }
+        if (waTourResults.length > 0) {
+            newWaReports.push({
+                id: 'wa_rep_tour_' + (Date.now() + 1),
+                type: 'whatsapp',
+                templateKey: 'newTourTemplate',
+                templateTitle: 'Seyahat Kaydı Şablonu',
+                createdAt: nowIso,
+                dateFormatted: dateFormattedStr,
+                totalRecipients: waTourResults.length,
+                successCount: waTourResults.filter(d => d.status === 'success').length,
+                failCount: waTourResults.filter(d => d.status === 'failed').length,
+                details: waTourResults
+            });
+        }
+
+        const existingWaReports = tour.whatsappReports || [];
+        const updatedWaReports = [...newWaReports, ...existingWaReports].slice(0, 30);
+
         try {
-            await editTour(tourId, { importReports: updatedReports });
+            await editTour(tourId, { 
+                importReports: updatedReports,
+                whatsappReports: updatedWaReports
+            });
         } catch (saveErr) {
-            console.error("Error saving import report to tour:", saveErr);
+            console.error("Error saving import and whatsapp report to tour:", saveErr);
         }
 
         try {
