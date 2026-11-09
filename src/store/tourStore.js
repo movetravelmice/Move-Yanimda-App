@@ -612,16 +612,11 @@ export const useTourStore = create((set, get) => ({
 
   editTour: async (tourId, newData) => {
       if (!isStaffSessionUser(getCurrentSessionUser())) throw new Error("Yetkisiz işlem.");
+      const sanitized = sanitizeForFirestore(newData);
       set(state => ({
-          tours: state.tours.map(t => t.id === tourId ? { ...t, ...newData } : t)
+          tours: state.tours.map(t => t.id === tourId ? { ...t, ...sanitized } : t)
       }));
       try { 
-          const sanitized = {};
-          Object.keys(newData).forEach(k => {
-              if (newData[k] !== undefined) {
-                  sanitized[k] = newData[k];
-              }
-          });
           await updateDoc(doc(db, 'tours', tourId), sanitized); 
       } catch (e) {
           console.error("Error editing tour:", e);

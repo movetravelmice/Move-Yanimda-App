@@ -1785,10 +1785,10 @@ export default function ParticipantsList() {
                     if (isTarget) {
                         return {
                             ...tp,
-                            emailSent: emailSent || tp.emailSent,
-                            activationWaSent: waActivationSent || tp.activationWaSent,
-                            tourWaSent: waTourSent || tp.tourWaSent,
-                            lastWaSentAt: (waActivationSent || waTourSent) ? Date.now() : tp.lastWaSentAt
+                            emailSent: Boolean(emailSent || tp.emailSent),
+                            activationWaSent: Boolean(waActivationSent || tp.activationWaSent),
+                            tourWaSent: Boolean(waTourSent || tp.tourWaSent),
+                            lastWaSentAt: (waActivationSent || waTourSent) ? Date.now() : (tp.lastWaSentAt || null)
                         };
                     }
                     return tp;
@@ -1881,8 +1881,8 @@ export default function ParticipantsList() {
                     if (tp.id === p.id || (p.email && tp.email?.toLowerCase() === p.email.toLowerCase())) {
                         return {
                             ...tp,
-                            activationWaSent: templateKey === 'accountActivationTemplate' ? true : tp.activationWaSent,
-                            tourWaSent: templateKey === 'newTourTemplate' ? true : tp.tourWaSent,
+                            activationWaSent: templateKey === 'accountActivationTemplate' ? true : Boolean(tp.activationWaSent),
+                            tourWaSent: templateKey === 'newTourTemplate' ? true : Boolean(tp.tourWaSent),
                             lastWaSentAt: Date.now()
                         };
                     }
@@ -1998,8 +1998,8 @@ export default function ParticipantsList() {
                     if (tp.id === p.id || (p.email && tp.email?.toLowerCase() === p.email.toLowerCase())) {
                         return {
                             ...tp,
-                            activationWaSent: actSent,
-                            tourWaSent: tourSent,
+                            activationWaSent: Boolean(actSent),
+                            tourWaSent: Boolean(tourSent),
                             lastWaSentAt: Date.now()
                         };
                     }
