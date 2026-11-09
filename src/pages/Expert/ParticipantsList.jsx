@@ -6050,7 +6050,10 @@ export default function ParticipantsList() {
                                     : ((p.ticketPdf || globalP.ticketPdf) ? [p.ticketPdf || globalP.ticketPdf] : []));
                             const ticketCount = partTickets.length;
                             const hasTicketPdf = ticketCount > 0;
-                            const companyName = globalP.company && globalP.company !== 'Bireysel Müşteri' && globalP.company !== 'Move Travel & Mice' ? globalP.company : null;
+                            const companyCandidate = (p.company && p.company !== 'Bireysel Müşteri' && p.company !== 'Move Travel & Mice')
+                                ? p.company
+                                : (globalP.company && globalP.company !== 'Bireysel Müşteri' && globalP.company !== 'Move Travel & Mice' ? globalP.company : (p.company || globalP.company));
+                            const companyName = companyCandidate && companyCandidate !== 'Bireysel Müşteri' && companyCandidate !== 'Move Travel & Mice' ? companyCandidate : null;
                             const comm = getParticipantCommStatus(p, globalP);
 
                             return (
