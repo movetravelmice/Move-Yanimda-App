@@ -677,21 +677,15 @@ app.post('/api/auth/verify-setup-token', async (req, res) => {
             }
         }
 
-        if (!userRecord) {
-            return res.json({
-                success: false,
-                valid: false,
-                reason: 'Kullanıcı hesabı bulunamadı veya sistemden silinmiş.'
-            });
-        }
-
+        // Token geçerliyse kullanıcı henüz users tablosuna yazılmamış olsa bile (örn. tur katılımcısı)
+        // tokenData içindeki güvenli bilgilerle doğrulama başarılı sayılır.
         const safeUser = {
-            id: userRecord.id,
-            name: userRecord.name || tokenData.name || '',
-            email: userRecord.email || tokenData.email || '',
-            phone: userRecord.phone || tokenData.phone || '',
-            company: userRecord.company || 'Move Travel & Mice',
-            avatar: userRecord.avatar || ''
+            id: userRecord?.id || tokenData.userId || '',
+            name: userRecord?.name || tokenData.name || 'Misafirimiz',
+            email: userRecord?.email || tokenData.email || '',
+            phone: userRecord?.phone || tokenData.phone || '',
+            company: userRecord?.company || 'Move Travel & Mice',
+            avatar: userRecord?.avatar || ''
         };
 
         return res.json({
@@ -699,7 +693,7 @@ app.post('/api/auth/verify-setup-token', async (req, res) => {
             valid: true,
             tokenData: {
                 token: cleanToken,
-                userId: userRecord.id,
+                userId: safeUser.id,
                 expiresAt: tokenData.expiresAt,
                 type: tokenData.type || 'set_password'
             },
@@ -763,10 +757,6 @@ app.post('/api/auth/complete-password-setup', async (req, res) => {
             }
         }
 
-        if (!userDocRef || !userData) {
-            return res.status(404).json({ success: false, message: 'İlgili kullanıcı hesabı sistemde bulunamadı.' });
-        }
-
         const nowIso = new Date().toISOString();
 
         // 1. Token'ı anında kullanıldı olarak işaretle
@@ -775,13 +765,31 @@ app.post('/api/auth/complete-password-setup', async (req, res) => {
             usedAt: Date.now()
         });
 
-        // 2. Kullanıcı şifresini güncelle
-        await userDocRef.update({
-            password: cleanPassword,
-            updatedAt: nowIso,
-            passwordUpdatedAt: nowIso
-        });
-        userData.password = cleanPassword;
+        // 2. Kullanıcı kaydı varsa güncelle, yoksa (tur katılımcısı ise) users tablosunda oluştur
+        if (!userDocRef) {
+            const newUserId = tokenData.userId || ('customer_' + Date.now());
+            userDocRef = db.collection('users').doc(newUserId);
+            userData = {
+                id: newUserId,
+                name: tokenData.name || 'Misafirimiz',
+                email: tokenData.email ? normalizeUserEmail(tokenData.email) : '',
+                phone: tokenData.phone || '',
+                role: 'customer',
+                company: 'Move Travel & Mice',
+                password: cleanPassword,
+                status: 'Aktif',
+                createdAt: nowIso,
+                updatedAt: nowIso
+            };
+            await userDocRef.set(userData);
+        } else {
+            await userDocRef.update({
+                password: cleanPassword,
+                updatedAt: nowIso,
+                passwordUpdatedAt: nowIso
+            });
+            userData.password = cleanPassword;
+        }
 
         // 3. Kullanıcının dahil olduğu turlardaki katılımcı kayıtlarının şifresini senkronize et
         try {
