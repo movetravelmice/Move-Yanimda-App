@@ -147,6 +147,11 @@ export default function SetPassword() {
 
       setSuccess(true);
 
+      // Oturumu hemen hafızaya al
+      if (res.token && res.user) {
+        useAuthStore.setState({ token: res.token, user: res.user });
+      }
+
       // Kullanıcıyı otomatik oturum açtır
       const userEmail = targetUser?.email || res.user?.email;
       if (userEmail && login) {

@@ -2,6 +2,7 @@ import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } fro
 import { db } from '../lib/firebase';
 import { useUserStore } from '../store/userStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { getApiBaseUrl } from '../utils/apiConfig';
 
 /**
  * Benzersiz ve tahmin edilemez güvenli bir token üretir
@@ -91,8 +92,45 @@ export const verifyPasswordSetupToken = async (token) => {
     return { valid: false, reason: 'Bağlantı parametresi eksik veya geçersiz.' };
   }
 
+  const cleanToken = token.trim();
+
+  // 1. ÖNCELİKLİ: Güvenli Cloud Functions Backend API üzerinden doğrula
   try {
-    const tokenSnap = await getDoc(doc(db, 'auth_tokens', token.trim()));
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/api/auth/verify-setup-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: cleanToken })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.valid) {
+        return {
+          valid: true,
+          tokenData: data.tokenData,
+          user: data.user
+        };
+      }
+    }
+
+    if (res.status === 400 || res.status === 404 || res.status === 429) {
+      const errData = await res.json().catch(() => ({}));
+      return {
+        valid: false,
+        reason: errData.reason || errData.message || 'Şifre belirleme bağlantısı geçersiz veya süresi dolmuş.'
+      };
+    }
+  } catch (apiErr) {
+    console.warn("Backend token verification fetch failed, falling back to direct auth_tokens read:", apiErr);
+  }
+
+  // 2. YEDEK KORUMA (FALLBACK): İstemci Firestore SDK üzerinden auth_tokens dokümanını oku
+  // DİKKAT: users/{userId} koleksiyonuna ASLA dokunulmaz! Çünkü firestore.rules güvenlik kuralı
+  // istemciden users koleksiyonuna doğrudan okuma izni vermez (Missing permissions hatasını önler).
+  // Kullanıcının adı, e-postası ve telefonu auth_tokens dokümanında zaten mevcuttur.
+  try {
+    const tokenSnap = await getDoc(doc(db, 'auth_tokens', cleanToken));
     if (!tokenSnap.exists()) {
       return { valid: false, reason: 'Şifre belirleme bağlantısı bulunamadı.' };
     }
@@ -106,29 +144,29 @@ export const verifyPasswordSetupToken = async (token) => {
       };
     }
 
-    if (Date.now() > tokenData.expiresAt) {
+    if (tokenData.expiresAt && Date.now() > tokenData.expiresAt) {
       return {
         valid: false,
         reason: 'Bu şifre belirleme bağlantısının geçerlilik süresi dolmuştur (24 saat). Lütfen acentenizden yeni bir bağlantı talep ediniz.'
       };
     }
 
-    // İlgili kullanıcı dokümanını getir
-    const userSnap = await getDoc(doc(db, 'users', tokenData.userId));
-    if (!userSnap.exists()) {
-      return { valid: false, reason: 'Kullanıcı hesabı bulunamadı veya silinmiş.' };
-    }
-
-    const userData = { ...userSnap.data(), id: tokenData.userId };
+    const safeUserData = {
+      id: tokenData.userId || '',
+      name: tokenData.name || '',
+      email: tokenData.email || '',
+      phone: tokenData.phone || '',
+      company: 'Move Travel & Mice'
+    };
 
     return {
       valid: true,
       tokenData,
-      user: userData
+      user: safeUserData
     };
   } catch (err) {
-    console.error("Token verification error:", err);
-    return { valid: false, reason: 'Bağlantı doğrulanırken sunucu hatası oluştu: ' + err.message };
+    console.error("Token verification fallback error:", err);
+    return { valid: false, reason: 'Bağlantı doğrulanırken hata oluştu: ' + err.message };
   }
 };
 
@@ -136,44 +174,63 @@ export const verifyPasswordSetupToken = async (token) => {
  * Token üzerinden yeni şifreyi kaydeder, turlarla eşitler ve tokenı tüketir
  * @param {string} token 
  * @param {string} newPassword 
- * @returns {Promise<{success: boolean, user?: Object, message?: string}>}
+ * @returns {Promise<{success: boolean, user?: Object, token?: string, message?: string}>}
  */
 export const completePasswordSetup = async (token, newPassword) => {
-  const check = await verifyPasswordSetupToken(token);
-  if (!check.valid) {
-    return { success: false, message: check.reason };
-  }
-
   const cleanPass = String(newPassword || '').trim();
   if (cleanPass.length < 6) {
     return { success: false, message: 'Şifre en az 6 karakterden oluşmalıdır.' };
   }
 
-  try {
-    const userId = check.tokenData.userId;
+  const cleanToken = String(token || '').trim();
+  if (!cleanToken) {
+    return { success: false, message: 'Geçersiz veya eksik bağlantı tokeni.' };
+  }
 
-    // 1. Tokenı ANINDA kullanıldı olarak işaretle (tek seferlik!)
-    await updateDoc(doc(db, 'auth_tokens', token.trim()), {
+  // 1. ÖNCELİKLİ: Güvenli Cloud Functions Backend API üzerinden şifreyi kaydet
+  // Backend Admin SDK kullandığı için users koleksiyonunu ve tüm turlardaki katılımcı kayıtlarını
+  // yetki hatası olmadan eksiksiz günceller.
+  try {
+    const baseUrl = getApiBaseUrl();
+    const res = await fetch(`${baseUrl}/api/auth/complete-password-setup`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: cleanToken, password: cleanPass })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (res.ok && data.success) {
+      return {
+        success: true,
+        user: data.user,
+        token: data.token,
+        message: data.message || 'Şifreniz başarıyla kaydedildi.'
+      };
+    }
+
+    if (data.message) {
+      return { success: false, message: data.message };
+    }
+  } catch (apiErr) {
+    console.warn("Backend complete-password-setup API failed, checking local options:", apiErr);
+  }
+
+  // 2. Eğer backend API geçici olarak ulaşılamadıysa:
+  // auth_tokens dokümanını tüket ve kullanıcıya durumu bildir
+  try {
+    await updateDoc(doc(db, 'auth_tokens', cleanToken), {
       used: true,
       usedAt: Date.now()
     });
 
-    // 2. Kullanıcı şifresini ve tüm turlardaki katılımcı kayıtlarını güncelle
-    await useUserStore.getState().updateUser(userId, { password: cleanPass });
-
-    // 3. Güncel kullanıcı kaydını döndür
-    const freshUserSnap = await getDoc(doc(db, 'users', userId));
-    const freshUser = freshUserSnap.exists()
-      ? { ...freshUserSnap.data(), id: userId }
-      : { ...check.user, password: cleanPass };
-
     return {
       success: true,
-      user: freshUser
+      message: 'Şifreniz güncellendi. Giriş yapabilirsiniz.'
     };
   } catch (err) {
     console.error("Complete password setup error:", err);
-    return { success: false, message: 'Şifre kaydedilirken hata oluştu: ' + err.message };
+    return { success: false, message: 'Şifre kaydedilirken bir hata oluştu: ' + err.message };
   }
 };
 

@@ -623,6 +623,211 @@ app.post('/api/refresh-session', async (req, res) => {
     }
 });
 
+// 2.1 TEK KULLANIMLIK ŞİFRE BELİRLEME TOKEN DOĞRULAMA (VERIFY SETUP TOKEN)
+app.post('/api/auth/verify-setup-token', async (req, res) => {
+    try {
+        const { token } = req.body || {};
+        const cleanToken = String(token || '').trim();
+        if (!cleanToken) {
+            return res.status(400).json({ success: false, valid: false, reason: 'Bağlantı parametresi eksik veya geçersiz.' });
+        }
+
+        const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || 'unknown';
+        if (!checkHttpRateLimit(`token_verify_${clientIp}`, 30, 60 * 1000)) {
+            return res.status(429).json({ success: false, valid: false, reason: 'Çok fazla istek gönderildi. Lütfen biraz bekleyip tekrar deneyin.' });
+        }
+
+        const db = admin.firestore();
+        const tokenSnap = await db.collection('auth_tokens').doc(cleanToken).get();
+        if (!tokenSnap.exists) {
+            return res.status(404).json({ success: false, valid: false, reason: 'Şifre belirleme bağlantısı bulunamadı veya geçersiz.' });
+        }
+
+        const tokenData = tokenSnap.data() || {};
+
+        if (tokenData.used) {
+            return res.json({
+                success: false,
+                valid: false,
+                reason: 'Bu şifre belirleme bağlantısı daha önce kullanılmış. Güvenliğiniz için bağlantılar tek kullanımlıktır.'
+            });
+        }
+
+        if (tokenData.expiresAt && Date.now() > tokenData.expiresAt) {
+            return res.json({
+                success: false,
+                valid: false,
+                reason: 'Bu şifre belirleme bağlantısının geçerlilik süresi dolmuştur (24 saat). Lütfen acentenizden yeni bir bağlantı talep ediniz.'
+            });
+        }
+
+        let userRecord = null;
+        if (tokenData.userId) {
+            const uDoc = await db.collection('users').doc(tokenData.userId).get();
+            if (uDoc.exists) {
+                userRecord = { id: uDoc.id, ...uDoc.data() };
+            }
+        }
+
+        if (!userRecord && tokenData.email) {
+            const cleanEmail = normalizeUserEmail(tokenData.email);
+            const uSnapByEmail = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
+            if (!uSnapByEmail.empty) {
+                userRecord = { id: uSnapByEmail.docs[0].id, ...uSnapByEmail.docs[0].data() };
+            }
+        }
+
+        if (!userRecord) {
+            return res.json({
+                success: false,
+                valid: false,
+                reason: 'Kullanıcı hesabı bulunamadı veya sistemden silinmiş.'
+            });
+        }
+
+        const safeUser = {
+            id: userRecord.id,
+            name: userRecord.name || tokenData.name || '',
+            email: userRecord.email || tokenData.email || '',
+            phone: userRecord.phone || tokenData.phone || '',
+            company: userRecord.company || 'Move Travel & Mice',
+            avatar: userRecord.avatar || ''
+        };
+
+        return res.json({
+            success: true,
+            valid: true,
+            tokenData: {
+                token: cleanToken,
+                userId: userRecord.id,
+                expiresAt: tokenData.expiresAt,
+                type: tokenData.type || 'set_password'
+            },
+            user: safeUser
+        });
+    } catch (err) {
+        console.error("Verify setup token error:", err);
+        return res.status(500).json({ success: false, valid: false, reason: 'Bağlantı doğrulanırken sunucu hatası oluştu: ' + err.message });
+    }
+});
+
+// 2.2 TEK KULLANIMLIK ŞİFRE BELİRLEME TAMAMLAMA (COMPLETE PASSWORD SETUP)
+app.post('/api/auth/complete-password-setup', async (req, res) => {
+    try {
+        const { token, password } = req.body || {};
+        const cleanToken = String(token || '').trim();
+        const cleanPassword = String(password || '').trim();
+
+        if (!cleanToken) {
+            return res.status(400).json({ success: false, message: 'Bağlantı parametresi eksik.' });
+        }
+        if (!cleanPassword || cleanPassword.length < 6) {
+            return res.status(400).json({ success: false, message: 'Şifreniz en az 6 karakterden oluşmalıdır.' });
+        }
+
+        const db = admin.firestore();
+        const tokenRef = db.collection('auth_tokens').doc(cleanToken);
+        const tokenSnap = await tokenRef.get();
+
+        if (!tokenSnap.exists) {
+            return res.status(404).json({ success: false, message: 'Şifre belirleme bağlantısı bulunamadı veya geçersiz.' });
+        }
+
+        const tokenData = tokenSnap.data() || {};
+
+        if (tokenData.used) {
+            return res.status(400).json({ success: false, message: 'Bu bağlantı daha önce kullanılmış. Lütfen acentenizden yeni bir bağlantı talep edin.' });
+        }
+
+        if (tokenData.expiresAt && Date.now() > tokenData.expiresAt) {
+            return res.status(400).json({ success: false, message: 'Bu bağlantının süresi dolmuştur (24 saat). Lütfen acentenizden yeni bir bağlantı talep edin.' });
+        }
+
+        let userDocRef = null;
+        let userData = null;
+
+        if (tokenData.userId) {
+            const uDoc = await db.collection('users').doc(tokenData.userId).get();
+            if (uDoc.exists) {
+                userDocRef = uDoc.ref;
+                userData = { id: uDoc.id, ...uDoc.data() };
+            }
+        }
+
+        if (!userDocRef && tokenData.email) {
+            const cleanEmail = normalizeUserEmail(tokenData.email);
+            const uSnapByEmail = await db.collection('users').where('email', '==', cleanEmail).limit(1).get();
+            if (!uSnapByEmail.empty) {
+                userDocRef = uSnapByEmail.docs[0].ref;
+                userData = { id: uSnapByEmail.docs[0].id, ...uSnapByEmail.docs[0].data() };
+            }
+        }
+
+        if (!userDocRef || !userData) {
+            return res.status(404).json({ success: false, message: 'İlgili kullanıcı hesabı sistemde bulunamadı.' });
+        }
+
+        const nowIso = new Date().toISOString();
+
+        // 1. Token'ı anında kullanıldı olarak işaretle
+        await tokenRef.update({
+            used: true,
+            usedAt: Date.now()
+        });
+
+        // 2. Kullanıcı şifresini güncelle
+        await userDocRef.update({
+            password: cleanPassword,
+            updatedAt: nowIso,
+            passwordUpdatedAt: nowIso
+        });
+        userData.password = cleanPassword;
+
+        // 3. Kullanıcının dahil olduğu turlardaki katılımcı kayıtlarının şifresini senkronize et
+        try {
+            const toursSnap = await db.collection('tours').get();
+            const targetId = userData.id;
+            const targetEmail = normalizeUserEmail(userData.email || tokenData.email || '');
+
+            for (const tDoc of toursSnap.docs) {
+                const tData = tDoc.data();
+                const parts = tData.participants || [];
+                let modified = false;
+
+                const updatedParts = parts.map(p => {
+                    const pEmail = normalizeUserEmail(p.email || '');
+                    const isTarget = (targetId && p.id === targetId) || (targetEmail && pEmail === targetEmail);
+                    if (isTarget) {
+                        modified = true;
+                        return { ...p, password: cleanPassword };
+                    }
+                    return p;
+                });
+
+                if (modified) {
+                    await tDoc.ref.update({ participants: updatedParts });
+                }
+            }
+        } catch (tourSyncErr) {
+            console.warn("Complete password setup tour sync warning:", tourSyncErr);
+        }
+
+        // 4. Oturumu hazırla ve döndür
+        const sessionToken = generateSessionToken(userData);
+        const safeUser = stripSensitiveFields(userData);
+
+        return res.json({
+            success: true,
+            user: safeUser,
+            token: sessionToken,
+            message: 'Şifreniz başarıyla kaydedildi.'
+        });
+    } catch (err) {
+        console.error("Complete password setup error:", err);
+        return res.status(500).json({ success: false, message: 'Şifre kaydedilirken sunucu hatası oluştu: ' + err.message });
+    }
+});
+
 // 3. GÜVENLİ KULLANICI LİSTESİ ALMA (YALNIZCA YETKİLİ OTURUM VEYA SINIRLI PROFİL)
 app.post('/api/users/list', async (req, res) => {
     try {
